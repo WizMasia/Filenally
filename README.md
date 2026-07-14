@@ -1,127 +1,66 @@
-# 🔄 File-nally (Beta v0.6.1)
+# File-nally (Beta v0.7.0)
 
-[**한국어 (Korean)**](#한국어) | [**English**](#english)
+[한국어](#한국어) · [English](#english)
 
----
+File-nally는 Chrome 또는 Edge에서 두 로컬 폴더를 비교하고 동기화하는 단일 HTML 애플리케이션입니다. 제품 코드는 [file-nally.html](file-nally.html) 하나에만 있으며, 서버·빌드·런타임 의존성이 없습니다.
 
-<a name="한국어"></a>
-# 🔄 File-nally (Beta v0.6.1) - 한국어
+## 한국어
 
-> **"마침내(Finally) 완성된, 파일(File) 나리들을 위한 스마트 양방향 동기화 시스템"**
+### 주요 기능
 
-**File-nally**는 서버나 추가 프로그램 설치(No Node.js, No Installation) 없이, 오직 **웹 브라우저(Chrome/Edge)**만으로 로컬 컴퓨터의 두 폴더를 안전하게 양방향 동기화하는 고성능 원페이지 웹 애플리케이션입니다. 
+- 양방향 또는 원본 → 대상 단방향 동기화
+- 실행 전에 파일별 변경 계획 미리보기
+- `최신 파일`, `원본 우선`, `건너뛰기`, `이름 변경 보존` 충돌 정책
+- 삭제 감지 시 영구 삭제 대신 `.trash/<실행 시각>/...`으로 격리
+- 폴더 쌍별 매니페스트·이력 관리와 JSON schema v2 백업/복원
+- 실행 중 현재 파일 작업을 마친 뒤 안전하게 중단
+- 한국어·영어 UI, 375px부터 지원하는 반응형 레이아웃
 
-최신 웹 표준 기술인 `File System Access API`와 `JSON 매니페스트 추적 엔진`을 결합하여 가볍고 빠른 동기화 경험을 제공합니다.
+### 사용법
 
----
+1. `file-nally.html`을 Chrome 또는 Edge에서 엽니다.
+2. 원본 폴더와 대상 폴더를 선택하고 읽기·쓰기 권한을 허용합니다.
+3. 방향, 충돌 정책, 제외할 하위 폴더명을 확인합니다.
+4. **변경사항 비교**로 작업 대기열을 검토합니다.
+5. **동기화 실행**을 누릅니다.
 
-## ✨ 핵심 기능 (Key Features)
+같은 폴더를 양쪽에 지정하거나 한 폴더 안에 다른 폴더를 지정하는 구성은 데이터 순환을 막기 위해 거부됩니다. `.trash`는 사용자가 제외 목록에서 지워도 항상 검사 대상에서 제외됩니다.
 
-* **🔁 완벽한 양방향 동기화 (Two-way Merge):** 원본(Source)과 대상(Target) 폴더의 변경 사항을 교차 분석하여 신규 파일 전송 및 최신 수정 버전 파일 업데이트를 자동으로 수행합니다.
-* **⚡ 이력 기반 스마트 스킵 (Smart Skip):** 과거 동기화 성공 시점의 파일 상태를 JSON 매니페스트로 기억합니다. 마지막 동기화 이후 변경되지 않은 파일은 연산과 디스크 I/O를 통째로 건너뛰어 대용량 폴더도 초고속으로 처리합니다.
-* **🗑️ 안전한 `.trash` 격리 시스템:** 양방향 동기화 중 한쪽에서 파일이 삭제된 경우, 반대편 폴더의 파일을 즉시 영구 삭제하지 않고 각 폴더 루트의 `.trash/` 폴더로 안전하게 대피시켜 데이터 유실을 원천 차단합니다.
-* **📊 실시간 진행 상황 모니터링:** 
-  * 전체 파일 대비 현재 진행률을 시각적인 **프로그레스 바(Progress Bar)**로 표시합니다.
-  * 작업 유형에 따라 직관적인 아이콘(`🔵 ➔` 대상 전송, `🟠 ⇠` 원본 전송, `🗑️` 휴지통 격리)이 실시간으로 로그와 UI에 렌더링됩니다.
-* **⏹️ 우아한 중지(Abort) 매커니즘:** 작업 중 언제든 안전하게 동기화를 중단할 수 있으며, 현재 기록 중이던 파일의 쓰기 트랜잭션이 완벽히 매듭지어진 후 안전하게 멈추므로 파일이 깨지지 않습니다.
-* **💾 전체 데이터 JSON 백업/복원:** 브라우저의 로컬 스토리지 연동은 물론, 누적 동기화 이력과 매니페스트 데이터를 하나의 `.json` 파일로 백업하고 다른 PC에서 그대로 복원할 수 있습니다.
+### 충돌 정책
 
----
+- **최신 파일 유지:** 수정 시간이 더 최신인 파일을 반대편에 복사합니다. 시간이 같고 내용 크기가 다르면 자동 처리하지 않습니다.
+- **원본 우선 덮어쓰기:** 양쪽이 모두 변경된 충돌에서 원본 파일을 선택합니다.
+- **기존 파일 건너뛰기:** 반대편 경로가 이미 있으면 덮어쓰지 않습니다.
+- **이름을 바꿔 두 버전 보존:** 양쪽 파일을 각각 `.conflict-source-*`, `.conflict-target-*` 이름으로 반대편에 복사합니다.
 
-## 🚀 시작하기 (How to Use)
+### JSON과 개인정보
 
-본 프로그램은 단일 HTML 파일로 구성되어 있어 서버 환경이나 빌드 과정이 전혀 필요 없습니다.
+설정, 폴더 쌍 프로필, 매니페스트, 실행 이력은 `smart_sync_state` 키의 JSON으로 브라우저에 저장됩니다. 디렉터리 핸들은 JSON에 포함하지 않고 IndexedDB에 별도로 보관합니다. 백업 JSON은 최대 5MB까지 가져올 수 있습니다. 복원된 프로필과 구버전 v0.6.1 전역 매니페스트는 폴더 쌍을 다시 확인하기 전까지 삭제 판단에 사용하지 않습니다.
 
-1. 본 리포지토리에서 `file-nally.html` 파일을 다운로드합니다.
-2. 다운로드한 파일을 **크롬(Chrome)** 또는 **엣지(Edge)** 브라우저에서 더블 클릭하여 엽니다.
-3. **1. 원본 폴더 (Source)**와 **2. 대상 폴더 (Target)** 버튼을 눌러 동기화할 로컬 디렉터리를 지정합니다 (브라우저의 파일 쓰기/수정 권한 팝업 시 '허용' 선택 필수).
-4. **🔍 변경사항 비교하기** 버튼을 눌러 양측 폴더의 대조 상태를 시각적으로 확인합니다.
-5. 대기열이 올바르게 잡혔다면 **▶ 동기화 실행** 버튼을 눌러 동기화를 가동합니다.
+중요한 파일은 실행 전에 별도로 백업하세요. 브라우저 권한 해제, 디스크 오류, 운영체제 제한까지 복구할 수 있는 백업 도구를 대체하지는 않습니다.
 
----
+### 개발 및 검증
 
-## 🚨 제어 상태 아이콘 가이드
+제품 실행에는 Node.js가 필요하지 않습니다. 아래 명령은 개발 회귀 테스트에만 사용합니다.
 
-프로그램 내부 테이블 및 실시간 진행 바, 시스템 로그에서 사용되는 직관적인 상태 표식입니다.
+```bash
+npm install
+npm test
+npm run test:visual
+```
 
-* `🔵 ➔ 업데이트/신규 전송` : 원본(Source)에 새 파일이 있거나 최신 수정본이 있어 대상(Target) 폴더로 보냅니다.
-* `🟠 ⇠ 업데이트/신규 전송` : 대상(Target)에 새 파일이 있거나 최신 수정본이 있어 원본(Source) 폴더로 가져옵니다.
-* `🗑️ 격리` : 지난 동기화 이후 한쪽에서 파일이 삭제된 것이 감지되어, 반대편 폴더의 파일을 `.trash` 폴더로 대피시킵니다.
-* `변화 없음` : 마지막 동기화 성공 상태와 완벽히 일치하여 디스크 조회를 스킵한 안전한 상태입니다.
+테스트는 실제 Chrome에서 메모리 기반 File System Access API를 사용해 JSON 마이그레이션, 폴더 쌍 검증, 충돌 정책, 복사, 버전 휴지통, 중단, 쓰기 실패, XSS 방어, 모바일 오버플로를 검증합니다. UI 설계 계약은 [DESIGN.md](DESIGN.md)에 있습니다.
 
----
+## English
 
-## 🔒 웹 브라우저 환경에 따른 제어 제약 사항
+File-nally is a single-file Chrome/Edge application for comparing and synchronizing two local folders. Open `file-nally.html`, select the source and target, review the generated plan, then run synchronization.
 
-* **보안 상 절대 경로 표시 불가:** 브라우저의 샌드박스(Sandbox) 보안 정책으로 인해 사용자의 실제 하드디스크 절대 경로(예: `C:\Users\...`)는 읽을 수 없으며 화면에는 폴더명과 하위 상대 경로만 표시됩니다.
-* **새로고침 시 권한 재승인:** 브라우저를 껐다 켜거나 페이지를 새로고침(F5)하면 보안을 위해 폴더 접근 권한이 초기화됩니다. 폴더 경로 자체는 기억하므로 버튼을 눌러 권한만 다시 허용해 주면 됩니다.
-* **OS 경로 길이 제한 (Windows):** 윈도우 환경에서는 전체 파일 경로가 260자를 초과할 경우 디스크 쓰기가 거부될 수 있으므로, 가급적 드라이브 루트와 가까운 경로에서 사용을 권장합니다.
+It supports one-way and bidirectional operation, four explicit conflict policies, versioned `.trash/<run timestamp>/...` isolation, per-folder-pair manifests, JSON schema v2 backup/restore, safe stop between file operations, Korean/English UI, and responsive layouts. Same or nested folder pairs are rejected, and `.trash` is always excluded from scans.
 
----
+Application state remains JSON in localStorage; non-serializable directory handles are stored separately in IndexedDB. Restored profiles and legacy v0.6.1 manifests are unverified and cannot trigger deletion until the folder pair is verified again. Back up important data independently before use.
 
-## ⚖️ 라이선스 및 면책 고지 (License & Disclaimer)
+Node.js and Playwright are development-only. Run `npm test` for functional regression coverage and `npm run test:visual` for responsive screenshots.
 
-* **License:** 본 프로젝트는 [MIT License](LICENSE) 하에 자유롭게 수정, 배포 및 상업적 이용이 가능합니다.
-* **Disclaimer:** 본 프로그램은 사용자의 로컬 디렉터리 내부 파일을 직접 수정, 이동 및 격리 제어하는 유틸리티 도구입니다. 프로그램은 "있는 그대로(AS IS)" 제공되며, 프로그램 사용 혹은 오용으로 인해 발생할 수 있는 예기치 못한 파일 유실이나 직·간접적인 손해에 대해 개발자는 어떠한 법적 책임도 지지 않습니다. 가동 전 중요 데이터는 반드시 별도 백업하시기 바랍니다.
+## License
 
----
-
-<a name="english"></a>
-# 🔄 File-nally (Beta v0.6.1) - English
-
-> **"Finally completed, a smart bidirectional folder synchronization system for file masters."**
-
-**File-nally** is a high-performance, single-page web application that securely synchronizes two local folders bidirectionally using only your **web browser (Chrome/Edge)**. There is absolutely no server-side dependency or additional software required (No Node.js, No Installation).
-
-By utilizing modern web standard tech like the `File System Access API` coupled with a `JSON Manifest Tracking Engine`, it delivers an ultra-fast, secure, and lightweight synchronization experience.
-
----
-
-## ✨ Key Features
-
-* **🔁 Seamless Bidirectional Sync (Two-way Merge):** Automatically cross-analyzes changes between the Source and Target folders to transmit new files and apply updates based on modification timestamps.
-* **⚡ Smart Skip Engine:** Remembers file states from the last successful sync in a local JSON manifest. Unmodified files are completely skipped from both comparison logic and disk I/O, allowing blazing-fast operations even on massive folders.
-* **🗑️ Secure `.trash` Isolation System:** When a file deletion is detected on one side, File-nally moves the counterpart file to a local `.trash/` folder inside each folder instead of permanently destroying it, completely avoiding unintended data loss.
-* **📊 Real-time Progress Monitoring:** 
-  * Features a visual **Progress Bar** representing overall file transmission progress.
-  * Displays intuitive visual action badges (`🔵 ➔` Send to Target, `🟠 ⇠` Send to Source, `🗑️` Isolate to Trash) dynamically across the system log and user interface.
-* **⏹️ Elegant Abort Mechanism:** Stop the synchronization at any point safely. File-nally will gracefully complete the active file-write transaction to prevent file corruption before halting the loop.
-* **💾 Full Data JSON Backup & Restore:** Save your current sync configurations, history log, and metadata snapshot to a single `.json` file. Restore it easily in other browsers or devices.
-
----
-
-## 🚀 How to Use
-
-File-nally is built entirely as a single-page HTML file, requiring no complex server setup or build process.
-
-1. Download the `file-nally.html` file from this repository.
-2. Double-click the downloaded file to run it in **Chrome** or **Edge** browser.
-3. Select your directories using the **1. Select Source Folder** and **2. Select Target Folder** buttons (ensure you grant folder write/edit permissions when prompted by your browser).
-4. Click **🔍 Compare Changes** to visually preview the pending file queue before running any actual sync.
-5. Once verified, click **▶ Run Synchronization** to initiate the sync transactions.
-
----
-
-## 🚨 Control Badge Guide
-
-These helpful indicator symbols are used across tables, status displays, and system logs to represent file-level analysis results:
-
-* `🔵 ➔ Send Update` : Indicates a new or newly-modified file in the Source folder is scheduled for copy into the Target folder.
-* `🟠 ⇠ Send Update` : Indicates a new or newly-modified file in the Target folder is scheduled for copy into the Source folder.
-* `🗑️ Isolation Pending` : File-nally has identified a deletion on one side and will safely move the matching file to the counterpart's `.trash` folder.
-* `No Change` : Files are in perfect agreement with the last sync manifest, skipping disk writes completely.
-
----
-
-## 🔒 Browser Environment Security Constraints
-
-* **No Real Disk Path Disclosure:** Due to strict browser Sandbox security guidelines, absolute path structures (e.g., `C:\Users\...`) cannot be accessed. Only local folder names and relative paths will be visible in the application.
-* **Re-authorization Required on Refresh:** Reloading the web page (F5) or restarting the browser clears mounted folder access tokens for security. File-nally will remember your path targets, but you will need to grant folder write access again.
-* **OS Path Length Limits (Windows):** In Windows environments, total file paths exceeding 260 characters may fail to write. It is highly recommended to use folders closer to your drive's root folder.
-
----
-
-## ⚖️ License & Disclaimer
-
-* **License:** This project is open-source software distributed under the [MIT License](LICENSE). Feel free to customize, distribute, and apply commercially.
-* **Disclaimer:** This software is a local file utility designed to modify, move, isolate, and replace items within your designated folders. It is provided "AS IS" without warranty of any kind. Users hold sole responsibility to securely back up critical files before running synchronization cycles. The developer shall not be liable for any direct, indirect, or accidental data loss arising from standard use, misuse, or sudden process interruptions.
+MIT. See [LICENSE](LICENSE).
