@@ -10,31 +10,40 @@ const {
 } = require('./support/mock-file-system.cjs');
 
 const ROOT = path.resolve(__dirname, '..');
-const HTML_PATH = path.join(ROOT, 'file-nally.html');
 const VISUAL = process.argv.includes('--visual');
 const grepIndex = process.argv.indexOf('--grep');
 const NAME_FILTER = grepIndex >= 0 ? new RegExp(process.argv[grepIndex + 1], 'i') : null;
 
 async function startServer() {
-  const html = await fs.readFile(HTML_PATH);
-  const server = http.createServer((request, response) => {
-    if (request.url === '/favicon.ico') {
+  const routes = new Map([
+    ['/', { file: path.join(ROOT, 'file-nally.html'), type: 'text/html; charset=utf-8' }],
+    ['/file-nally.html', { file: path.join(ROOT, 'file-nally.html'), type: 'text/html; charset=utf-8' }],
+    ['/dev/file-nally.html', { file: path.join(ROOT, 'dev', 'file-nally.html'), type: 'text/html; charset=utf-8' }],
+    ['/dev/css/file-nally.css', { file: path.join(ROOT, 'dev', 'css', 'file-nally.css'), type: 'text/css; charset=utf-8' }],
+    ['/dev/js/file-nally.js', { file: path.join(ROOT, 'dev', 'js', 'file-nally.js'), type: 'text/javascript; charset=utf-8' }],
+  ]);
+  const server = http.createServer(async (request, response) => {
+    const pathname = new URL(request.url, 'http://127.0.0.1').pathname;
+    if (pathname === '/favicon.ico') {
       response.writeHead(204).end();
       return;
     }
-    if (request.url === '/' || request.url.startsWith('/file-nally.html')) {
-      response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-      response.end(html);
+    const route = routes.get(pathname);
+    if (!route) {
+      response.writeHead(404).end('Not found');
       return;
     }
-    response.writeHead(404).end('Not found');
+    try {
+      const content = await fs.readFile(route.file);
+      response.writeHead(200, { 'content-type': route.type });
+      response.end(content);
+    } catch (error) {
+      response.writeHead(500).end(error.message);
+    }
   });
   await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-  const address = server.address();
-  return {
-    server,
-    url: `http://127.0.0.1:${address.port}/file-nally.html`,
-  };
+  const origin = `http://127.0.0.1:${server.address().port}`;
+  return { server, url: `${origin}/file-nally.html`, devUrl: `${origin}/dev/file-nally.html` };
 }
 
 async function resetBrowserState(page) {
@@ -76,12 +85,25 @@ async function executeCurrentPlan(page) {
 }
 
 async function main() {
-  const { server, url } = await startServer();
+  const { server, url, devUrl } = await startServer();
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
   const tests = [];
   const add = (name, run) => {
     if (!NAME_FILTER || NAME_FILTER.test(name)) tests.push({ name, run });
   };
+
+  add('development sources load with external CSS and JavaScript', async ({ page, devUrl }) => {
+    await page.goto(devUrl);
+    await page.waitForFunction(() => Boolean(window.FileNallyTest));
+    const result = await page.evaluate(() => ({
+      version: document.querySelector('.version')?.textContent,
+      background: getComputedStyle(document.body).backgroundColor,
+      errors: window.__testUnhandledErrors || [],
+    }));
+    assert.equal(result.version, 'Beta v0.7.0');
+    assert.equal(result.background, 'rgb(244, 246, 250)');
+    assert.deepEqual(result.errors, []);
+  });
 
   add('comparison re-enables synchronization when work is queued', async ({ page }) => {
     await mountPair(page, {
@@ -391,7 +413,7 @@ async function main() {
     await resetBrowserState(page);
     await page.reload();
     try {
-      await test.run({ page, context, url });
+      await test.run({ page, context, url, devUrl });
       const errors = await page.evaluate(() => window.__testUnhandledErrors || []);
       assert.deepEqual(errors, []);
       results.push({ name: test.name, status: 'PASS' });
