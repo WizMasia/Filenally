@@ -1,0 +1,11 @@
+{
+  "name": "file-nally",
+  "private": true,
+  "scripts": {
+    "test": "node tests/file-nally.e2e.cjs",
+    "test:visual": "node tests/file-nally.e2e.cjs --visual"
+  },
+  "devDependencies": {
+    "playwright": "1.61.1"
+  }
+}

@@ -3,950 +3,1005 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File-nally : 로컬 폴더 양방향 동기화 시스템</title>
+    <meta name="description" content="브라우저에서 두 로컬 폴더를 안전하게 비교하고 동기화하는 단일 HTML 도구">
+    <title>File-nally · 로컬 폴더 동기화</title>
     <style>
-        :root { 
-            --primary: #4F46E5; --hover: #4338CA; --bg: #F3F4F6; --surface: #FFFFFF; 
-            --border: #E5E7EB; --text: #1F2937; --green-light: #E6F4EA; --green-text: #137333;
-            --blue-light: #E8F0FE; --blue-text: #1A73E8; --gray-light: #F1F3F4; --gray-text: #5F6368;
-            --orange-light: #FEF7E0; --orange-text: #B06000; --warning: #F59E0B; --warning-hover: #D97706;
-            --danger-light: #FCE8E6; --danger-text: #C5221F;
+        :root {
+            color-scheme: light;
+            --surface-page: #f4f6fa;
+            --surface-panel: #ffffff;
+            --surface-subtle: #f8fafc;
+            --surface-strong: #172033;
+            --text-primary: #172033;
+            --text-secondary: #536078;
+            --text-muted: #667085;
+            --border-default: #d8dee9;
+            --border-strong: #aeb8ca;
+            --accent-primary: #4338ca;
+            --accent-hover: #3730a3;
+            --accent-soft: #eef2ff;
+            --status-success: #087a55;
+            --status-success-soft: #ecfdf3;
+            --status-warning: #9a4d00;
+            --status-warning-soft: #fff7ed;
+            --status-danger: #b42318;
+            --status-danger-soft: #fff1f0;
+            --status-info: #175cd3;
+            --status-info-soft: #eff8ff;
+            --space-1: 4px;
+            --space-2: 8px;
+            --space-3: 12px;
+            --space-4: 16px;
+            --space-5: 20px;
+            --space-6: 24px;
+            --space-8: 32px;
+            --radius-sm: 6px;
+            --radius-md: 10px;
+            --radius-lg: 14px;
+            --shadow-panel: 0 1px 2px rgb(16 24 40 / 0.06);
         }
-        body { font-family: 'Pretendard', system-ui, sans-serif; background-color: var(--bg); color: var(--text); padding: 1.5rem; margin: 0; display: flex; flex-direction: column; align-items: center; }
-        .container { max-width: 1200px; width: 100%; min-height: 100vh; display: flex; flex-direction: column; }
-        .content { flex: 1; }
-        h1 { font-size: 1.8rem; margin-bottom: 0.5rem; text-align: center; }
-        p.desc { text-align: center; color: #6B7280; margin-bottom: 1.5rem; font-size: 0.95rem; }
-        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
-        .flex-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
-        button { background-color: var(--primary); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; font-size: 0.95rem; cursor: pointer; font-weight: 500; transition: all 0.2s; white-space: nowrap; }
-        button:hover:not(:disabled) { background-color: var(--hover); }
-        button:disabled { background-color: #D1D5DB; cursor: not-allowed; }
-        .btn-secondary { background-color: #4B5563; }
-        .btn-secondary:hover:not(:disabled) { background-color: #374151; }
-        .btn-warning { background-color: var(--warning); }
-        .btn-warning:hover:not(:disabled) { background-color: var(--warning-hover); }
-        .btn-danger { background-color: #EF4444; }
-        .btn-danger:hover:not(:disabled) { background-color: #DC2626; }
-        .path-display { flex-grow: 1; padding: 0.6rem; background: #F9FAFB; border: 1px solid var(--border); border-radius: 6px; color: #4B5563; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .option-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
-        .option-item { display: flex; flex-direction: column; gap: 0.4rem; }
-        .option-item label { font-weight: 600; font-size: 0.85rem; color: #4B5563; }
-        select, input[type="text"] { padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background-color: white; font-size: 0.9rem; outline: none; }
-        
-        .progress-container { margin-top: 1.2rem; padding: 1rem; background-color: #F9FAFB; border: 1px solid var(--border); border-radius: 8px; display: none; }
-        .progress-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; margin-bottom: 0.5rem; }
-        .progress-bar-bg { width: 100%; background-color: #E5E7EB; height: 8px; border-radius: 4px; overflow: hidden; }
-        .progress-bar-fill { width: 0%; background-color: #10B981; height: 100%; transition: width 0.15s ease-out; }
-        
-        .viewer-container { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
-        .viewer-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border); }
-        .table-wrapper { max-height: 350px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: white; }
-        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
-        th, td { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
-        th { background-color: #F9FAFB; font-weight: 600; position: sticky; top: 0; z-index: 10; }
-        
-        .row-new { background-color: var(--green-light); }
-        .row-update { background-color: var(--blue-light); }
-        .row-same { background-color: transparent; color: #9CA3AF; }
-        .row-incoming { background-color: var(--orange-light); }
-        .row-trash { background-color: var(--danger-light); }
-        
-        .badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
-        .badge-new-out { background-color: #C2E7D9; color: var(--green-text); }
-        .badge-update-out { background-color: #D2E3FC; color: var(--blue-text); }
-        .badge-update-in { background-color: #FEF0D5; color: var(--orange-text); }
-        .badge-trash { background-color: #FAD2E1; color: var(--danger-text); }
-        .badge-same { background-color: #E8EAED; color: var(--gray-text); }
-        
-        .sync-btn-container { text-align: center; margin-top: 1rem; display: flex; justify-content: center; gap: 1rem; }
-        #btnSync { background-color: #10B981; font-size: 1.1rem; padding: 0.7rem 2rem; }
-        #btnSync:hover:not(:disabled) { background-color: #059669; }
-        #btnAbort { font-size: 1.1rem; padding: 0.7rem 2rem; }
-        
-        .history-log-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
-        .log-box { max-height: 200px; overflow-y: auto; background: #1E293B; color: #F8FAFC; padding: 0.8rem; border-radius: 8px; font-family: monospace; font-size: 0.8rem; margin: 0; }
-        .history-table th { background-color: #334155; color: white; }
-        .history-table td { color: #334155; }
 
-        /* 배포용 라이선스 및 법적 고지 푸터 스타일 */
-        footer { width: 100%; border-top: 1px solid var(--border); padding-top: 1.5rem; padding-bottom: 1rem; margin-top: auto; font-size: 0.8rem; color: #6B7280; text-align: center; line-height: 1.5; }
-        .footer-law { max-width: 900px; margin: 0.5rem auto 0 auto; text-align: justify; text-justify: inter-word; font-size: 0.75rem; color: #9CA3AF; padding: 0 1rem; }
+        * { box-sizing: border-box; }
+        html { min-width: 0; background: var(--surface-page); }
+        body {
+            min-width: 0;
+            margin: 0;
+            background: var(--surface-page);
+            color: var(--text-primary);
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            font-size: 0.9375rem;
+            line-height: 1.55;
+        }
+        button, input, select { font: inherit; }
+        button, select, input { min-width: 0; }
+        button {
+            min-height: 40px;
+            border: 1px solid transparent;
+            border-radius: var(--radius-sm);
+            padding: var(--space-2) var(--space-4);
+            background: var(--accent-primary);
+            color: #ffffff;
+            cursor: pointer;
+            font-weight: 700;
+            transition: transform 120ms ease-out;
+        }
+        button:hover:not(:disabled) { background: var(--accent-hover); }
+        button:active:not(:disabled) { transform: translateY(1px); }
+        button:disabled { background: #e4e7ec; border-color: #d0d5dd; color: #667085; cursor: not-allowed; }
+        button:focus-visible, select:focus-visible, input:focus-visible {
+            outline: 3px solid rgb(67 56 202 / 0.28);
+            outline-offset: 2px;
+            border-color: var(--accent-primary);
+        }
+        .button-secondary { background: #344054; }
+        .button-secondary:hover:not(:disabled) { background: #1d2939; }
+        .button-warning { background: var(--status-warning); }
+        .button-warning:hover:not(:disabled) { background: #7a3d00; }
+        .button-danger { background: var(--status-danger); }
+        .button-danger:hover:not(:disabled) { background: #912018; }
+        .button-ghost { background: transparent; border-color: var(--border-default); color: var(--text-primary); }
+        .button-ghost:hover:not(:disabled) { background: var(--surface-subtle); }
+
+        .icon { width: 1.05rem; height: 1.05rem; flex: 0 0 auto; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+        .with-icon { display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2); }
+        .app-shell { width: min(1200px, 100%); margin: 0 auto; padding: var(--space-6); }
+        .app-header { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); margin-bottom: var(--space-4); }
+        .brand { display: flex; align-items: center; gap: var(--space-3); min-width: 0; }
+        .brand-mark { display: grid; place-items: center; width: 40px; height: 40px; border-radius: var(--radius-md); background: var(--accent-primary); color: #ffffff; }
+        .brand-copy { min-width: 0; }
+        h1 { margin: 0; font-size: 1.75rem; line-height: 1.2; letter-spacing: -0.02em; }
+        .version { color: var(--accent-primary); font-size: 0.8125rem; font-weight: 750; }
+        .language-switch { display: flex; gap: var(--space-1); padding: var(--space-1); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-panel); }
+        .language-switch button { min-height: 34px; padding: var(--space-1) var(--space-3); background: transparent; color: var(--text-secondary); }
+        .language-switch button[aria-pressed="true"] { background: var(--accent-primary); color: #ffffff; }
+        .desc { max-width: 72ch; margin: 0 auto var(--space-5); color: var(--text-secondary); text-align: center; }
+
+        .panel { min-width: 0; border: 1px solid var(--border-default); border-radius: var(--radius-lg); background: var(--surface-panel); box-shadow: var(--shadow-panel); }
+        .control-panel { padding: var(--space-5); margin-bottom: var(--space-4); }
+        .folder-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
+        .folder-select { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-3); }
+        .path-display { min-width: 0; padding: var(--space-2) var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--surface-subtle); color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .profile-line { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px dashed var(--border-default); color: var(--text-secondary); font-size: 0.8125rem; }
+        .profile-badge { display: inline-flex; align-items: center; gap: var(--space-1); border-radius: 999px; padding: var(--space-1) var(--space-2); background: var(--surface-subtle); color: var(--text-secondary); font-weight: 700; }
+        .profile-badge[data-verified="true"] { background: var(--status-success-soft); color: var(--status-success); }
+
+        .option-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); margin-top: var(--space-4); }
+        .field { display: flex; min-width: 0; flex-direction: column; gap: var(--space-1); }
+        .field label { color: var(--text-secondary); font-size: 0.8125rem; font-weight: 700; }
+        select, input[type="text"] { width: 100%; min-height: 40px; border: 1px solid var(--border-default); border-radius: var(--radius-sm); background: var(--surface-panel); color: var(--text-primary); padding: var(--space-2) var(--space-3); }
+        .data-actions, .primary-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: var(--space-2); }
+        .data-actions { margin-top: var(--space-4); }
+        .primary-actions { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border-default); }
+
+        .status-banner { display: flex; align-items: flex-start; gap: var(--space-2); min-height: 44px; margin-top: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface-subtle); color: var(--text-secondary); }
+        .status-banner[data-tone="info"] { border-color: #b2ddff; background: var(--status-info-soft); color: var(--status-info); }
+        .status-banner[data-tone="success"] { border-color: #abefc6; background: var(--status-success-soft); color: var(--status-success); }
+        .status-banner[data-tone="warning"] { border-color: #fedf89; background: var(--status-warning-soft); color: var(--status-warning); }
+        .status-banner[data-tone="danger"] { border-color: #fecdca; background: var(--status-danger-soft); color: var(--status-danger); }
+        .progress-container { display: none; margin-top: var(--space-3); padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-subtle); }
+        .progress-container[data-visible="true"] { display: block; }
+        .progress-head { display: flex; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-2); font-size: 0.8125rem; }
+        .progress-file { min-width: 0; overflow-wrap: anywhere; }
+        .progress-track { height: 8px; overflow: hidden; border-radius: 999px; background: #e4e7ec; }
+        .progress-bar { width: 0; height: 100%; background: var(--accent-primary); transition: width 200ms ease-in-out; }
+
+        .workspace-grid, .history-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); min-width: 0; }
+        .workspace-grid { margin-bottom: var(--space-4); }
+        .history-grid { margin-bottom: var(--space-6); }
+        .panel-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border-default); }
+        .panel-title { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: 1rem; line-height: 1.4; }
+        .count { color: var(--text-secondary); font-size: 0.75rem; font-weight: 700; }
+        .table-wrapper { min-width: 0; max-height: 360px; overflow: auto; }
+        table { width: 100%; min-width: 520px; border-collapse: collapse; font-size: 0.8125rem; }
+        th, td { padding: var(--space-3); border-bottom: 1px solid var(--border-default); text-align: left; vertical-align: top; }
+        th { position: sticky; top: 0; z-index: 1; background: var(--surface-subtle); color: var(--text-secondary); font-weight: 750; }
+        tbody tr:last-child td { border-bottom: 0; }
+        .file-name { font-weight: 700; }
+        .file-path { color: var(--text-secondary); overflow-wrap: anywhere; }
+        .empty-cell { height: 120px; color: var(--text-muted); text-align: center; vertical-align: middle; }
+        .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: var(--space-1) var(--space-2); font-size: 0.75rem; font-weight: 750; white-space: nowrap; }
+        .badge-neutral { background: #f2f4f7; color: #475467; }
+        .badge-info { background: var(--status-info-soft); color: var(--status-info); }
+        .badge-success { background: var(--status-success-soft); color: var(--status-success); }
+        .badge-warning { background: var(--status-warning-soft); color: var(--status-warning); }
+        .badge-danger { background: var(--status-danger-soft); color: var(--status-danger); }
+
+        .log-box { height: 220px; overflow: auto; padding: var(--space-4); background: var(--surface-strong); color: #f8fafc; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.8125rem; overflow-wrap: anywhere; }
+        .log-line + .log-line { margin-top: var(--space-2); }
+        .history-panel .table-wrapper { max-height: 220px; }
+        footer { border-top: 1px solid var(--border-default); padding-top: var(--space-5); color: var(--text-secondary); font-size: 0.8125rem; text-align: center; }
+        .footer-law { max-width: 90ch; margin: var(--space-2) auto 0; }
+        .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+        @media (max-width: 900px) {
+            .option-grid { grid-template-columns: 1fr 1fr; }
+            .option-grid .field:last-child { grid-column: 1 / -1; }
+        }
+        @media (max-width: 760px) {
+            .app-shell { padding: var(--space-4); }
+            .app-header { align-items: stretch; flex-direction: column; }
+            .language-switch { align-self: flex-start; }
+            .folder-grid, .workspace-grid, .history-grid, .option-grid { grid-template-columns: minmax(0, 1fr); }
+            .option-grid .field:last-child { grid-column: auto; }
+            .folder-select { grid-template-columns: minmax(0, 1fr); }
+            .folder-select button { width: 100%; }
+            .primary-actions button, .data-actions button { flex: 1 1 180px; }
+            .profile-line { align-items: flex-start; flex-direction: column; }
+            .control-panel { padding: var(--space-4); }
+        }
+        @media (max-width: 420px) {
+            h1 { font-size: 1.5rem; }
+            .brand-mark { width: 36px; height: 36px; }
+            .primary-actions button, .data-actions button { flex-basis: 100%; width: 100%; }
+        }
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; }
+        }
     </style>
 </head>
 <body>
+<svg aria-hidden="true" class="sr-only" width="0" height="0">
+    <symbol id="icon-sync" viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M4 17h5v5"/><path d="M5.2 9a7 7 0 0 1 11.4-3.4L20 7"/><path d="M18.8 15a7 7 0 0 1-11.4 3.4L4 17"/></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M3 6h6l2 2h10v10H3z"/></symbol>
+    <symbol id="icon-compare" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></symbol>
+    <symbol id="icon-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M4 20h16"/></symbol>
+    <symbol id="icon-file" viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 3 2 21h20z"/><path d="M12 9v5"/><path d="M12 18h.01"/></symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 14h8l1-14"/></symbol>
+</svg>
 
-<div class="container">
-    <div class="content">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; width: 100%; flex-wrap: wrap; gap: 1rem;">
-            <h1 style="margin: 0; text-align: left;">🔄 File-nally <span style="font-size: 1.1rem; color: #4F46E5; vertical-align: middle;">Beta v0.6.1</span></h1>
-            <div style="display: flex; gap: 0.3rem; align-items: center; background: #E5E7EB; padding: 0.2rem; border-radius: 6px;">
-                <button id="btnLangKo" style="padding: 0.3rem 0.8rem; font-size: 0.8rem; border-radius: 4px; font-weight: bold; background: var(--primary); color: white;">한국어</button>
-                <button id="btnLangEn" style="padding: 0.3rem 0.8rem; font-size: 0.8rem; border-radius: 4px; font-weight: bold; background: transparent; color: var(--text);">English</button>
+<div class="app-shell">
+    <header class="app-header">
+        <div class="brand">
+            <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-sync"></use></svg></span>
+            <div class="brand-copy">
+                <h1>File-nally</h1>
+                <div class="version">Beta v0.7.0</div>
             </div>
         </div>
-        <p class="desc">매니페스트 변경 이력을 분석하여 변경 없는 파일은 고속 스킵하고, 지워진 파일은 각 폴더의 .trash 위치로 격리 이동합니다.</p>
+        <div class="language-switch" role="group" aria-label="Language">
+            <button id="btnLangKo" type="button" aria-pressed="true">한국어</button>
+            <button id="btnLangEn" type="button" aria-pressed="false">English</button>
+        </div>
+    </header>
 
-        <!-- 1. 제어 센터 -->
-        <div class="card">
-            <div class="flex-row">
-                <button id="btnSrc">1. 원본 폴더 (Source)</button>
-                <div class="path-display" id="pathSrc">선택되지 않음</div>
+    <main>
+        <p class="desc" data-i18n="desc">두 로컬 폴더를 비교한 뒤 변경 계획을 검토하고 안전하게 동기화합니다.</p>
+
+        <section class="panel control-panel" aria-labelledby="controlTitle">
+            <h2 id="controlTitle" class="sr-only" data-i18n="controlTitle">동기화 제어</h2>
+            <div class="folder-grid">
+                <div class="folder-select">
+                    <button id="btnSrc" class="with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="selectSource">원본 폴더 선택</span></button>
+                    <div class="path-display" id="pathSrc" title="" data-i18n="notSelected">선택되지 않음</div>
+                </div>
+                <div class="folder-select">
+                    <button id="btnTgt" class="with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="selectTarget">대상 폴더 선택</span></button>
+                    <div class="path-display" id="pathTgt" title="" data-i18n="notSelected">선택되지 않음</div>
+                </div>
             </div>
-            <div class="flex-row">
-                <button id="btnTgt">2. 대상 폴더 (Target)</button>
-                <div class="path-display" id="pathTgt">선택되지 않음</div>
+
+            <div class="profile-line">
+                <span id="profileText" data-i18n="profileNone">선택된 동기화 프로필이 없습니다.</span>
+                <span id="profileBadge" class="profile-badge" data-verified="false"><svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg><span data-i18n="profileUnverified">폴더 쌍 미확인</span></span>
             </div>
-            
+
             <div class="option-grid">
-                <div class="option-item">
-                    <label for="syncDirection">🔁 동기화 방향</label>
+                <div class="field">
+                    <label for="syncDirection" data-i18n="directionLabel">동기화 방향</label>
                     <select id="syncDirection">
-                        <option value="bidirectional">양방향 동기화 (Source ⇄ Target)</option>
-                        <option value="unidirectional">단방향 동기화 (Source ➔ Target)</option>
+                        <option value="bidirectional" data-i18n="directionBoth">양방향 (원본 ⇄ 대상)</option>
+                        <option value="unidirectional" data-i18n="directionOne">단방향 (원본 → 대상)</option>
                     </select>
                 </div>
-                <div class="option-item">
-                    <label for="conflictPolicy">⚡ 파일 충돌 해결 정책</label>
+                <div class="field">
+                    <label for="conflictPolicy" data-i18n="policyLabel">충돌 해결 정책</label>
                     <select id="conflictPolicy">
-                        <option value="latest">최신 파일 유지 (날짜 비교)</option>
-                        <option value="overwrite">무조건 덮어쓰기 (강제 대체)</option>
-                        <option value="skip">기존 파일 건너뛰기</option>
-                        <option value="rename">이름 변경하여 둘 다 유지</option>
+                        <option value="latest" data-i18n="policyLatest">최신 파일 유지</option>
+                        <option value="source-overwrite" data-i18n="policySource">원본 우선 덮어쓰기</option>
+                        <option value="skip" data-i18n="policySkip">기존 파일 건너뛰기</option>
+                        <option value="rename" data-i18n="policyRename">이름을 바꿔 두 버전 보존</option>
                     </select>
                 </div>
-                <div class="option-item">
-                    <label for="excludeDirs">🚫 제외할 하위 폴더명 (쉼표 구분)</label>
-                    <input type="text" id="excludeDirs" value="node_modules, .git, dist, temp, .trash">
-                </div>
-                <div class="option-item" style="justify-content: flex-end; flex-direction: row; gap: 0.5rem; padding-top: 1.2rem; flex-wrap: wrap;">
-                    <button id="btnGenDefault" class="btn-secondary" title="깨끗한 기본 설정 JSON 템플릿 파일 생성 및 다운로드">📄 기본값 JSON 생성</button>
-                    <button id="btnExport" class="btn-secondary" title="현재 구성 및 이력 데이터를 통합 JSON으로 백업 다운로드">💾 데이터 백업 (JSON)</button>
-                    <button id="btnImport" class="btn-secondary" title="백업된 설정 JSON 파일을 업로드하여 환경 복원">📂 데이터 복원</button>
-                    <input type="file" id="fileImporter" accept=".json" style="display: none;">
+                <div class="field">
+                    <label for="excludeDirs" data-i18n="excludeLabel">제외할 하위 폴더명</label>
+                    <input id="excludeDirs" type="text" value="node_modules, .git, dist, temp, .trash" spellcheck="false">
                 </div>
             </div>
 
-            <div class="sync-btn-container">
-                <button id="btnCompare" disabled>🔍 변경사항 비교하기</button>
-                <button id="btnSync" disabled>▶ 동기화 실행</button>
-                <button id="btnAbort" class="btn-warning" disabled>⏹ 동기화 중지</button>
+            <div class="data-actions">
+                <button id="btnGenDefault" class="button-ghost with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-file"></use></svg><span data-i18n="defaultJson">기본 JSON</span></button>
+                <button id="btnExport" class="button-secondary with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg><span data-i18n="exportJson">JSON 백업</span></button>
+                <button id="btnImport" class="button-secondary with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg><span data-i18n="importJson">JSON 복원</span></button>
+                <input id="fileImporter" class="sr-only" type="file" accept="application/json,.json">
             </div>
 
-            <div id="progressContainer" class="progress-container">
-                <div class="progress-header">
-                    <span id="currentFileText" style="color: var(--text); font-weight: 500; max-width: 75%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">준비 중...</span>
-                    <span id="progressPercentText" style="color: var(--primary); font-weight: bold;">0% (0/0)</span>
-                </div>
-                <div class="progress-bar-bg">
-                    <div id="progressBar" class="progress-bar-fill"></div>
-                </div>
+            <div class="primary-actions">
+                <button id="btnCompare" class="button-ghost with-icon" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-compare"></use></svg><span data-i18n="compare">변경사항 비교</span></button>
+                <button id="btnSync" class="with-icon" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-play"></use></svg><span data-i18n="sync">동기화 실행</span></button>
+                <button id="btnAbort" class="button-warning with-icon" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-stop"></use></svg><span data-i18n="abort">안전하게 중지</span></button>
             </div>
-        </div>
 
-        <!-- 2. 파일 비교 테이블 뷰어 -->
-        <div class="viewer-container">
-            <div class="card" style="margin-bottom:0;">
-                <div class="viewer-title"><span>📁 원본 폴더 (Source)</span><span id="srcCount" style="font-size:0.8rem; color:#6B7280;">파일: 0개</span></div>
-                <div class="table-wrapper">
-                    <table>
-                        <thead><tr><th style="width:50%">파일명/경로</th><th style="width:15%">크기</th><th style="width:15%">수정일</th><th style="width:20%">분석 상태</th></tr></thead>
-                        <tbody id="srcFileBody"><tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">폴더를 지정하고 비교해 보세요.</td></tr></tbody>
-                    </table>
-                </div>
+            <div id="syncStatus" class="status-banner" data-tone="neutral" role="status" aria-live="polite">
+                <svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg>
+                <span id="syncStatusText" data-i18n="waiting">폴더를 선택해 주세요.</span>
             </div>
-            <div class="card" style="margin-bottom:0;">
-                <div class="viewer-title"><span>📁 대상 폴더 (Target)</span><span id="tgtCount" style="font-size:0.8rem; color:#6B7280;">파일: 0개</span></div>
-                <div class="table-wrapper">
-                    <table>
-                        <thead><tr><th style="width:50%">파일명/경로</th><th style="width:15%">크기</th><th style="width:15%">수정일</th><th style="width:20%">분석 상태</th></tr></thead>
-                        <tbody id="tgtFileBody"><tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">폴더를 지정하고 비교해 보세요.</td></tr></tbody>
-                    </table>
-                </div>
-            </div>
-        </div>
 
-        <!-- 3. 실시간 시스템 로그 및 과거 이력 테이블 -->
-        <div class="history-log-grid">
-            <div class="card" style="margin-bottom:0;">
-                <h3 style="margin-top:0; font-size:0.95rem; display: flex; justify-content: space-between; align-items: center;">
-                    <span>📋 실시간 시스템 로그</span>
-                    <span id="syncStatus" style="font-size:0.85rem; font-weight:normal; color:#6B7280;">대기 중</span>
-                </h3>
-                <div id="logBox" class="log-box" style="height: 150px;"></div>
-            </div>
-            <div class="card" style="margin-bottom:0;">
-                <h3 style="margin-top:0; font-size:0.95rem; display: flex; justify-content: space-between;">
-                    <span>📜 과거 동기화 성공 이력 (JSON 연동)</span>
-                    <button id="btnClearHistory" class="btn-danger" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; border-radius: 4px;">이력 초기화</button>
-                </h3>
-                <div class="table-wrapper" style="height: 150px; border: none;">
-                    <table class="history-table">
-                        <thead><tr><th>실행 시간</th><th>방향</th><th>처리된 파일 수</th><th>상태</th></tr></thead>
-                        <tbody id="historyBody"><tr><td colspan="4" style="text-align:center; color:#9CA3AF;">기록된 이력이 없습니다.</td></tr></tbody>
-                    </table>
+            <div id="progressContainer" class="progress-container" data-visible="false">
+                <div class="progress-head">
+                    <span id="currentFileText" class="progress-file" data-i18n="preparing">준비 중</span>
+                    <span id="progressPercentText">0% (0/0)</span>
                 </div>
+                <div id="progressBar" class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="동기화 진행률"><div class="progress-bar"></div></div>
             </div>
-        </div>
-    </div>
+        </section>
 
-    <!-- 4. 법적 고지 및 오픈소스 라이선스 푸터 레이어 -->
+        <section id="workspaceResults" class="workspace-grid" aria-label="폴더 비교 결과">
+            <article class="panel">
+                <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="sourceTitle">원본 폴더</span></h2><span id="srcCount" class="count">0</span></div>
+                <div class="table-wrapper"><table><thead><tr><th data-i18n="pathHead">파일명과 경로</th><th data-i18n="sizeHead">크기</th><th data-i18n="dateHead">수정일</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="srcFileBody"></tbody></table></div>
+            </article>
+            <article class="panel">
+                <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="targetTitle">대상 폴더</span></h2><span id="tgtCount" class="count">0</span></div>
+                <div class="table-wrapper"><table><thead><tr><th data-i18n="pathHead">파일명과 경로</th><th data-i18n="sizeHead">크기</th><th data-i18n="dateHead">수정일</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="tgtFileBody"></tbody></table></div>
+            </article>
+        </section>
+
+        <section id="activityResults" class="history-grid" aria-label="동기화 기록">
+            <article class="panel">
+                <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg><span data-i18n="logTitle">실시간 로그</span></h2><span id="phaseLabel" class="count" data-i18n="idle">대기</span></div>
+                <div id="logBox" class="log-box" role="log" aria-live="polite"></div>
+            </article>
+            <article class="panel history-panel">
+                <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-file"></use></svg><span data-i18n="historyTitle">동기화 이력</span></h2><button id="btnClearHistory" class="button-danger" type="button" data-i18n="clearHistory">이력 초기화</button></div>
+                <div class="table-wrapper"><table><thead><tr><th data-i18n="timeHead">실행 시간</th><th data-i18n="directionHead">방향</th><th data-i18n="processedHead">처리</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="historyBody"></tbody></table></div>
+            </article>
+        </section>
+    </main>
+
     <footer>
-        <div><b>File-nally</b> is Open Source software licensed under the <b>MIT License</b>.</div>
-        <div class="footer-law">
-            <b>[법적 면책 고지 / Legal Disclaimer]</b><br>
-            본 소프트웨어는 최선을 다해 개발 및 검증되었으나, 사용자의 로컬 드렉터리 내부 파일을 직접 수정, 이동, 대체 및 삭제 제어하는 유틸리티 도구입니다. 본 프로그램은 어떠한 종류의 명시적 또는 묵시적인 보증 없이 "있는 그대로(AS IS)" 제공됩니다. 사용자는 본 프로그램을 가동하기 전 반드시 누락되면 안 되는 핵심 데이터를 별도로 안전하게 백업해야 할 책임이 있습니다. 개발자는 본 프로그램의 사용, 오용, 오작동 또는 중간 작업 중단으로 인하여 발생하는 파일 유실, 손상, 시스템 장애를 포함한 어떠한 직·간접적인 손해나 법적 분쟁에 대해서도 일체의 책임을 지지 않습니다. 본 프로그램을 사용하는 것은 이 면책 조항에 동의하는 것으로 간주됩니다.
-        </div>
-        <div style="margin-top:0.6rem; color:#9CA3AF;">Copyright 2026. File-nally Dev. All rights reserved.</div>
+        <div><strong>File-nally</strong> · MIT License</div>
+        <p class="footer-law" data-i18n="disclaimer">중요한 데이터는 동기화 전에 별도로 백업하세요. 브라우저와 운영체제의 파일 권한 또는 예기치 않은 중단으로 인한 손실 가능성이 있습니다.</p>
+        <div>Copyright 2026. File-nally Dev.</div>
     </footer>
 </div>
 
 <script>
-    const TRANSLATIONS = {
+(() => {
+    'use strict';
+
+    const STORAGE_KEY = 'smart_sync_state';
+    const STATE_VERSION = 2;
+    const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+    const MAX_PROFILES = 100;
+    const MAX_MANIFEST_ENTRIES = 100000;
+    const MAX_PROFILE_HISTORY = 30;
+    const MAX_GLOBAL_HISTORY = 100;
+    const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
+    const DEFAULT_EXCLUDES = ['node_modules', '.git', 'dist', 'temp', '.trash'];
+
+    const TEXT = {
         ko: {
-            desc: "매니페스트 변경 이력을 분석하여 변경 없는 파일은 고속 스킵하고, 지워진 파일은 각 폴더의 .trash 위치로 격리 이동합니다.",
-            btnSrc: "1. 원본 폴더 (Source)",
-            btnTgt: "2. 대상 폴더 (Target)",
-            pathNotSelected: "선택되지 않음",
-            syncDirection: "🔁 동기화 방향",
-            directionBidi: "양방향 동기화 (Source ⇄ Target)",
-            directionUni: "단방향 동기화 (Source ➔ Target)",
-            conflictPolicy: "⚡ 파일 충돌 해결 정책",
-            conflictLatest: "최신 파일 유지 (날짜 비교)",
-            conflictOverwrite: "무조건 덮어쓰기 (강제 대체)",
-            conflictSkip: "기존 파일 건너뛰기",
-            conflictRename: "이름 변경하여 둘 다 유지",
-            excludeDirs: "🚫 제외할 하위 폴더명 (쉼표 구분)",
-            btnGenDefault: "📄 기본값 JSON 생성",
-            btnExport: "💾 데이터 백업 (JSON)",
-            btnImport: "📂 데이터 복원",
-            btnCompare: "🔍 변경사항 비교하기",
-            btnSync: "▶ 동기화 실행",
-            btnAbort: "⏹ 동기화 중지",
-            srcFolderTitle: "📁 원본 폴더 (Source)",
-            tgtFolderTitle: "📁 대상 폴더 (Target)",
-            fileCount: "파일: {count}개",
-            thPath: "파일명/경로",
-            thSize: "크기",
-            thDate: "수정일",
-            thStatus: "분석 상태",
-            comparePrompt: "폴더를 지정하고 비교해 보세요.",
-            noFiles: "파일이 없습니다.",
-            sysLog: "📋 실시간 시스템 로그",
-            statusWaiting: "대기 중",
-            historyTitle: "📜 과거 동기화 성공 이력 (JSON 연동)",
-            btnClearHistory: "이력 초기화",
-            historyThTime: "실행 시간",
-            historyThDir: "방향",
-            historyThFiles: "처리된 파일 수",
-            historyThStatus: "상태",
-            historyEmpty: "기록된 이력이 없습니다.",
-            footerLicense: "is Open Source software licensed under the <b>MIT License</b>.",
-            footerDisclaimerTitle: "[법적 면책 고지 / Legal Disclaimer]",
-            footerDisclaimerText: "본 소프트웨어는 최선을 다해 개발 및 검증되었으나, 사용자의 로컬 드렉터리 내부 파일을 직접 수정, 이동, 대체 및 삭제 제어하는 유틸리티 도구입니다. 본 프로그램은 어떠한 종류의 명시적 또는 묵시적인 보증 없이 \"있는 그대로(AS IS)\" 제공됩니다. 사용자는 본 프로그램을 가동하기 전 반드시 누락되면 안 되는 핵심 데이터를 별도로 안전하게 백업해야 할 책임이 있습니다. 개발자는 본 프로그램의 사용, 오용, 오작동 또는 중간 작업 중단으로 인하여 발생하는 파일 유실, 손상, 시스템 장애를 포함한 어떠한 직·간접적인 손해나 법적 분쟁에 대해서도 일체의 책임을 지지 않습니다. 본 프로그램을 사용하는 것은 이 면책 조항에 동의하는 것으로 간주됩니다.",
-            logInit: "✨ 최초 실행 감지: 기본 설정 JSON 구조가 저장소에 자동 안착되었습니다.",
-            logLoadState: "🔄 기존 로컬 환경설정 및 이력 데이터를 로드했습니다.",
-            logCompareStart: "폴더 상태 스캔 및 매니페스트 이력 대조 중...",
-            logCompareDone: "비교 대조 완료 (실제 반영 필요한 변경 대상 대기열: {count}개)",
-            logCompareError: "분석 중 오류 발생: {message}",
-            logSyncStart: "동기화 파일 트랜잭션 적용 작업을 시작합니다...",
-            logSyncAborted: "⏹ 사용자의 요청으로 동기화 작업을 강제 중지했습니다.",
-            logSyncAbortProcess: "⏳ 사용자 중지 시그널 감지. 현재 임시 버퍼 세션 정착 완료 후 작업을 즉시 매듭짓습니다...",
-            logSyncAbortWarning: "중지 명령 처리 중... 데이터 무결성을 보호하기 위해 현재 파일까지만 안전 래핑 마감 중...",
-            logSyncFileStream: "[{icon}] {path} 복사 및 격리 스트림 처리 중... ({current}/{total})",
-            logSyncDone: "작업 완료: 총 {count}개의 로컬 트랜잭션을 마스터 데이터에 안전하게 영구 반영 완료.",
-            logSyncError: "동기화 실행 중 크리티컬 에러 발생: {message}",
-            logFolderSrcCancel: "📁 원본 폴더 지정 작업이 취소되었습니다.",
-            logFolderSrcFail: "❌ 원본 폴더 바인딩 실패: {message}",
-            logFolderTgtCancel: "📁 대상 폴더 지정 작업이 취소되었습니다.",
-            logFolderTgtFail: "❌ 대상 폴더 바인딩 실패: {message}",
-            logGenDefault: "📄 기본 템플릿 설정 파일(default_sync_config.json) 생성 및 다운로드 완료.",
-            logBackupExport: "💾 현재 마스터 구성 및 누적 데이터 백업 JSON 파일 추출 완착.",
-            logBackupImport: "📂 외부 파일에서 백업 데이터를 파싱하여 로컬 엔진에 성공적으로 주입 완료.",
-            logClearHistory: "이력 및 상태 데이터베이스 초기화 완료.",
-            logMountSrc: "1번 원본 폴더(Source) 마운트 및 샌드박스 쓰기 권한을 인가했습니다. ({name})",
-            logMountTgt: "2번 대상 폴더(Target) 마운트 및 샌드박스 쓰기 권한을 인가했습니다. ({name})",
-            alertImportInvalid: "유효한 File-nally 백업 JSON 마스터 규격이 아닙니다.",
-            alertImportParseError: "JSON 설정 파일을 복원하는 도중 파싱 에러가 발생했습니다.",
-            alertClearHistoryConfirm: "주의: 모든 과거 동기화 성공 이력과 매니페스트 스냅샷 데이터베이스를 초기화하시겠습니까? (방향/제외 등 기본 옵션 설정은 보존됩니다.)",
-            badgeNoChange: "변화 없음",
-            badgeUpdateSend: "🔵 ➔ 업데이트 전송",
-            badgeUpdateRecv: "🔵 ⇠ 업데이트 예정",
-            badgeUpdateSendBidi: "🟠 ➔ 업데이트 전송",
-            badgeUpdateRecvBidi: "🟠 ⇠ 업데이트 예정",
-            badgeDeleteWait: "🗑️ 반대편 삭제로 인한 격리 대기",
-            badgeNewSend: "🔵 ➔ 신규 파일 전송",
-            badgeNewSendBidi: "🟠 ➔ 신규 파일 전송",
-            badgeProtected: "동일 (대상 파일 보호됨)",
-            badgeProtectedTgt: "동일 (보호됨)",
-            badgeKeepTgtOnly: "유지 (대상 단독 파일)",
-            stateComparing: "비교 분석 중...⏳",
-            stateCompareDone: "비교 완료 (전송 대기: {count}건)",
-            stateSyncing: "동기화 적용 중... ⏳",
-            stateSyncAborted: "동기화 중지됨 ⏹",
-            stateSyncDone: "동기화 완료 ✅",
-            stateSyncFailed: "동기화 실패 ❌",
-            syncWorkingText: "현재 작업:",
-            syncAbortedSpan: "동기화 중지됨 (총 {total}개 중 {success}개 완료)",
-            syncDoneSpan: "축하합니다! 모든 파일 격리 및 병합 동기화 작업이 성공적으로 완착되었습니다.",
-            syncFailedSpan: "작업 실패 중단: {message}",
-            historyStatusSuccess: "성공",
-            historyStatusAborted: "중단됨 (사용자 요청)"
+            desc: '두 로컬 폴더를 비교한 뒤 변경 계획을 검토하고 안전하게 동기화합니다.', controlTitle: '동기화 제어', selectSource: '원본 폴더 선택', selectTarget: '대상 폴더 선택', notSelected: '선택되지 않음', languageLabel: '언어', progressLabel: '동기화 진행률', workspaceLabel: '폴더 비교 결과', activityLabel: '동기화 기록',
+            profileNone: '선택된 동기화 프로필이 없습니다.', profileUnverified: '폴더 쌍 미확인', profileVerified: '폴더 쌍 확인됨', profileLabel: '{source} ⇄ {target}',
+            directionLabel: '동기화 방향', directionBoth: '양방향 (원본 ⇄ 대상)', directionOne: '단방향 (원본 → 대상)', policyLabel: '충돌 해결 정책', policyLatest: '최신 파일 유지', policySource: '원본 우선 덮어쓰기', policySkip: '기존 파일 건너뛰기', policyRename: '이름을 바꿔 두 버전 보존', excludeLabel: '제외할 하위 폴더명',
+            defaultJson: '기본 JSON', exportJson: 'JSON 백업', importJson: 'JSON 복원', compare: '변경사항 비교', sync: '동기화 실행', abort: '안전하게 중지', waiting: '폴더를 선택해 주세요.', preparing: '준비 중',
+            sourceTitle: '원본 폴더', targetTitle: '대상 폴더', pathHead: '파일명과 경로', sizeHead: '크기', dateHead: '수정일', stateHead: '상태', logTitle: '실시간 로그', idle: '대기', historyTitle: '동기화 이력', clearHistory: '이력 초기화', timeHead: '실행 시간', directionHead: '방향', processedHead: '처리',
+            disclaimer: '중요한 데이터는 동기화 전에 별도로 백업하세요. 브라우저와 운영체제의 파일 권한 또는 예기치 않은 중단으로 인한 손실 가능성이 있습니다.',
+            emptyFiles: '표시할 파일이 없습니다.', emptyHistory: '기록된 동기화 이력이 없습니다.', selected: '{name} 선택됨', pairReady: '폴더 쌍이 확인되었습니다. 변경사항을 비교할 수 있습니다.', sameFolder: '같은 폴더를 원본과 대상으로 사용할 수 없습니다.', nestedFolder: '한 폴더가 다른 폴더 안에 있습니다. 중첩 폴더는 동기화할 수 없습니다.', pickCancelled: '폴더 선택이 취소되었습니다.', pickFailed: '폴더를 선택하지 못했습니다: {message}',
+            comparing: '폴더를 검사하고 변경 계획을 계산하는 중입니다.', compareDone: '비교 완료 · 실행할 작업 {count}건', compareNone: '비교 완료 · 실행할 변경사항이 없습니다.', compareFailed: '비교 중 오류가 발생했습니다: {message}',
+            syncing: '동기화 실행 중 · {current}/{total}', syncDone: '동기화 완료 · {count}건 처리', syncAborted: '동기화가 안전하게 중단되었습니다. {count}건 처리됨', syncFailed: '동기화 중 오류가 발생했습니다: {message}', aborting: '현재 파일 작업을 마친 뒤 중단합니다.',
+            importDone: 'JSON 데이터를 복원했습니다.', importFailed: 'JSON을 복원하지 못했습니다: {message}', exportDone: 'JSON 백업을 생성했습니다.', defaultDone: '기본 JSON을 생성했습니다.', historyCleared: '동기화 이력을 초기화했습니다.', confirmClear: '현재 프로필과 전체 동기화 이력을 초기화할까요?',
+            statusUnchanged: '변경 없음', statusBaseline: '기준 저장', statusCopyOut: '보내기', statusCopyIn: '받기', statusTrash: '휴지통 이동', statusConflict: '충돌 · 확인 필요', statusSkipped: '정책에 따라 건너뜀', statusProtected: '단방향 보호', statusNew: '신규',
+            phaseReady: '준비', phaseComparing: '비교', phasePlanned: '계획됨', phaseSyncing: '실행', phaseSuccess: '완료', phaseError: '오류', phaseAborted: '중단', directionBothShort: '양방향', directionOneShort: '단방향', success: '성공', failed: '실패', aborted: '중단',
         },
         en: {
-            desc: "Analyzes the manifest change history to high-speed skip unmodified files and moves deleted files into the .trash directory of each folder.",
-            btnSrc: "1. Select Source Folder",
-            btnTgt: "2. Select Target Folder",
-            pathNotSelected: "Not Selected",
-            syncDirection: "🔁 Synchronization Direction",
-            directionBidi: "Bidirectional Sync (Source ⇄ Target)",
-            directionUni: "Unidirectional Sync (Source ➔ Target)",
-            conflictPolicy: "⚡ File Conflict Resolution Policy",
-            conflictLatest: "Keep Latest File (Compare Date)",
-            conflictOverwrite: "Always Overwrite (Force Replace)",
-            conflictSkip: "Skip Existing Files",
-            conflictRename: "Rename to Keep Both Files",
-            excludeDirs: "🚫 Exclude Subfolders (comma-separated)",
-            btnGenDefault: "📄 Create Default JSON",
-            btnExport: "💾 Backup Data (JSON)",
-            btnImport: "📂 Restore Data",
-            btnCompare: "🔍 Compare Changes",
-            btnSync: "▶ Run Synchronization",
-            btnAbort: "⏹ Stop Sync",
-            srcFolderTitle: "📁 Source Folder",
-            tgtFolderTitle: "📁 Target Folder",
-            fileCount: "Files: {count}",
-            thPath: "File Name / Path",
-            thSize: "Size",
-            thDate: "Modified Date",
-            thStatus: "Analysis Status",
-            comparePrompt: "Please specify folders and compare changes.",
-            noFiles: "No files found.",
-            sysLog: "📋 Real-time System Log",
-            statusWaiting: "Waiting",
-            historyTitle: "📜 Past Synchronization History (JSON-linked)",
-            btnClearHistory: "Clear History",
-            historyThTime: "Run Time",
-            historyThDir: "Direction",
-            historyThFiles: "Files Processed",
-            historyThStatus: "Status",
-            historyEmpty: "No history recorded.",
-            footerLicense: "is Open Source software licensed under the <b>MIT License</b>.",
-            footerDisclaimerTitle: "[Legal Disclaimer]",
-            footerDisclaimerText: "This software is developed and validated with care, but it is a utility tool that directly modifies, moves, replaces, and deletes files within the user's local directories. This program is provided \"AS IS\" without warranty of any kind, express or implied. Users bear the sole responsibility to securely back up critical data before running this program. The developer shall not be liable for any direct or indirect damages or legal disputes, including file loss, corruption, or system failure arising from the use, misuse, malfunction, or interruption of this program. Using this program constitutes agreement to this disclaimer.",
-            logInit: "✨ First run detected: Default config JSON structure has been stored locally.",
-            logLoadState: "🔄 Existing configuration and history data loaded successfully.",
-            logCompareStart: "Scanning folder states and comparing manifest histories...",
-            logCompareDone: "Comparison complete (Pending change queue: {count} items)",
-            logCompareError: "Error during analysis: {message}",
-            logSyncStart: "Starting synchronization transactions...",
-            logSyncAborted: "⏹ Synchronization was forcefully stopped by user request.",
-            logSyncAbortProcess: "⏳ Stopping signal detected. Finishing the current file task to preserve data integrity...",
-            logSyncAbortWarning: "Stopping in progress... Safely wrapping up current file to protect data integrity...",
-            logSyncFileStream: "[{icon}] Processing copy and isolation stream for {path}... ({current}/{total})",
-            logSyncDone: "Sync complete: Successfully applied {count} local transactions to master data.",
-            logSyncError: "Critical error occurred during sync execution: {message}",
-            logFolderSrcCancel: "📁 Source folder selection was cancelled.",
-            logFolderSrcFail: "❌ Source folder binding failed: {message}",
-            logFolderTgtCancel: "📁 Target folder selection was cancelled.",
-            logFolderTgtFail: "❌ Target folder binding failed: {message}",
-            logGenDefault: "📄 Default template config file (default_sync_config.json) created and downloaded.",
-            logBackupExport: "💾 Current configuration and history backup JSON exported.",
-            logBackupImport: "📂 Restored configuration database from external backup file successfully.",
-            logClearHistory: "History and status databases have been cleared.",
-            logMountSrc: "Authorized sandbox write permissions and mounted Source folder. ({name})",
-            logMountTgt: "Authorized sandbox write permissions and mounted Target folder. ({name})",
-            alertImportInvalid: "The file is not a valid File-nally state backup JSON.",
-            alertImportParseError: "An error occurred while parsing the JSON backup file.",
-            alertClearHistoryConfirm: "Warning: Are you sure you want to clear all past sync histories and manifest snapshot databases? (Options like Direction and Exclude folders will be kept.)",
-            badgeNoChange: "No Change",
-            badgeUpdateSend: "🔵 ➔ Send Update",
-            badgeUpdateRecv: "🔵 ⇠ Pending Update",
-            badgeUpdateSendBidi: "🟠 ➔ Send Update",
-            badgeUpdateRecvBidi: "🟠 ⇠ Pending Update",
-            badgeDeleteWait: "🗑️ Deletion Isolation Pending",
-            badgeNewSend: "🔵 ➔ Send New File",
-            badgeNewSendBidi: "🟠 ➔ Send New File",
-            badgeProtected: "Same (Target protected)",
-            badgeProtectedTgt: "Same (Protected)",
-            badgeKeepTgtOnly: "Keep (Target-only)",
-            stateComparing: "Analyzing changes...⏳",
-            stateCompareDone: "Compare Complete (Pending: {count})",
-            stateSyncing: "Synchronizing... ⏳",
-            stateSyncAborted: "Sync Stopped ⏹",
-            stateSyncDone: "Sync Complete ✅",
-            stateSyncFailed: "Sync Failed ❌",
-            syncWorkingText: "Current Task:",
-            syncAbortedSpan: "Sync Stopped ({success} of {total} completed)",
-            syncDoneSpan: "Congratulations! All file isolation and merge sync tasks completed successfully.",
-            syncFailedSpan: "Sync aborted with error: {message}",
-            historyStatusSuccess: "Success",
-            historyStatusAborted: "Stopped (User Request)"
-        }
-    };
-
-    const DEFAULT_CONFIG = {
-        config: {
-            direction: 'bidirectional',
-            conflictPolicy: 'latest',
-            excludeDirs: 'node_modules, .git, dist, temp, .trash',
-            lang: 'ko'
+            desc: 'Compare two local folders, review the change plan, and synchronize them safely.', controlTitle: 'Synchronization controls', selectSource: 'Select source folder', selectTarget: 'Select target folder', notSelected: 'Not selected', languageLabel: 'Language', progressLabel: 'Synchronization progress', workspaceLabel: 'Folder comparison results', activityLabel: 'Synchronization activity',
+            profileNone: 'No synchronization profile is selected.', profileUnverified: 'Folder pair unverified', profileVerified: 'Folder pair verified', profileLabel: '{source} ⇄ {target}',
+            directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', excludeLabel: 'Excluded directory names',
+            defaultJson: 'Default JSON', exportJson: 'Back up JSON', importJson: 'Restore JSON', compare: 'Compare changes', sync: 'Run synchronization', abort: 'Stop safely', waiting: 'Select both folders to begin.', preparing: 'Preparing',
+            sourceTitle: 'Source folder', targetTitle: 'Target folder', pathHead: 'File and path', sizeHead: 'Size', dateHead: 'Modified', stateHead: 'Status', logTitle: 'Live log', idle: 'Idle', historyTitle: 'Synchronization history', clearHistory: 'Clear history', timeHead: 'Run time', directionHead: 'Direction', processedHead: 'Processed',
+            disclaimer: 'Back up important data before synchronization. Browser or operating-system permissions and unexpected interruption can still cause data loss.',
+            emptyFiles: 'No files to display.', emptyHistory: 'No synchronization history recorded.', selected: '{name} selected', pairReady: 'Folder pair verified. You can compare changes now.', sameFolder: 'The same folder cannot be both source and target.', nestedFolder: 'One selected folder is inside the other. Nested pairs are not supported.', pickCancelled: 'Folder selection was cancelled.', pickFailed: 'Could not select the folder: {message}',
+            comparing: 'Scanning folders and calculating the change plan.', compareDone: 'Compare Complete · {count} queued actions', compareNone: 'Compare Complete · no changes to apply', compareFailed: 'Comparison failed: {message}',
+            syncing: 'Synchronizing · {current}/{total}', syncDone: 'Synchronization Complete · {count} actions processed', syncAborted: 'Synchronization stopped safely after {count} actions', syncFailed: 'Synchronization failed: {message}', aborting: 'Stopping after the current file operation finishes.',
+            importDone: 'JSON data restored.', importFailed: 'Could not restore JSON: {message}', exportDone: 'JSON backup created.', defaultDone: 'Default JSON created.', historyCleared: 'Synchronization history cleared.', confirmClear: 'Clear the active profile and global synchronization history?',
+            statusUnchanged: 'No change', statusBaseline: 'Save baseline', statusCopyOut: 'Send', statusCopyIn: 'Receive', statusTrash: 'Move to trash', statusConflict: 'Conflict · review', statusSkipped: 'Skipped by policy', statusProtected: 'Protected by one-way mode', statusNew: 'New',
+            phaseReady: 'Ready', phaseComparing: 'Comparing', phasePlanned: 'Planned', phaseSyncing: 'Running', phaseSuccess: 'Complete', phaseError: 'Error', phaseAborted: 'Stopped', directionBothShort: 'Bidirectional', directionOneShort: 'One-way', success: 'Success', failed: 'Failed', aborted: 'Stopped',
         },
-        history: [],
-        manifest: {}
     };
 
-    let appState = null;
-    let srcHandle = null, tgtHandle = null, isWorking = false, syncQueue = [];
-    let isAborted = false;
+    const $ = (selector) => document.querySelector(selector);
+    const uid = () => globalThis.crypto?.randomUUID?.() || `profile-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const nowIso = () => new Date().toISOString();
+    const runStamp = () => new Date().toISOString().replace(/[-:TZ]/g, '').replace('.', '-');
+    const cloneJson = (value) => JSON.parse(JSON.stringify(value));
+    const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+    const normalizeExcludes = (value) => {
+        const values = Array.isArray(value) ? value : String(value || '').split(',');
+        const normalized = values.map((item) => String(item).trim()).filter(Boolean);
+        normalized.push('.trash');
+        return [...new Set(normalized)].slice(0, 100);
+    };
+    const format = (template, values = {}) => Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), template);
+    const safeMessage = (error) => error instanceof Error || error instanceof DOMException ? error.message : String(error || 'Unknown error');
+    const safeSegments = (path) => {
+        const parts = String(path).split('/');
+        if (!parts.length || parts.some((part) => !part || part === '.' || part === '..')) throw new Error(`Unsafe relative path: ${path}`);
+        return parts;
+    };
 
-    const syncDirection = document.getElementById('syncDirection');
-    const conflictPolicy = document.getElementById('conflictPolicy');
-    const excludeDirsInput = document.getElementById('excludeDirs');
-    const logBox = document.getElementById('logBox');
-    const historyBody = document.getElementById('historyBody');
-    const btnCompare = document.getElementById('btnCompare');
-    const btnSync = document.getElementById('btnSync');
-    const btnAbort = document.getElementById('btnAbort');
-    const syncStatus = document.getElementById('syncStatus');
-
-    const progressContainer = document.getElementById('progressContainer');
-    const currentFileText = document.getElementById('currentFileText');
-    const progressPercentText = document.getElementById('progressPercentText');
-    const progressBar = document.getElementById('progressBar');
-
-    function t(key, params = {}) {
-        const lang = (appState && appState.config && appState.config.lang) || 'ko';
-        let text = TRANSLATIONS[lang]?.[key] || TRANSLATIONS['ko']?.[key] || key;
-        for (const [k, v] of Object.entries(params)) {
-            text = text.replace(`{${k}}`, v);
-        }
-        return text;
-    }
-
-    function updateStaticLanguage() {
-        const lang = appState.config.lang || 'ko';
-        
-        // Header desc
-        document.querySelector('.desc').innerText = t('desc');
-        
-        // Control center
-        document.getElementById('btnSrc').innerText = t('btnSrc');
-        document.getElementById('btnTgt').innerText = t('btnTgt');
-        
-        if (!srcHandle) document.getElementById('pathSrc').innerText = t('pathNotSelected');
-        if (!tgtHandle) document.getElementById('pathTgt').innerText = t('pathNotSelected');
-        
-        document.querySelector('label[for="syncDirection"]').innerText = t('syncDirection');
-        document.querySelector('#syncDirection option[value="bidirectional"]').innerText = t('directionBidi');
-        document.querySelector('#syncDirection option[value="unidirectional"]').innerText = t('directionUni');
-        
-        document.querySelector('label[for="conflictPolicy"]').innerText = t('conflictPolicy');
-        document.querySelector('#conflictPolicy option[value="latest"]').innerText = t('conflictLatest');
-        document.querySelector('#conflictPolicy option[value="overwrite"]').innerText = t('conflictOverwrite');
-        document.querySelector('#conflictPolicy option[value="skip"]').innerText = t('conflictSkip');
-        document.querySelector('#conflictPolicy option[value="rename"]').innerText = t('conflictRename');
-        
-        document.querySelector('label[for="excludeDirs"]').innerText = t('excludeDirs');
-        
-        document.getElementById('btnGenDefault').innerText = t('btnGenDefault');
-        document.getElementById('btnExport').innerText = t('btnExport');
-        document.getElementById('btnImport').innerText = t('btnImport');
-        
-        document.getElementById('btnCompare').innerText = t('btnCompare');
-        document.getElementById('btnSync').innerText = t('btnSync');
-        document.getElementById('btnAbort').innerText = t('btnAbort');
-        
-        // Viewer labels
-        document.querySelector('.viewer-container .card:nth-child(1) .viewer-title span:nth-child(1)').innerText = t('srcFolderTitle');
-        document.querySelector('.viewer-container .card:nth-child(2) .viewer-title span:nth-child(1)').innerText = t('tgtFolderTitle');
-        
-        // Table heads
-        document.querySelectorAll('.table-wrapper table thead').forEach((thead, i) => {
-            thead.innerHTML = `<tr><th style="width:50%">${t('thPath')}</th><th style="width:15%">${t('thSize')}</th><th style="width:15%">${t('thDate')}</th><th style="width:20%">${t('thStatus')}</th></tr>`;
+    const StateStore = (() => {
+        const createDefault = () => ({
+            schemaVersion: STATE_VERSION,
+            config: { direction: 'bidirectional', conflictPolicy: 'latest', excludeDirs: [...DEFAULT_EXCLUDES], lang: navigator.language?.startsWith('ko') ? 'ko' : 'en' },
+            activeProfileId: null,
+            profiles: {},
+            globalHistory: [],
         });
-        
-        // Table placeholders
-        const srcBody = document.getElementById('srcFileBody');
-        const tgtBody = document.getElementById('tgtFileBody');
-        if (srcBody.innerHTML.includes('폴더를 지정하고') || srcBody.innerHTML.includes('Please specify folders')) {
-            srcBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('comparePrompt')}</td></tr>`;
-        } else if (srcBody.innerHTML.includes('파일이 없습니다') || srcBody.innerHTML.includes('No files')) {
-            srcBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('noFiles')}</td></tr>`;
-        }
-        
-        if (tgtBody.innerHTML.includes('폴더를 지정하고') || tgtBody.innerHTML.includes('Please specify folders')) {
-            tgtBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('comparePrompt')}</td></tr>`;
-        } else if (tgtBody.innerHTML.includes('파일이 없습니다') || tgtBody.innerHTML.includes('No files')) {
-            tgtBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('noFiles')}</td></tr>`;
-        }
-        
-        // System log & past history labels
-        document.querySelector('.history-log-grid .card:nth-child(1) h3 span:nth-child(1)').innerText = t('sysLog');
-        if (syncStatus.innerText === '대기 중' || syncStatus.innerText === 'Waiting') {
-            syncStatus.innerText = t('statusWaiting');
-        }
-        
-        document.querySelector('.history-log-grid .card:nth-child(2) h3 span:nth-child(1)').innerText = t('historyTitle');
-        document.getElementById('btnClearHistory').innerText = t('btnClearHistory');
-        
-        // History table header
-        document.querySelector('.history-table thead').innerHTML = `<tr><th>${t('historyThTime')}</th><th>${t('historyThDir')}</th><th>${t('historyThFiles')}</th><th>${t('historyThStatus')}</th></tr>`;
-        
-        // History empty check
-        if (historyBody.innerHTML.includes('기록된 이력이 없습니다') || historyBody.innerHTML.includes('No history recorded')) {
-            historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF;">${t('historyEmpty')}</td></tr>`;
-        }
-        
-        // Footer
-        document.querySelector('footer div:nth-child(1)').innerHTML = `<b>File-nally</b> ${t('footerLicense')}`;
-        document.querySelector('footer .footer-law').innerHTML = `<b>${t('footerDisclaimerTitle')}</b><br>${t('footerDisclaimerText')}`;
-        
-        // Toggle active state for Language Buttons
-        const btnKo = document.getElementById('btnLangKo');
-        const btnEn = document.getElementById('btnLangEn');
-        if (lang === 'ko') {
-            btnKo.style.backgroundColor = 'var(--primary)';
-            btnKo.style.color = 'white';
-            btnEn.style.backgroundColor = 'transparent';
-            btnEn.style.color = 'var(--text)';
-        } else {
-            btnEn.style.backgroundColor = 'var(--primary)';
-            btnEn.style.color = 'white';
-            btnKo.style.backgroundColor = 'transparent';
-            btnKo.style.color = 'var(--text)';
-        }
-    }
 
-    function loadState() {
-        const savedState = localStorage.getItem('smart_sync_state');
-        if (!savedState) {
-            appState = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-            const browserLang = navigator.language || navigator.userLanguage;
-            appState.config.lang = browserLang.startsWith('ko') ? 'ko' : 'en';
-            saveState();
-            addLog(t('logInit'));
-        } else {
-            try {
-                appState = JSON.parse(savedState);
-                if (!appState.config.lang) {
-                    const browserLang = navigator.language || navigator.userLanguage;
-                    appState.config.lang = browserLang.startsWith('ko') ? 'ko' : 'en';
-                    saveState();
+        const rejectForbidden = (value, seen = new Set()) => {
+            if (!value || typeof value !== 'object' || seen.has(value)) return;
+            seen.add(value);
+            for (const key of Object.keys(value)) {
+                if (FORBIDDEN_KEYS.has(key)) throw new Error(`Forbidden JSON key: ${key}`);
+                rejectForbidden(value[key], seen);
+            }
+        };
+
+        const cleanConfig = (raw = {}) => ({
+            direction: raw.direction === 'unidirectional' ? 'unidirectional' : 'bidirectional',
+            conflictPolicy: ['latest', 'source-overwrite', 'skip', 'rename'].includes(raw.conflictPolicy) ? raw.conflictPolicy : raw.conflictPolicy === 'overwrite' ? 'source-overwrite' : 'latest',
+            excludeDirs: normalizeExcludes(raw.excludeDirs || DEFAULT_EXCLUDES),
+            lang: raw.lang === 'en' ? 'en' : 'ko',
+        });
+
+        const cleanSnapshot = (value) => isObject(value) && Number.isFinite(Number(value.size)) && Number.isFinite(Number(value.lastModified))
+            ? { size: Number(value.size), lastModified: Number(value.lastModified) }
+            : null;
+
+        const cleanManifest = (raw) => {
+            const result = {};
+            if (!isObject(raw)) return result;
+            for (const [path, entry] of Object.entries(raw).slice(0, MAX_MANIFEST_ENTRIES)) {
+                if (typeof path !== 'string' || !path || FORBIDDEN_KEYS.has(path)) continue;
+                if (isObject(entry) && ('source' in entry || 'target' in entry)) {
+                    result[path] = { source: cleanSnapshot(entry.source), target: cleanSnapshot(entry.target) };
+                } else if (isObject(entry)) {
+                    result[path] = {
+                        source: Number.isFinite(Number(entry.srcTime)) ? { size: Number(entry.size || 0), lastModified: Number(entry.srcTime) } : null,
+                        target: Number.isFinite(Number(entry.tgtTime)) ? { size: Number(entry.size || 0), lastModified: Number(entry.tgtTime) } : null,
+                    };
                 }
-                addLog(t('logLoadState'));
-            } catch (e) {
-                console.error('State parse error, fallback to default', e);
-                appState = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
-                saveState();
             }
-        }
-        
-        syncDirection.value = appState.config.direction || 'bidirectional';
-        conflictPolicy.value = appState.config.conflictPolicy || 'latest';
-        excludeDirsInput.value = appState.config.excludeDirs || 'node_modules, .git, dist, temp, .trash';
-        updateStaticLanguage();
-        renderHistoryTable();
-    }
+            return result;
+        };
 
-    function saveState() {
-        if (!appState) return;
-        appState.config.direction = syncDirection.value;
-        appState.config.conflictPolicy = conflictPolicy.value;
-        appState.config.excludeDirs = excludeDirsInput.value;
-        localStorage.setItem('smart_sync_state', JSON.stringify(appState));
-    }
+        const cleanHistory = (raw, limit) => Array.isArray(raw) ? raw.slice(0, limit).map((entry) => {
+            const filesCount = Number(entry?.filesCount || 0);
+            return {
+                time: String(entry?.time || ''),
+                direction: entry?.direction === 'unidirectional' ? 'unidirectional' : 'bidirectional',
+                filesCount: Number.isFinite(filesCount) ? Math.max(0, filesCount) : 0,
+                status: ['success', 'failed', 'aborted', '성공'].includes(entry?.status) ? entry.status === '성공' ? 'success' : entry.status : 'failed',
+            };
+        }) : [];
 
-    [syncDirection, conflictPolicy, excludeDirsInput].forEach(el => el.addEventListener('change', saveState));
-    excludeDirsInput.addEventListener('input', saveState);
+        const cleanCheckpoint = (raw) => {
+            if (!isObject(raw)) return null;
+            const completed = Number(raw.completed);
+            const total = Number(raw.total);
+            if (typeof raw.planId !== 'string' || !Number.isFinite(completed) || !Number.isFinite(total)) return null;
+            return {
+                planId: raw.planId,
+                completed: Math.max(0, completed),
+                total: Math.max(0, total),
+                updatedAt: String(raw.updatedAt || nowIso()),
+            };
+        };
 
-    function addLog(msg) {
-        const time = new Date().toLocaleTimeString();
-        logBox.innerHTML += `<div>[${time}] ${msg}</div>`;
-        logBox.scrollTop = logBox.scrollHeight;
-    }
-
-    function renderHistoryTable() {
-        if (!appState.history || appState.history.length === 0) {
-            historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF;">${t('historyEmpty')}</td></tr>`;
-            return;
-        }
-        historyBody.innerHTML = appState.history.map(h => {
-            let statusText = h.status;
-            let statusColor = 'red';
-            if (h.status === '성공') {
-                statusText = appState.config.lang === 'ko' ? '성공' : 'Success';
-                statusColor = 'green';
-            } else if (h.status.includes('중단') || h.status.includes('Stopped')) {
-                statusText = appState.config.lang === 'ko' ? '중단됨' : 'Stopped';
-                statusColor = 'orange';
-            } else {
-                statusText = appState.config.lang === 'ko' ? '실패' : 'Failed';
+        const sanitizeV2 = (raw) => {
+            rejectForbidden(raw);
+            const state = createDefault();
+            state.config = cleanConfig(raw.config);
+            state.globalHistory = cleanHistory(raw.globalHistory, MAX_GLOBAL_HISTORY);
+            if (isObject(raw.profiles)) {
+                for (const [id, profile] of Object.entries(raw.profiles).slice(0, MAX_PROFILES)) {
+                    if (!isObject(profile) || FORBIDDEN_KEYS.has(id)) continue;
+                    const checkpoint = cleanCheckpoint(profile.lastCheckpoint);
+                    state.profiles[id] = {
+                        id,
+                        sourceName: String(profile.sourceName || ''),
+                        targetName: String(profile.targetName || ''),
+                        bindingStatus: profile.bindingStatus === 'verified' ? 'verified' : 'unverified',
+                        createdAt: String(profile.createdAt || nowIso()),
+                        lastUsedAt: String(profile.lastUsedAt || nowIso()),
+                        manifest: cleanManifest(profile.manifest),
+                        history: cleanHistory(profile.history, MAX_PROFILE_HISTORY),
+                    };
+                    if (checkpoint) state.profiles[id].lastCheckpoint = checkpoint;
+                }
             }
+            state.activeProfileId = typeof raw.activeProfileId === 'string' && state.profiles[raw.activeProfileId] ? raw.activeProfileId : null;
+            return state;
+        };
 
-            const directionText = h.direction === 'bidirectional' 
-                ? (appState.config.lang === 'ko' ? '양방향' : 'Bidirectional')
-                : (appState.config.lang === 'ko' ? '단방향' : 'Unidirectional');
-
-            const filesCountText = appState.config.lang === 'ko' ? `${h.filesCount}개` : `${h.filesCount} items`;
-
-            return `
-                <tr>
-                    <td><b>${h.time}</b></td>
-                    <td>${directionText}</td>
-                    <td style="text-align:center; color:blue; font-weight:bold;">${filesCountText}</td>
-                    <td style="color:${statusColor};">${statusText}</td>
-                </tr>
-            `;
-        }).join('');
-    }
-
-    async function scanDirectory(dirHandle, currentPath = '', excludeList = []) {
-        const fileMap = new Map();
-        for await (const entry of dirHandle.values()) {
-            const itemPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
-            if (entry.kind === 'file') {
-                const file = await entry.getFile();
-                fileMap.set(itemPath, { name: entry.name, path: itemPath, size: file.size, lastModified: file.lastModified, handle: entry });
-            } else if (entry.kind === 'directory') {
-                if (excludeList.includes(entry.name)) continue;
-                const subMap = await scanDirectory(entry, itemPath, excludeList);
-                for (const [key, value] of subMap) fileMap.set(key, value);
+        const migrate = (raw) => {
+            rejectForbidden(raw);
+            if (raw?.schemaVersion === STATE_VERSION) return sanitizeV2(raw);
+            const state = createDefault();
+            state.config = cleanConfig(raw?.config);
+            const history = cleanHistory(raw?.history, MAX_PROFILE_HISTORY);
+            const manifest = cleanManifest(raw?.manifest);
+            if (history.length || Object.keys(manifest).length) {
+                const id = `legacy-${uid()}`;
+                state.profiles[id] = { id, sourceName: '', targetName: '', bindingStatus: 'unverified', createdAt: nowIso(), lastUsedAt: nowIso(), manifest, history };
+                state.globalHistory = history.slice(0, MAX_GLOBAL_HISTORY);
             }
-        }
-        return fileMap;
-    }
+            return state;
+        };
 
-    async function compareFolders() {
-        if (!srcHandle || !tgtHandle) return;
-        isWorking = true; toggleUI(false);
-        syncStatus.innerText = t('stateComparing');
-        syncStatus.style.color = '#3B82F6';
-        addLog(t('logCompareStart'));
+        const load = () => {
+            const raw = localStorage.getItem(STORAGE_KEY);
+            if (!raw) return createDefault();
+            try { return migrate(JSON.parse(raw)); } catch (error) { console.warn('State reset:', safeMessage(error)); return createDefault(); }
+        };
+        const save = (state) => localStorage.setItem(STORAGE_KEY, JSON.stringify(sanitizeV2(state)));
+        const exportState = (state) => cloneJson(sanitizeV2(state));
+        const importText = (text) => {
+            if (new Blob([text]).size > MAX_IMPORT_BYTES) throw new Error('JSON file exceeds 5MB');
+            const state = migrate(JSON.parse(text));
+            for (const profile of Object.values(state.profiles)) profile.bindingStatus = 'unverified';
+            return state;
+        };
+        return Object.freeze({ createDefault, export: exportState, importText, load, migrate, sanitize: sanitizeV2, save });
+    })();
 
-        progressContainer.style.display = 'none';
+    const HandleStore = (() => {
+        const memory = new Map();
+        let dbPromise = null;
+        const open = () => {
+            if (!('indexedDB' in window)) return Promise.reject(new Error('IndexedDB unavailable'));
+            if (dbPromise) return dbPromise;
+            dbPromise = new Promise((resolve, reject) => {
+                const request = indexedDB.open('file-nally-handles', 1);
+                request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains('pairs')) request.result.createObjectStore('pairs', { keyPath: 'profileId' }); };
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error || new Error('IndexedDB open failed'));
+            });
+            return dbPromise;
+        };
+        const list = async () => {
+            const values = [...memory.values()];
+            try {
+                const db = await open();
+                const stored = await new Promise((resolve, reject) => {
+                    const request = db.transaction('pairs', 'readonly').objectStore('pairs').getAll();
+                    request.onsuccess = () => resolve(request.result || []);
+                    request.onerror = () => reject(request.error);
+                });
+                for (const item of stored) if (!values.some((value) => value.profileId === item.profileId)) values.push(item);
+            } catch { /* memory-only safe fallback */ }
+            return values;
+        };
+        const put = async (profileId, sourceHandle, targetHandle) => {
+            const record = { profileId, sourceHandle, targetHandle, updatedAt: nowIso() };
+            memory.set(profileId, record);
+            try {
+                const db = await open();
+                await new Promise((resolve, reject) => {
+                    const request = db.transaction('pairs', 'readwrite').objectStore('pairs').put(record);
+                    request.onsuccess = () => resolve();
+                    request.onerror = () => reject(request.error);
+                });
+            } catch { /* mock handles and private modes may not be cloneable */ }
+        };
+        const findMatching = async (sourceHandle, targetHandle) => {
+            for (const record of await list()) {
+                try {
+                    if (await sourceHandle.isSameEntry(record.sourceHandle) && await targetHandle.isSameEntry(record.targetHandle)) return record;
+                } catch { /* stale handle */ }
+            }
+            return null;
+        };
+        const get = async (profileId) => (await list()).find((record) => record.profileId === profileId) || null;
+        return Object.freeze({ findMatching, get, open, put });
+    })();
 
-        try {
-            const excludeList = excludeDirsInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
-            const srcFiles = await scanDirectory(srcHandle, '', excludeList);
-            const tgtFiles = await scanDirectory(tgtHandle, '', excludeList);
+    const validateFolderPair = async (sourceHandle, targetHandle) => {
+        if (await sourceHandle.isSameEntry(targetHandle)) return 'same';
+        if (typeof sourceHandle.resolve === 'function' && (await sourceHandle.resolve(targetHandle))?.length) return 'nested';
+        if (typeof targetHandle.resolve === 'function' && (await targetHandle.resolve(sourceHandle))?.length) return 'nested';
+        return null;
+    };
 
-            document.getElementById('srcCount').innerText = t('fileCount', {count: srcFiles.size});
-            document.getElementById('tgtCount').innerText = t('fileCount', {count: tgtFiles.size});
+    const SyncPlanner = (() => {
+        const asMap = (value) => value instanceof Map ? value : new Map(Object.entries(value || {}));
+        const snapshot = (file) => file ? { size: Number(file.size), lastModified: Number(file.lastModified) } : null;
+        const sameSnapshot = (file, previous) => Boolean(file && previous && Number(file.size) === Number(previous.size) && Number(file.lastModified) === Number(previous.lastModified));
+        const conflictName = (path, side, stamp) => {
+            const parts = safeSegments(path);
+            const file = parts.pop();
+            const dot = file.lastIndexOf('.');
+            const stem = dot > 0 ? file.slice(0, dot) : file;
+            const ext = dot > 0 ? file.slice(dot) : '';
+            return [...parts, `${stem}.conflict-${side}-${stamp}${ext}`].join('/');
+        };
 
-            const manifest = appState.manifest || {};
-            const allPaths = new Set([...srcFiles.keys(), ...tgtFiles.keys(), ...Object.keys(manifest)]);
-            syncQueue = [];
-            
-            const srcFileBody = document.getElementById('srcFileBody');
-            const tgtFileBody = document.getElementById('tgtFileBody');
-            srcFileBody.innerHTML = ''; tgtFileBody.innerHTML = '';
-
-            const srcRenderRows = [];
-            const tgtRenderRows = [];
+        const plan = ({ source, target, manifest = {}, trustedManifest = false, direction = 'bidirectional', conflictPolicy = 'latest', stamp = runStamp() }) => {
+            const src = asMap(source);
+            const tgt = asMap(target);
+            const actions = [];
+            const rows = [];
+            let conflicts = 0;
+            const allPaths = new Set([...src.keys(), ...tgt.keys(), ...Object.keys(manifest || {})]);
+            const pushCopy = (path, fromSide, toSide, destinationPath = path) => actions.push({ type: 'copy', path, sourcePath: path, destinationPath, fromSide, toSide });
+            const resolveConflict = (path, sourceFile, targetFile, sourceStatus, targetStatus) => {
+                if (conflictPolicy === 'skip') { conflicts += 1; return { sourceStatus: 'skipped', targetStatus: 'skipped' }; }
+                if (conflictPolicy === 'rename') {
+                    pushCopy(path, 'source', 'target', conflictName(path, 'source', stamp));
+                    pushCopy(path, 'target', 'source', conflictName(path, 'target', stamp));
+                    return { sourceStatus: 'copy-out', targetStatus: 'copy-out' };
+                }
+                if (conflictPolicy === 'source-overwrite') { pushCopy(path, 'source', 'target'); return { sourceStatus: 'copy-out', targetStatus: 'copy-in' }; }
+                if (sourceFile.lastModified > targetFile.lastModified) { pushCopy(path, 'source', 'target'); return { sourceStatus: 'copy-out', targetStatus: 'copy-in' }; }
+                if (targetFile.lastModified > sourceFile.lastModified) { pushCopy(path, 'target', 'source'); return { sourceStatus: 'copy-in', targetStatus: 'copy-out' }; }
+                conflicts += 1;
+                return { sourceStatus: sourceStatus || 'conflict', targetStatus: targetStatus || 'conflict' };
+            };
 
             for (const path of allPaths) {
-                const src = srcFiles.get(path);
-                const tgt = tgtFiles.get(path);
-                const hist = manifest[path]; 
+                const sourceFile = src.get(path) || null;
+                const targetFile = tgt.get(path) || null;
+                const previous = trustedManifest ? manifest[path] : null;
+                let sourceStatus = sourceFile ? 'unchanged' : 'missing';
+                let targetStatus = targetFile ? 'unchanged' : 'missing';
 
-                let action = 'none';
-                let srcStateText = t('badgeNoChange'), srcRowClass = 'row-same', srcBadge = 'badge-same';
-                let tgtStateText = t('badgeNoChange'), tgtRowClass = 'row-same', tgtBadge = 'badge-same';
-
-                if (src && tgt) {
-                    if (hist && src.lastModified === hist.srcTime && tgt.lastModified === hist.tgtTime) {
-                        srcStateText = t('badgeNoChange'); tgtStateText = t('badgeNoChange');
-                    } else if (src.lastModified > tgt.lastModified) {
-                        action = 'copyToTarget';
-                        srcStateText = t('badgeUpdateSend'); srcRowClass = 'row-update'; srcBadge = 'badge-new-out';
-                        tgtStateText = t('badgeUpdateRecv'); tgtRowClass = 'row-incoming'; tgtBadge = 'badge-update-in';
-                    } else if (tgt.lastModified > src.lastModified) {
-                        if (syncDirection.value === 'bidirectional') {
-                            action = 'copyToSource';
-                            srcStateText = t('badgeUpdateRecvBidi'); srcRowClass = 'row-incoming'; srcBadge = 'badge-update-in';
-                            tgtStateText = t('badgeUpdateSendBidi'); tgtRowClass = 'row-update'; srcBadge = 'badge-new-out';
-                        } else {
-                            srcStateText = t('badgeProtected'); tgtStateText = t('badgeProtectedTgt');
-                        }
-                    }
-                } else if (src && !tgt) {
-                    if (hist) {
-                        action = 'trashSource';
-                        srcStateText = t('badgeDeleteWait'); srcRowClass = 'row-trash'; srcBadge = 'badge-trash';
+                if (sourceFile && targetFile) {
+                    const sourceEqualsTarget = sourceFile.size === targetFile.size && sourceFile.lastModified === targetFile.lastModified;
+                    if (!previous) {
+                        if (sourceEqualsTarget) { actions.push({ type: 'baseline', path }); sourceStatus = targetStatus = 'baseline'; }
+                        else if (direction === 'unidirectional') {
+                            if (conflictPolicy === 'skip') sourceStatus = targetStatus = 'skipped';
+                            else { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in'; }
+                        } else ({ sourceStatus, targetStatus } = resolveConflict(path, sourceFile, targetFile));
                     } else {
-                        action = 'copyToTarget';
-                        srcStateText = t('badgeNewSend'); srcRowClass = 'row-new'; srcBadge = 'badge-new-out';
+                        const sourceChanged = !sameSnapshot(sourceFile, previous.source);
+                        const targetChanged = !sameSnapshot(targetFile, previous.target);
+                        if (!sourceChanged && !targetChanged) { sourceStatus = targetStatus = 'unchanged'; }
+                        else if (direction === 'unidirectional') {
+                            if (conflictPolicy === 'skip') sourceStatus = targetStatus = 'skipped';
+                            else { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in'; }
+                        } else if (sourceChanged && !targetChanged) { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in'; }
+                        else if (!sourceChanged && targetChanged) { pushCopy(path, 'target', 'source'); sourceStatus = 'copy-in'; targetStatus = 'copy-out'; }
+                        else ({ sourceStatus, targetStatus } = resolveConflict(path, sourceFile, targetFile));
                     }
-                } else if (!src && tgt) {
-                    if (hist) {
-                        action = 'trashTarget';
-                        tgtStateText = t('badgeDeleteWait'); tgtRowClass = 'row-trash'; tgtBadge = 'badge-trash';
-                    } else {
-                        if (syncDirection.value === 'bidirectional') {
-                            action = 'copyToSource';
-                            tgtStateText = t('badgeNewSendBidi'); tgtRowClass = 'row-new'; tgtBadge = 'badge-new-out';
-                        } else {
-                            tgtStateText = t('badgeKeepTgtOnly');
-                        }
-                    }
-                } else if (!src && !tgt) {
-                    delete appState.manifest[path];
-                    continue;
-                }
+                } else if (sourceFile) {
+                    if (previous?.source && previous?.target) {
+                        if (sameSnapshot(sourceFile, previous.source)) { actions.push({ type: 'trash', path, side: 'source' }); sourceStatus = 'trash'; }
+                        else { sourceStatus = 'conflict'; conflicts += 1; }
+                    } else { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; }
+                } else if (targetFile) {
+                    if (previous?.source && previous?.target) {
+                        if (sameSnapshot(targetFile, previous.target)) { actions.push({ type: 'trash', path, side: 'target' }); targetStatus = 'trash'; }
+                        else { targetStatus = 'conflict'; conflicts += 1; }
+                    } else if (direction === 'bidirectional') { pushCopy(path, 'target', 'source'); targetStatus = 'copy-out'; }
+                    else targetStatus = 'protected';
+                } else if (previous) actions.push({ type: 'forget', path });
 
-                if (action !== 'none') {
-                    syncQueue.push({ path, src, tgt, action });
-                }
-
-                if (src) {
-                    srcRenderRows.push(`<tr class="${srcRowClass}"><td>📄 ${src.name}<br><small style="color:#6B7280">${path}</small></td><td>${(src.size/1024).toFixed(1)} KB</td><td>${new Date(src.lastModified).toLocaleDateString()}</td><td><span class="badge ${srcBadge}">${srcStateText}</span></td></tr>`);
-                }
-                if (tgt) {
-                    tgtRenderRows.push(`<tr class="${tgtRowClass}"><td>📄 ${tgt.name}<br><small style="color:#6B7280">${path}</small></td><td>${(tgt.size/1024).toFixed(1)} KB</td><td>${new Date(tgt.lastModified).toLocaleDateString()}</td><td><span class="badge ${tgtBadge}">${tgtStateText}</span></td></tr>`);
-                }
+                if (sourceFile || targetFile) rows.push({ path, source: sourceFile, target: targetFile, sourceStatus, targetStatus });
             }
-
-            srcFileBody.innerHTML = srcRenderRows.length ? srcRenderRows.join('') : `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('noFiles')}</td></tr>`;
-            tgtFileBody.innerHTML = tgtRenderRows.length ? tgtRenderRows.join('') : `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('noFiles')}</td></tr>`;
-
-            addLog(t('logCompareDone', {count: syncQueue.length}));
-            syncStatus.innerText = t('stateCompareDone', {count: syncQueue.length});
-            syncStatus.style.color = '#4B5563';
-        } catch (e) {
-            addLog(t('logCompareError', {message: e.message}));
-            syncStatus.innerText = t('stateSyncFailed');
-            syncStatus.style.color = '#EF4444';
-        } checkReady();
-    }
-
-    async function getDeepDirectoryHandle(baseDirHandle, pathParts) {
-        let currentDir = baseDirHandle;
-        for (const part of pathParts) currentDir = await currentDir.getDirectoryHandle(part, { create: true });
-        return currentDir;
-    }
-
-    async function moveToTrashFolder(baseHandle, relPath, fileHandle) {
-        const pathParts = relPath.split('/');
-        const fileName = pathParts.pop();
-        
-        const trashDirHandle = await getDeepDirectoryHandle(baseHandle, ['.trash', ...pathParts]);
-        const fileObj = await fileHandle.getFile();
-        
-        const destFileHandle = await trashDirHandle.getFileHandle(fileName, { create: true });
-        const writable = await destFileHandle.createWritable();
-        await writable.write(fileObj);
-        await writable.close();
-        
-        const parentDirHandle = await getDeepDirectoryHandle(baseHandle, pathParts);
-        await parentDirHandle.removeEntry(fileName);
-    }
-
-    async function executeSync() {
-        if (syncQueue.length === 0) return;
-        isWorking = true; isAborted = false; toggleUI(false);
-        syncStatus.innerText = t('stateSyncing');
-        syncStatus.style.color = '#3B82F6';
-        addLog(t('logSyncStart'));
-
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '0%';
-        progressPercentText.innerText = `0% (0/${syncQueue.length})`;
-
-        let successCount = 0;
-        const policy = conflictPolicy.value;
-
-        try {
-            for (let i = 0; i < syncQueue.length; i++) {
-                if (isAborted) {
-                    addLog(t('logSyncAborted'));
-                    syncStatus.innerText = t('stateSyncAborted');
-                    syncStatus.style.color = '#EF4444';
-                    currentFileText.innerHTML = `<span style="color: #EF4444; font-weight: bold;">${t('syncAbortedSpan', {total: syncQueue.length, success: successCount})}</span>`;
-                    
-                    appState.history.unshift({ time: new Date().toLocaleString(), direction: syncDirection.value, filesCount: successCount, status: t('historyStatusAborted') });
-                    saveState(); renderHistoryTable();
-                    return; 
-                }
-
-                const item = syncQueue[i];
-                const percent = Math.round((i / syncQueue.length) * 100);
-                progressBar.style.width = `${percent}%`;
-                progressPercentText.innerText = `${percent}% (${i}/${syncQueue.length})`;
-                
-                let actionIcon = '🔵 ➔';
-                if (item.action === 'copyToSource') actionIcon = '🟠 ⇠';
-                if (item.action.startsWith('trash')) actionIcon = '🗑️';
-
-                currentFileText.innerHTML = `${t('syncWorkingText')} <span style="font-weight:bold; color:var(--primary);">${actionIcon}</span> <small>${item.path}</small>`;
-                addLog(t('logSyncFileStream', {icon: actionIcon, path: item.path, current: i+1, total: syncQueue.length}));
-
-                if (item.action === 'copyToTarget') {
-                    const fileObj = await item.src.handle.getFile();
-                    const pathParts = item.path.split('/');
-                    const fileName = pathParts.pop();
-                    const targetDir = await getDeepDirectoryHandle(tgtHandle, pathParts);
-                    const destFileHandle = await targetDir.getFileHandle(fileName, { create: true });
-                    const writable = await destFileHandle.createWritable();
-                    await writable.write(fileObj);
-                    await writable.close();
-
-                    const updatedFile = await destFileHandle.getFile();
-                    appState.manifest[item.path] = { srcTime: fileObj.lastModified, tgtTime: updatedFile.lastModified, size: fileObj.size };
-                } else if (item.action === 'copyToSource') {
-                    const fileObj = await item.tgt.handle.getFile();
-                    const pathParts = item.path.split('/');
-                    const fileName = pathParts.pop();
-                    const targetDir = await getDeepDirectoryHandle(srcHandle, pathParts);
-                    const destFileHandle = await targetDir.getFileHandle(fileName, { create: true });
-                    const writable = await destFileHandle.createWritable();
-                    await writable.write(fileObj);
-                    await writable.close();
-
-                    const updatedFile = await destFileHandle.getFile();
-                    appState.manifest[item.path] = { srcTime: updatedFile.lastModified, tgtTime: fileObj.lastModified, size: fileObj.size };
-                } else if (item.action === 'trashSource') {
-                    await moveToTrashFolder(srcHandle, item.path, item.src.handle);
-                    delete appState.manifest[item.path];
-                } else if (item.action === 'trashTarget') {
-                    await moveToTrashFolder(tgtHandle, item.path, item.tgt.handle);
-                    delete appState.manifest[item.path];
-                }
-
-                successCount++;
-            }
-
-            progressBar.style.width = '100%';
-            progressPercentText.innerText = `100% (${successCount}/${syncQueue.length})`;
-            currentFileText.innerHTML = `<span style="color: #10B981; font-weight: bold;">${t('syncDoneSpan')}</span>`;
-
-            appState.history.unshift({ time: new Date().toLocaleString(), direction: syncDirection.value, filesCount: successCount, status: '성공' });
-            if (appState.history.length > 30) appState.history.pop();
-
-            saveState(); renderHistoryTable();
-            addLog(t('logSyncDone', {count: successCount}));
-            syncStatus.innerText = t('stateSyncDone');
-            syncStatus.style.color = '#10B981';
-            await compareFolders(); 
-        } catch (e) {
-            addLog(t('logSyncError', {message: e.message}));
-            syncStatus.innerText = t('stateSyncFailed');
-            syncStatus.style.color = '#EF4444';
-            currentFileText.innerHTML = `<span style="color: #EF4444; font-weight: bold;">${t('syncFailedSpan', {message: e.message})}</span>`;
-        } finally {
-            isWorking = false; toggleUI(true);
-        }
-    }
-
-    btnAbort.addEventListener('click', () => {
-        isAborted = true;
-        btnAbort.disabled = true;
-        addLog(t('logSyncAbortProcess'));
-        currentFileText.innerHTML = `<span style="color: var(--warning); font-weight: bold;">${t('logSyncAbortWarning')}</span>`;
-    });
-
-    function downloadJsonFile(objectData, fileName) {
-        const jsonString = JSON.stringify(objectData, null, 2);
-        const blob = new Blob([jsonString], { type: "application/json" });
-        const link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = fileName;
-        link.click();
-        URL.revokeObjectURL(link.href);
-    }
-
-    document.getElementById('btnGenDefault').addEventListener('click', () => {
-        downloadJsonFile(DEFAULT_CONFIG, "default_sync_config.json");
-        addLog(t('logGenDefault'));
-    });
-
-    document.getElementById('btnExport').addEventListener('click', () => {
-        downloadJsonFile(appState, `File-nally_backup_state_${new Date().toISOString().slice(0,10)}.json`);
-        addLog(t('logBackupExport'));
-    });
-
-    document.getElementById('btnImport').addEventListener('click', () => document.getElementById('fileImporter').click());
-    document.getElementById('fileImporter').addEventListener('change', (e) => {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            try {
-                const parsed = JSON.parse(event.target.result);
-                if (parsed.config && parsed.history && parsed.manifest) {
-                    appState = parsed;
-                    localStorage.setItem('smart_sync_state', JSON.stringify(appState));
-                    loadState();
-                    addLog(t('logBackupImport'));
-                } else {
-                    alert(t('alertImportInvalid'));
-                }
-            } catch (err) { alert(t('alertImportParseError')); }
+            return { id: uid(), stamp, actions, rows, summary: { actions: actions.length, conflicts } };
         };
-        reader.readAsText(file);
+        return Object.freeze({ plan, snapshot });
+    })();
+
+    const FileAdapter = (() => {
+        const scan = async (directory, excludes, currentPath = '') => {
+            const files = new Map();
+            for await (const entry of directory.values()) {
+                const path = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                safeSegments(path);
+                if (entry.kind === 'file') {
+                    const file = await entry.getFile();
+                    files.set(path, { name: entry.name, path, size: file.size, lastModified: file.lastModified, handle: entry });
+                } else if (!excludes.includes(entry.name)) {
+                    const nested = await scan(entry, excludes, path);
+                    for (const [key, value] of nested) files.set(key, value);
+                }
+            }
+            return files;
+        };
+        const directoryFor = async (root, parts, create) => {
+            let directory = root;
+            for (const part of parts) directory = await directory.getDirectoryHandle(part, { create });
+            return directory;
+        };
+        const fileHandleFor = async (root, path) => {
+            const parts = safeSegments(path);
+            const name = parts.pop();
+            const directory = await directoryFor(root, parts, false);
+            return directory.getFileHandle(name);
+        };
+        const copy = async (action, handles) => {
+            const sourceRoot = handles[action.fromSide];
+            const targetRoot = handles[action.toSide];
+            const sourceHandle = await fileHandleFor(sourceRoot, action.sourcePath);
+            const sourceFile = await sourceHandle.getFile();
+            const parts = safeSegments(action.destinationPath);
+            const name = parts.pop();
+            const targetDirectory = await directoryFor(targetRoot, parts, true);
+            const targetHandle = await targetDirectory.getFileHandle(name, { create: true });
+            const writable = await targetHandle.createWritable();
+            await writable.write(sourceFile);
+            await writable.close();
+        };
+        const moveToTrash = async (action, handles, stamp) => {
+            const root = handles[action.side];
+            const sourceHandle = await fileHandleFor(root, action.path);
+            const sourceFile = await sourceHandle.getFile();
+            const originalParts = safeSegments(action.path);
+            const name = originalParts.pop();
+            const trashDirectory = await directoryFor(root, ['.trash', stamp, ...originalParts], true);
+            let trashName = name;
+            for (let suffix = 1; suffix < 10000; suffix += 1) {
+                try {
+                    await trashDirectory.getFileHandle(trashName);
+                    const dot = name.lastIndexOf('.');
+                    const stem = dot > 0 ? name.slice(0, dot) : name;
+                    const extension = dot > 0 ? name.slice(dot) : '';
+                    trashName = `${stem}.${suffix}${extension}`;
+                } catch (error) {
+                    if (error?.name === 'NotFoundError') break;
+                    throw error;
+                }
+            }
+            const trashHandle = await trashDirectory.getFileHandle(trashName, { create: true });
+            const writable = await trashHandle.createWritable();
+            await writable.write(sourceFile);
+            await writable.close();
+            const originalDirectory = await directoryFor(root, originalParts, false);
+            await originalDirectory.removeEntry(name);
+        };
+        return Object.freeze({ copy, moveToTrash, scan });
+    })();
+
+    const elements = {
+        btnSrc: $('#btnSrc'), btnTgt: $('#btnTgt'), pathSrc: $('#pathSrc'), pathTgt: $('#pathTgt'), profileText: $('#profileText'), profileBadge: $('#profileBadge'),
+        direction: $('#syncDirection'), policy: $('#conflictPolicy'), excludes: $('#excludeDirs'), btnCompare: $('#btnCompare'), btnSync: $('#btnSync'), btnAbort: $('#btnAbort'),
+        status: $('#syncStatus'), statusText: $('#syncStatusText'), phaseLabel: $('#phaseLabel'), progress: $('#progressContainer'), progressText: $('#currentFileText'), progressPercent: $('#progressPercentText'), progressBar: $('#progressBar'), progressFill: $('#progressBar .progress-bar'),
+        srcBody: $('#srcFileBody'), tgtBody: $('#tgtFileBody'), srcCount: $('#srcCount'), tgtCount: $('#tgtCount'), log: $('#logBox'), history: $('#historyBody'),
+    };
+
+    const model = {
+        state: StateStore.load(), source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), plan: null, phase: 'idle', abortRequested: false, logs: [],
+    };
+
+    const language = () => model.state.config.lang === 'en' ? 'en' : 'ko';
+    const t = (key, values) => format(TEXT[language()][key] || TEXT.ko[key] || key, values);
+    const makeIcon = (name) => {
+        const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('class', 'icon'); svg.setAttribute('aria-hidden', 'true');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', `#icon-${name}`); svg.append(use); return svg;
+    };
+    const setStatus = (message, tone = 'neutral', iconName = 'info') => {
+        elements.status.dataset.tone = tone;
+        const oldIcon = elements.status.querySelector('svg');
+        oldIcon?.replaceWith(makeIcon(iconName));
+        elements.statusText.textContent = message;
+    };
+    const addLog = (message) => {
+        const entry = `[${new Date().toLocaleTimeString(language())}] ${String(message)}`;
+        model.logs.push(entry);
+        if (model.logs.length > 500) model.logs.shift();
+        const line = document.createElement('div'); line.className = 'log-line'; line.textContent = entry;
+        elements.log.append(line);
+        while (elements.log.children.length > 500) elements.log.firstElementChild.remove();
+        elements.log.scrollTop = elements.log.scrollHeight;
+    };
+    const phaseKey = { idle: 'idle', ready: 'phaseReady', comparing: 'phaseComparing', planned: 'phasePlanned', syncing: 'phaseSyncing', aborting: 'phaseSyncing', success: 'phaseSuccess', error: 'phaseError', aborted: 'phaseAborted' };
+    const setPhase = (phase) => { model.phase = phase; elements.phaseLabel.textContent = t(phaseKey[phase] || 'idle'); renderControls(); };
+    const renderControls = () => {
+        const busy = ['comparing', 'syncing', 'aborting'].includes(model.phase);
+        const paired = Boolean(model.source && model.target && model.profile && model.trustedProfile);
+        elements.btnSrc.disabled = busy; elements.btnTgt.disabled = busy;
+        elements.direction.disabled = busy; elements.policy.disabled = busy; elements.excludes.disabled = busy;
+        elements.btnCompare.disabled = busy || !paired;
+        elements.btnSync.disabled = model.phase !== 'planned' || !model.plan?.actions.length;
+        elements.btnAbort.disabled = !['syncing'].includes(model.phase);
+    };
+    const renderStaticText = () => {
+        document.documentElement.lang = language();
+        document.querySelectorAll('[data-i18n]').forEach((node) => { const key = node.dataset.i18n; if (TEXT[language()][key]) node.textContent = TEXT[language()][key]; });
+        $('#btnLangKo').setAttribute('aria-pressed', String(language() === 'ko'));
+        $('#btnLangEn').setAttribute('aria-pressed', String(language() === 'en'));
+        $('.language-switch').setAttribute('aria-label', t('languageLabel'));
+        elements.progressBar.setAttribute('aria-label', t('progressLabel'));
+        $('#workspaceResults').setAttribute('aria-label', t('workspaceLabel'));
+        $('#activityResults').setAttribute('aria-label', t('activityLabel'));
+        elements.excludes.value = model.state.config.excludeDirs.join(', ');
+        elements.direction.value = model.state.config.direction;
+        elements.policy.value = model.state.config.conflictPolicy;
+        renderPaths(); renderProfile(); renderHistory(); renderRows(); renderControls();
+    };
+    const renderPaths = () => {
+        elements.pathSrc.textContent = model.source?.name || t('notSelected');
+        elements.pathSrc.title = model.source?.name || '';
+        elements.pathTgt.textContent = model.target?.name || t('notSelected');
+        elements.pathTgt.title = model.target?.name || '';
+    };
+    const renderProfile = () => {
+        if (!model.profile) {
+            elements.profileText.textContent = t('profileNone');
+            elements.profileBadge.dataset.verified = 'false';
+            elements.profileBadge.querySelector('span').textContent = t('profileUnverified');
+            return;
+        }
+        elements.profileText.textContent = t('profileLabel', { source: model.profile.sourceName, target: model.profile.targetName });
+        elements.profileBadge.dataset.verified = String(model.trustedProfile);
+        elements.profileBadge.querySelector('span').textContent = t(model.trustedProfile ? 'profileVerified' : 'profileUnverified');
+    };
+    const statusPresentation = (code) => ({
+        unchanged: ['statusUnchanged', 'neutral'], baseline: ['statusBaseline', 'info'], 'copy-out': ['statusCopyOut', 'success'], 'copy-in': ['statusCopyIn', 'info'], trash: ['statusTrash', 'danger'], conflict: ['statusConflict', 'warning'], skipped: ['statusSkipped', 'warning'], protected: ['statusProtected', 'neutral'], missing: ['statusNew', 'neutral'],
+    }[code] || ['statusUnchanged', 'neutral']);
+    const appendEmptyRow = (body, text) => { body.replaceChildren(); const row = body.insertRow(); const cell = row.insertCell(); cell.colSpan = 4; cell.className = 'empty-cell'; cell.textContent = text; };
+    const appendFileRow = (body, file, path, status) => {
+        const row = body.insertRow();
+        const nameCell = row.insertCell();
+        const name = document.createElement('div'); name.className = 'file-name'; name.textContent = file.name;
+        const pathText = document.createElement('div'); pathText.className = 'file-path'; pathText.textContent = path;
+        nameCell.append(name, pathText);
+        row.insertCell().textContent = file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(1)} KB`;
+        row.insertCell().textContent = new Date(file.lastModified).toLocaleString(language());
+        const statusCell = row.insertCell(); const [key, tone] = statusPresentation(status); const badge = document.createElement('span'); badge.className = `badge badge-${tone}`; badge.textContent = t(key); statusCell.append(badge);
+    };
+    const renderRows = () => {
+        elements.srcBody.replaceChildren(); elements.tgtBody.replaceChildren();
+        const rows = model.plan?.rows || [...new Set([...model.sourceFiles.keys(), ...model.targetFiles.keys()])].map((path) => ({
+            path,
+            source: model.sourceFiles.get(path) || null,
+            target: model.targetFiles.get(path) || null,
+            sourceStatus: 'unchanged',
+            targetStatus: 'unchanged',
+        }));
+        for (const row of rows) {
+            if (row.source) appendFileRow(elements.srcBody, row.source, row.path, row.sourceStatus);
+            if (row.target) appendFileRow(elements.tgtBody, row.target, row.path, row.targetStatus);
+        }
+        if (!elements.srcBody.children.length) appendEmptyRow(elements.srcBody, t('emptyFiles'));
+        if (!elements.tgtBody.children.length) appendEmptyRow(elements.tgtBody, t('emptyFiles'));
+        elements.srcCount.textContent = String(model.sourceFiles.size || 0);
+        elements.tgtCount.textContent = String(model.targetFiles.size || 0);
+    };
+    const renderHistory = () => {
+        elements.history.replaceChildren();
+        const history = model.profile?.history || model.state.globalHistory || [];
+        if (!history.length) { const row = elements.history.insertRow(); const cell = row.insertCell(); cell.colSpan = 4; cell.className = 'empty-cell'; cell.textContent = t('emptyHistory'); return; }
+        for (const item of history.slice(0, MAX_PROFILE_HISTORY)) {
+            const row = elements.history.insertRow();
+            row.insertCell().textContent = item.time;
+            row.insertCell().textContent = t(item.direction === 'unidirectional' ? 'directionOneShort' : 'directionBothShort');
+            row.insertCell().textContent = String(item.filesCount);
+            const status = row.insertCell(); status.textContent = t(item.status === 'success' ? 'success' : item.status === 'aborted' ? 'aborted' : 'failed');
+        }
+    };
+    const updateProgress = (current, total, path = '') => {
+        const percent = total ? Math.round((current / total) * 100) : 0;
+        elements.progress.dataset.visible = 'true'; elements.progressText.textContent = path || t('preparing'); elements.progressPercent.textContent = `${percent}% (${current}/${total})`;
+        elements.progressFill.style.width = `${percent}%`; elements.progressBar.setAttribute('aria-valuenow', String(percent));
+    };
+
+    const buildManifest = (sourceFiles, targetFiles) => {
+        const manifest = {};
+        const allPaths = new Set([...sourceFiles.keys(), ...targetFiles.keys()]);
+        for (const path of allPaths) manifest[path] = { source: SyncPlanner.snapshot(sourceFiles.get(path)), target: SyncPlanner.snapshot(targetFiles.get(path)) };
+        return manifest;
+    };
+
+    const SyncExecutor = (() => {
+        const run = async (plan, context) => {
+            let completed = 0;
+            for (const action of plan.actions) {
+                if (model.abortRequested) return { status: 'aborted', completed, total: plan.actions.length, errors: [] };
+                updateProgress(completed, plan.actions.length, action.path);
+                try {
+                    if (action.type === 'copy') await FileAdapter.copy(action, context.handles);
+                    else if (action.type === 'trash') await FileAdapter.moveToTrash(action, context.handles, plan.stamp);
+                } catch (error) {
+                    return { status: 'failed', completed, total: plan.actions.length, errors: [safeMessage(error)] };
+                }
+                completed += 1;
+                context.profile.lastCheckpoint = { planId: plan.id, completed, total: plan.actions.length, updatedAt: nowIso() };
+                StateStore.save(context.state);
+            }
+            updateProgress(completed, plan.actions.length, '');
+            return { status: 'success', completed, total: plan.actions.length, errors: [] };
+        };
+        return Object.freeze({ run });
+    })();
+
+    const Controller = (() => {
+        const saveConfig = () => {
+            model.state.config = { direction: elements.direction.value, conflictPolicy: elements.policy.value, excludeDirs: normalizeExcludes(elements.excludes.value), lang: language() };
+            StateStore.save(model.state);
+        };
+        const invalidatePlan = () => { model.plan = null; if (model.source && model.target && model.profile) setPhase('ready'); else setPhase('idle'); renderRows(); };
+        const bindPair = async () => {
+            if (!model.source || !model.target) return;
+            const problem = await validateFolderPair(model.source, model.target);
+            if (problem) {
+                model.profile = null; model.trustedProfile = false; model.target = null; elements.pathTgt.textContent = t('notSelected'); elements.pathTgt.title = '';
+                setPhase('error'); setStatus(t(problem === 'same' ? 'sameFolder' : 'nestedFolder'), 'danger', 'alert'); renderProfile(); return;
+            }
+            const matching = await HandleStore.findMatching(model.source, model.target);
+            let profile = matching ? model.state.profiles[matching.profileId] : null;
+            if (!profile) {
+                const id = uid();
+                profile = { id, sourceName: model.source.name, targetName: model.target.name, bindingStatus: 'verified', createdAt: nowIso(), lastUsedAt: nowIso(), manifest: {}, history: [] };
+                model.state.profiles[id] = profile;
+            }
+            profile.sourceName = model.source.name; profile.targetName = model.target.name; profile.bindingStatus = 'verified'; profile.lastUsedAt = nowIso();
+            model.state.activeProfileId = profile.id; model.profile = profile; model.trustedProfile = true;
+            await HandleStore.put(profile.id, model.source, model.target); StateStore.save(model.state);
+            setPhase('ready'); setStatus(t('pairReady'), 'success', 'check'); renderProfile(); renderHistory();
+        };
+        const pick = async (side) => {
+            try {
+                const handle = await window.showDirectoryPicker({ mode: 'readwrite' });
+                model[side] = handle;
+                const pathElement = side === 'source' ? elements.pathSrc : elements.pathTgt;
+                pathElement.textContent = handle.name; pathElement.title = handle.name;
+                addLog(t('selected', { name: handle.name })); invalidatePlan(); await bindPair();
+            } catch (error) {
+                if (error?.name === 'AbortError') setStatus(t('pickCancelled'), 'warning', 'info');
+                else setStatus(t('pickFailed', { message: safeMessage(error) }), 'danger', 'alert');
+            }
+        };
+        const compare = async () => {
+            if (!model.profile || !model.source || !model.target) return;
+            setPhase('comparing'); setStatus(t('comparing'), 'info', 'compare'); elements.progress.dataset.visible = 'false';
+            try {
+                const excludes = normalizeExcludes(elements.excludes.value);
+                [model.sourceFiles, model.targetFiles] = await Promise.all([FileAdapter.scan(model.source, excludes), FileAdapter.scan(model.target, excludes)]);
+                model.plan = SyncPlanner.plan({ source: model.sourceFiles, target: model.targetFiles, manifest: model.profile.manifest, trustedManifest: model.trustedProfile, direction: elements.direction.value, conflictPolicy: elements.policy.value });
+                renderRows();
+                setPhase(model.plan.actions.length ? 'planned' : 'ready');
+                setStatus(t(model.plan.actions.length ? 'compareDone' : 'compareNone', { count: model.plan.actions.length }), model.plan.summary.conflicts ? 'warning' : 'success', model.plan.summary.conflicts ? 'alert' : 'check');
+                addLog(t(model.plan.actions.length ? 'compareDone' : 'compareNone', { count: model.plan.actions.length }));
+            } catch (error) {
+                model.plan = null; setPhase('error'); setStatus(t('compareFailed', { message: safeMessage(error) }), 'danger', 'alert'); addLog(t('compareFailed', { message: safeMessage(error) }));
+            } finally { renderControls(); }
+        };
+        const sync = async () => {
+            if (!model.plan?.actions.length || !model.profile) return;
+            const plan = model.plan; model.abortRequested = false; setPhase('syncing'); setStatus(t('syncing', { current: 0, total: plan.actions.length }), 'info', 'sync'); updateProgress(0, plan.actions.length);
+            try {
+                const result = await SyncExecutor.run(plan, { handles: { source: model.source, target: model.target }, profile: model.profile, state: model.state });
+                const excludes = normalizeExcludes(elements.excludes.value);
+                [model.sourceFiles, model.targetFiles] = await Promise.all([FileAdapter.scan(model.source, excludes), FileAdapter.scan(model.target, excludes)]);
+                model.profile.manifest = buildManifest(model.sourceFiles, model.targetFiles);
+                if (result.status !== 'failed') delete model.profile.lastCheckpoint;
+                const history = { time: new Date().toLocaleString(language()), direction: elements.direction.value, filesCount: result.completed, status: result.status };
+                model.profile.history.unshift(history); model.profile.history = model.profile.history.slice(0, MAX_PROFILE_HISTORY); model.state.globalHistory.unshift(history); model.state.globalHistory = model.state.globalHistory.slice(0, MAX_GLOBAL_HISTORY); StateStore.save(model.state);
+                model.plan = null; renderHistory(); renderRows();
+                if (result.status === 'aborted') { setPhase('aborted'); setStatus(t('syncAborted', { count: result.completed }), 'warning', 'stop'); }
+                else if (result.status === 'failed') { setPhase('error'); setStatus(t('syncFailed', { message: result.errors[0] || 'Unknown error' }), 'danger', 'alert'); }
+                else { setPhase('success'); setStatus(t('syncDone', { count: result.completed }), 'success', 'check'); }
+                addLog(elements.statusText.textContent);
+            } catch (error) {
+                setPhase('error'); setStatus(t('syncFailed', { message: safeMessage(error) }), 'danger', 'alert'); addLog(t('syncFailed', { message: safeMessage(error) }));
+            } finally { model.abortRequested = false; renderControls(); }
+        };
+        const abort = () => { if (model.phase === 'syncing') { model.abortRequested = true; setPhase('aborting'); setStatus(t('aborting'), 'warning', 'stop'); } };
+        const importState = async (file) => {
+            try {
+                if (file.size > MAX_IMPORT_BYTES) throw new Error('JSON file exceeds 5MB');
+                model.state = StateStore.importText(await file.text()); model.source = model.target = model.profile = null; model.trustedProfile = false; model.plan = null; StateStore.save(model.state); setPhase('idle'); renderStaticText(); setStatus(t('importDone'), 'success', 'check'); addLog(t('importDone'));
+            } catch (error) { setPhase('error'); setStatus(t('importFailed', { message: safeMessage(error) }), 'danger', 'alert'); }
+        };
+        return Object.freeze({ abort, bindPair, compare, importState, invalidatePlan, pick, saveConfig, sync });
+    })();
+
+    const downloadJson = (data, name) => {
+        const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+        const link = document.createElement('a'); link.href = url; link.download = name; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 0);
+    };
+
+    elements.btnSrc.addEventListener('click', () => Controller.pick('source'));
+    elements.btnTgt.addEventListener('click', () => Controller.pick('target'));
+    elements.btnCompare.addEventListener('click', Controller.compare);
+    elements.btnSync.addEventListener('click', Controller.sync);
+    elements.btnAbort.addEventListener('click', Controller.abort);
+    [elements.direction, elements.policy, elements.excludes].forEach((control) => control.addEventListener('change', () => { Controller.saveConfig(); Controller.invalidatePlan(); }));
+    elements.excludes.addEventListener('input', () => { model.state.config.excludeDirs = normalizeExcludes(elements.excludes.value); StateStore.save(model.state); Controller.invalidatePlan(); });
+    $('#btnLangKo').addEventListener('click', () => { model.state.config.lang = 'ko'; StateStore.save(model.state); renderStaticText(); });
+    $('#btnLangEn').addEventListener('click', () => { model.state.config.lang = 'en'; StateStore.save(model.state); renderStaticText(); });
+    $('#btnGenDefault').addEventListener('click', () => { downloadJson(StateStore.createDefault(), 'file-nally-default.json'); setStatus(t('defaultDone'), 'success', 'check'); });
+    $('#btnExport').addEventListener('click', () => { downloadJson(StateStore.export(model.state), `file-nally-backup-${new Date().toISOString().slice(0, 10)}.json`); setStatus(t('exportDone'), 'success', 'check'); });
+    $('#btnImport').addEventListener('click', () => $('#fileImporter').click());
+    $('#fileImporter').addEventListener('change', async (event) => { const file = event.target.files?.[0]; if (file) await Controller.importState(file); event.target.value = ''; });
+    $('#btnClearHistory').addEventListener('click', () => {
+        if (!confirm(t('confirmClear'))) return;
+        model.state.globalHistory = []; if (model.profile) model.profile.history = []; StateStore.save(model.state); renderHistory(); setStatus(t('historyCleared'), 'success', 'check');
     });
 
-    document.getElementById('btnClearHistory').addEventListener('click', () => {
-        if(confirm(t('alertClearHistoryConfirm'))) {
-            appState.history = []; appState.manifest = {}; saveState(); renderHistoryTable(); addLog(t('logClearHistory'));
+    const initialize = async () => {
+        model.profile = model.state.activeProfileId ? model.state.profiles[model.state.activeProfileId] || null : null;
+        if (model.profile) {
+            const record = await HandleStore.get(model.profile.id);
+            if (record) {
+                try {
+                    const sourcePermission = await record.sourceHandle.queryPermission({ mode: 'readwrite' });
+                    const targetPermission = await record.targetHandle.queryPermission({ mode: 'readwrite' });
+                    if (sourcePermission === 'granted' && targetPermission === 'granted') {
+                        model.source = record.sourceHandle; model.target = record.targetHandle; model.trustedProfile = model.profile.bindingStatus === 'verified';
+                        elements.pathSrc.textContent = model.source.name; elements.pathSrc.title = model.source.name; elements.pathTgt.textContent = model.target.name; elements.pathTgt.title = model.target.name; setPhase('ready'); setStatus(t('pairReady'), 'success', 'check');
+                    }
+                } catch { model.trustedProfile = false; }
+            }
         }
+        renderStaticText(); renderRows(); renderHistory(); renderControls(); addLog(t('waiting'));
+    };
+
+    window.FileNallyTest = Object.freeze({
+        StateStore,
+        SyncPlanner,
+        executeCurrentPlan: () => Controller.sync(),
+        getModel: () => ({ phase: model.phase, trustedProfile: model.trustedProfile, profileId: model.profile?.id || null, plan: model.plan ? cloneJson({ id: model.plan.id, actions: model.plan.actions, summary: model.plan.summary }) : null }),
     });
 
-    function toggleUI(enable) {
-        btnCompare.disabled = !enable;
-        btnSync.disabled = !enable || syncQueue.length === 0;
-        btnAbort.disabled = enable; 
-        document.getElementById('btnSrc').disabled = !enable;
-        document.getElementById('btnTgt').disabled = !enable;
-    }
-
-    document.getElementById('btnSrc').addEventListener('click', async () => { 
-        try {
-            srcHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); 
-            document.getElementById('pathSrc').innerText = `📁 ${srcHandle.name}`; 
-            addLog(t('logMountSrc', {name: srcHandle.name}));
-            checkReady(); 
-        } catch (e) {
-            if (e.name === 'AbortError') addLog(t('logFolderSrcCancel'));
-            else addLog(t('logFolderSrcFail', {message: e.message}));
-        }
+    initialize().catch((error) => {
+        setPhase('error');
+        setStatus(t('pickFailed', { message: safeMessage(error) }), 'danger', 'alert');
+        addLog(safeMessage(error));
     });
-
-    document.getElementById('btnTgt').addEventListener('click', async () => { 
-        try {
-            tgtHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); 
-            document.getElementById('pathTgt').innerText = `📁 ${tgtHandle.name}`; 
-            addLog(t('logMountTgt', {name: tgtHandle.name}));
-            checkReady(); 
-        } catch (e) {
-            if (e.name === 'AbortError') addLog(t('logFolderTgtCancel'));
-            else addLog(t('logFolderTgtFail', {message: e.message}));
-        }
-    });
-    
-    document.getElementById('btnLangKo').addEventListener('click', () => {
-        appState.config.lang = 'ko';
-        saveState();
-        updateStaticLanguage();
-        if (srcHandle && tgtHandle) {
-            compareFolders();
-        }
-    });
-    
-    document.getElementById('btnLangEn').addEventListener('click', () => {
-        appState.config.lang = 'en';
-        saveState();
-        updateStaticLanguage();
-        if (srcHandle && tgtHandle) {
-            compareFolders();
-        }
-    });
-    
-    function checkReady() { if (srcHandle && tgtHandle && !isWorking) toggleUI(true); }
-    btnCompare.addEventListener('click', compareFolders);
-    btnSync.addEventListener('click', executeSync);
-
-    loadState();
+})();
 </script>
 </body>
 </html>
