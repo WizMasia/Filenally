@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="브라우저에서 두 로컬 폴더를 안전하게 비교하고 동기화하는 단일 HTML 도구">
+    <title>File-nally · 로컬 폴더 동기화</title>
+    <!-- file-nally:css:start -->
+    <link rel="stylesheet" href="./css/file-nally.css">
+    <!-- file-nally:css:end -->
+</head>
+<body>
+<svg aria-hidden="true" class="sr-only" width="0" height="0">
+    <symbol id="icon-sync" viewBox="0 0 24 24"><path d="M20 7h-5V2"/><path d="M4 17h5v5"/><path d="M5.2 9a7 7 0 0 1 11.4-3.4L20 7"/><path d="M18.8 15a7 7 0 0 1-11.4 3.4L4 17"/></symbol>
+    <symbol id="icon-folder" viewBox="0 0 24 24"><path d="M3 6h6l2 2h10v10H3z"/></symbol>
+    <symbol id="icon-compare" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 5 5"/></symbol>
+    <symbol id="icon-play" viewBox="0 0 24 24"><path d="m8 5 11 7-11 7z"/></symbol>
+    <symbol id="icon-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+    <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4 20h16"/></symbol>
+    <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 15V3"/><path d="m7 8 5-5 5 5"/><path d="M4 20h16"/></symbol>
+    <symbol id="icon-file" viewBox="0 0 24 24"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v5h5"/></symbol>
+    <symbol id="icon-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6"/><path d="M12 7h.01"/></symbol>
+    <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 3 2 21h20z"/><path d="M12 9v5"/><path d="M12 18h.01"/></symbol>
+    <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 14h8l1-14"/></symbol>
+</svg>
+
+<div class="app-shell">
+    <header class="app-header">
+        <div class="brand">
+            <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-sync"></use></svg></span>
+            <div class="brand-copy">
+                <h1>File-nally</h1>
+                <div class="version">Beta v0.7.0</div>
+            </div>
+        </div>
+        <div class="language-switch" role="group" aria-label="Language">
+            <button id="btnLangKo" type="button" aria-pressed="true">한국어</button>
+            <button id="btnLangEn" type="button" aria-pressed="false">English</button>
+        </div>
+    </header>
+
+    <main>
+        <p class="desc" data-i18n="desc">두 로컬 폴더를 비교한 뒤 변경 계획을 검토하고 안전하게 동기화합니다.</p>
+
+        <section class="panel control-panel" aria-labelledby="controlTitle">
+            <h2 id="controlTitle" class="sr-only" data-i18n="controlTitle">동기화 제어</h2>
+            <div class="folder-grid">
+                <div class="folder-select">
+                    <button id="btnSrc" class="with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="selectSource">원본 폴더 선택</span></button>
+                    <div class="path-display" id="pathSrc" title="" data-i18n="notSelected">선택되지 않음</div>
+                </div>
+                <div class="folder-select">
+                    <button id="btnTgt" class="with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="selectTarget">대상 폴더 선택</span></button>
+                    <div class="path-display" id="pathTgt" title="" data-i18n="notSelected">선택되지 않음</div>
+                </div>
+            </div>
+
+            <div class="profile-line">
+                <span id="profileText" data-i18n="profileNone">선택된 동기화 프로필이 없습니다.</span>
+                <span id="profileBadge" class="profile-badge" data-verified="false"><svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg><span data-i18n="profileUnverified">폴더 쌍 미확인</span></span>
+            </div>
+
+            <div class="option-grid">
+                <div class="field">
+                    <label for="syncDirection" data-i18n="directionLabel">동기화 방향</label>
+                    <select id="syncDirection">
+                        <option value="bidirectional" data-i18n="directionBoth">양방향 (원본 ⇄ 대상)</option>
+                        <option value="unidirectional" data-i18n="directionOne">단방향 (원본 → 대상)</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="conflictPolicy" data-i18n="policyLabel">충돌 해결 정책</label>
+                    <select id="conflictPolicy">
+                        <option value="latest" data-i18n="policyLatest">최신 파일 유지</option>
+                        <option value="source-overwrite" data-i18n="policySource">원본 우선 덮어쓰기</option>
+                        <option value="skip" data-i18n="policySkip">기존 파일 건너뛰기</option>
+                        <option value="rename" data-i18n="policyRename">이름을 바꿔 두 버전 보존</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="excludeDirs" data-i18n="excludeLabel">제외할 하위 폴더명</label>
+                    <input id="excludeDirs" type="text" value="node_modules, .git, dist, temp, .trash" spellcheck="false">
+                </div>
+            </div>
+
+            <div class="data-actions">
+                <button id="btnGenDefault" class="button-ghost with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-file"></use></svg><span data-i18n="defaultJson">기본 JSON</span></button>
+                <button id="btnExport" class="button-secondary with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-download"></use></svg><span data-i18n="exportJson">JSON 백업</span></button>
+                <button id="btnImport" class="button-secondary with-icon" type="button"><svg class="icon" aria-hidden="true"><use href="#icon-upload"></use></svg><span data-i18n="importJson">JSON 복원</span></button>
+                <input id="fileImporter" class="sr-only" type="file" accept="application/json,.json">
+            </div>
+
+            <div class="primary-actions">
+                <button id="btnCompare" class="button-ghost with-icon" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-compare"></use></svg><span data-i18n="compare">변경사항 비교</span></button>
+                <button id="btnSync" class="with-icon" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-play"></use></svg><span data-i18n="sync">동기화 실행</span></button>
+                <button id="btnAbort" class="button-warning with-icon" type="button" disabled><svg class="icon" aria-hidden="true"><use href="#icon-stop"></use></svg><span data-i18n="abort">안전하게 중지</span></button>
+            </div>
+
+            <div id="syncStatus" class="status-banner" data-tone="neutral" role="status" aria-live="polite">
+                <svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg>
+                <span id="syncStatusText" data-i18n="waiting">폴더를 선택해 주세요.</span>
+            </div>
+
+            <div id="progressContainer" class="progress-container" data-visible="false">
+                <div class="progress-head">
+                    <span id="currentFileText" class="progress-file" data-i18n="preparing">준비 중</span>
+                    <span id="progressPercentText">0% (0/0)</span>
+                </div>
+                <div id="progressBar" class="progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" aria-label="동기화 진행률"><div class="progress-bar"></div></div>
+            </div>
+        </section>
+
+        <section id="workspaceResults" class="workspace-grid" aria-label="폴더 비교 결과">
+            <article class="panel">
+                <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="sourceTitle">원본 폴더</span></h2><span id="srcCount" class="count">0</span></div>
+                <div class="table-wrapper"><table><thead><tr><th data-i18n="pathHead">파일명과 경로</th><th data-i18n="sizeHead">크기</th><th data-i18n="dateHead">수정일</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="srcFileBody"></tbody></table></div>
+            </article>
+            <article class="panel">
+                <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="targetTitle">대상 폴더</span></h2><span id="tgtCount" class="count">0</span></div>
+                <div class="table-wrapper"><table><thead><tr><th data-i18n="pathHead">파일명과 경로</th><th data-i18n="sizeHead">크기</th><th data-i18n="dateHead">수정일</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="tgtFileBody"></tbody></table></div>
+            </article>
+        </section>
+
+        <section id="activityResults" class="history-grid" aria-label="동기화 기록">
+            <article class="panel">
+                <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg><span data-i18n="logTitle">실시간 로그</span></h2><span id="phaseLabel" class="count" data-i18n="idle">대기</span></div>
+                <div id="logBox" class="log-box" role="log" aria-live="polite"></div>
+            </article>
+            <article class="panel history-panel">
+                <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-file"></use></svg><span data-i18n="historyTitle">동기화 이력</span></h2><button id="btnClearHistory" class="button-danger" type="button" data-i18n="clearHistory">이력 초기화</button></div>
+                <div class="table-wrapper"><table><thead><tr><th data-i18n="timeHead">실행 시간</th><th data-i18n="directionHead">방향</th><th data-i18n="processedHead">처리</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="historyBody"></tbody></table></div>
+            </article>
+        </section>
+    </main>
+
+    <footer>
+        <div><strong>File-nally</strong> · MIT License</div>
+        <p class="footer-law" data-i18n="disclaimer">중요한 데이터는 동기화 전에 별도로 백업하세요. 브라우저와 운영체제의 파일 권한 또는 예기치 않은 중단으로 인한 손실 가능성이 있습니다.</p>
+        <div>Copyright 2026. File-nally Dev.</div>
+    </footer>
+</div>
+
+<!-- file-nally:js:start -->
+<script src="./js/file-nally.js"></script>
+<!-- file-nally:js:end -->
+</body>
+</html>

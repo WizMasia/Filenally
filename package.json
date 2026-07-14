@@ -5,8 +5,8 @@
     "build": "node scripts/build.cjs",
     "build:check": "node scripts/build.cjs --check",
     "build:test": "node tests/build-pipeline.cjs",
-    "test": "node tests/file-nally.e2e.cjs",
-    "test:visual": "node tests/file-nally.e2e.cjs --visual"
+    "test": "npm run build:test && npm run build:check && node tests/file-nally.e2e.cjs",
+    "test:visual": "npm run build:test && npm run build:check && node tests/file-nally.e2e.cjs --visual"
   },
   "devDependencies": {
     "playwright": "1.61.1"
