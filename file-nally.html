@@ -78,7 +78,13 @@
 
 <div class="container">
     <div class="content">
-        <h1>🔄 File-nally <span style="font-size: 1.1rem; color: #4F46E5; vertical-align: middle;">Beta v0.6.1</span></h1>
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem; width: 100%; flex-wrap: wrap; gap: 1rem;">
+            <h1 style="margin: 0; text-align: left;">🔄 File-nally <span style="font-size: 1.1rem; color: #4F46E5; vertical-align: middle;">Beta v0.6.1</span></h1>
+            <div style="display: flex; gap: 0.3rem; align-items: center; background: #E5E7EB; padding: 0.2rem; border-radius: 6px;">
+                <button id="btnLangKo" style="padding: 0.3rem 0.8rem; font-size: 0.8rem; border-radius: 4px; font-weight: bold; background: var(--primary); color: white;">한국어</button>
+                <button id="btnLangEn" style="padding: 0.3rem 0.8rem; font-size: 0.8rem; border-radius: 4px; font-weight: bold; background: transparent; color: var(--text);">English</button>
+            </div>
+        </div>
         <p class="desc">매니페스트 변경 이력을 분석하여 변경 없는 파일은 고속 스킵하고, 지워진 파일은 각 폴더의 .trash 위치로 격리 이동합니다.</p>
 
         <!-- 1. 제어 센터 -->
@@ -196,11 +202,195 @@
 </div>
 
 <script>
+    const TRANSLATIONS = {
+        ko: {
+            desc: "매니페스트 변경 이력을 분석하여 변경 없는 파일은 고속 스킵하고, 지워진 파일은 각 폴더의 .trash 위치로 격리 이동합니다.",
+            btnSrc: "1. 원본 폴더 (Source)",
+            btnTgt: "2. 대상 폴더 (Target)",
+            pathNotSelected: "선택되지 않음",
+            syncDirection: "🔁 동기화 방향",
+            directionBidi: "양방향 동기화 (Source ⇄ Target)",
+            directionUni: "단방향 동기화 (Source ➔ Target)",
+            conflictPolicy: "⚡ 파일 충돌 해결 정책",
+            conflictLatest: "최신 파일 유지 (날짜 비교)",
+            conflictOverwrite: "무조건 덮어쓰기 (강제 대체)",
+            conflictSkip: "기존 파일 건너뛰기",
+            conflictRename: "이름 변경하여 둘 다 유지",
+            excludeDirs: "🚫 제외할 하위 폴더명 (쉼표 구분)",
+            btnGenDefault: "📄 기본값 JSON 생성",
+            btnExport: "💾 데이터 백업 (JSON)",
+            btnImport: "📂 데이터 복원",
+            btnCompare: "🔍 변경사항 비교하기",
+            btnSync: "▶ 동기화 실행",
+            btnAbort: "⏹ 동기화 중지",
+            srcFolderTitle: "📁 원본 폴더 (Source)",
+            tgtFolderTitle: "📁 대상 폴더 (Target)",
+            fileCount: "파일: {count}개",
+            thPath: "파일명/경로",
+            thSize: "크기",
+            thDate: "수정일",
+            thStatus: "분석 상태",
+            comparePrompt: "폴더를 지정하고 비교해 보세요.",
+            noFiles: "파일이 없습니다.",
+            sysLog: "📋 실시간 시스템 로그",
+            statusWaiting: "대기 중",
+            historyTitle: "📜 과거 동기화 성공 이력 (JSON 연동)",
+            btnClearHistory: "이력 초기화",
+            historyThTime: "실행 시간",
+            historyThDir: "방향",
+            historyThFiles: "처리된 파일 수",
+            historyThStatus: "상태",
+            historyEmpty: "기록된 이력이 없습니다.",
+            footerLicense: "is Open Source software licensed under the <b>MIT License</b>.",
+            footerDisclaimerTitle: "[법적 면책 고지 / Legal Disclaimer]",
+            footerDisclaimerText: "본 소프트웨어는 최선을 다해 개발 및 검증되었으나, 사용자의 로컬 드렉터리 내부 파일을 직접 수정, 이동, 대체 및 삭제 제어하는 유틸리티 도구입니다. 본 프로그램은 어떠한 종류의 명시적 또는 묵시적인 보증 없이 \"있는 그대로(AS IS)\" 제공됩니다. 사용자는 본 프로그램을 가동하기 전 반드시 누락되면 안 되는 핵심 데이터를 별도로 안전하게 백업해야 할 책임이 있습니다. 개발자는 본 프로그램의 사용, 오용, 오작동 또는 중간 작업 중단으로 인하여 발생하는 파일 유실, 손상, 시스템 장애를 포함한 어떠한 직·간접적인 손해나 법적 분쟁에 대해서도 일체의 책임을 지지 않습니다. 본 프로그램을 사용하는 것은 이 면책 조항에 동의하는 것으로 간주됩니다.",
+            logInit: "✨ 최초 실행 감지: 기본 설정 JSON 구조가 저장소에 자동 안착되었습니다.",
+            logLoadState: "🔄 기존 로컬 환경설정 및 이력 데이터를 로드했습니다.",
+            logCompareStart: "폴더 상태 스캔 및 매니페스트 이력 대조 중...",
+            logCompareDone: "비교 대조 완료 (실제 반영 필요한 변경 대상 대기열: {count}개)",
+            logCompareError: "분석 중 오류 발생: {message}",
+            logSyncStart: "동기화 파일 트랜잭션 적용 작업을 시작합니다...",
+            logSyncAborted: "⏹ 사용자의 요청으로 동기화 작업을 강제 중지했습니다.",
+            logSyncAbortProcess: "⏳ 사용자 중지 시그널 감지. 현재 임시 버퍼 세션 정착 완료 후 작업을 즉시 매듭짓습니다...",
+            logSyncAbortWarning: "중지 명령 처리 중... 데이터 무결성을 보호하기 위해 현재 파일까지만 안전 래핑 마감 중...",
+            logSyncFileStream: "[{icon}] {path} 복사 및 격리 스트림 처리 중... ({current}/{total})",
+            logSyncDone: "작업 완료: 총 {count}개의 로컬 트랜잭션을 마스터 데이터에 안전하게 영구 반영 완료.",
+            logSyncError: "동기화 실행 중 크리티컬 에러 발생: {message}",
+            logFolderSrcCancel: "📁 원본 폴더 지정 작업이 취소되었습니다.",
+            logFolderSrcFail: "❌ 원본 폴더 바인딩 실패: {message}",
+            logFolderTgtCancel: "📁 대상 폴더 지정 작업이 취소되었습니다.",
+            logFolderTgtFail: "❌ 대상 폴더 바인딩 실패: {message}",
+            logGenDefault: "📄 기본 템플릿 설정 파일(default_sync_config.json) 생성 및 다운로드 완료.",
+            logBackupExport: "💾 현재 마스터 구성 및 누적 데이터 백업 JSON 파일 추출 완착.",
+            logBackupImport: "📂 외부 파일에서 백업 데이터를 파싱하여 로컬 엔진에 성공적으로 주입 완료.",
+            logClearHistory: "이력 및 상태 데이터베이스 초기화 완료.",
+            logMountSrc: "1번 원본 폴더(Source) 마운트 및 샌드박스 쓰기 권한을 인가했습니다. ({name})",
+            logMountTgt: "2번 대상 폴더(Target) 마운트 및 샌드박스 쓰기 권한을 인가했습니다. ({name})",
+            alertImportInvalid: "유효한 File-nally 백업 JSON 마스터 규격이 아닙니다.",
+            alertImportParseError: "JSON 설정 파일을 복원하는 도중 파싱 에러가 발생했습니다.",
+            alertClearHistoryConfirm: "주의: 모든 과거 동기화 성공 이력과 매니페스트 스냅샷 데이터베이스를 초기화하시겠습니까? (방향/제외 등 기본 옵션 설정은 보존됩니다.)",
+            badgeNoChange: "변화 없음",
+            badgeUpdateSend: "🔵 ➔ 업데이트 전송",
+            badgeUpdateRecv: "🔵 ⇠ 업데이트 예정",
+            badgeUpdateSendBidi: "🟠 ➔ 업데이트 전송",
+            badgeUpdateRecvBidi: "🟠 ⇠ 업데이트 예정",
+            badgeDeleteWait: "🗑️ 반대편 삭제로 인한 격리 대기",
+            badgeNewSend: "🔵 ➔ 신규 파일 전송",
+            badgeNewSendBidi: "🟠 ➔ 신규 파일 전송",
+            badgeProtected: "동일 (대상 파일 보호됨)",
+            badgeProtectedTgt: "동일 (보호됨)",
+            badgeKeepTgtOnly: "유지 (대상 단독 파일)",
+            stateComparing: "비교 분석 중...⏳",
+            stateCompareDone: "비교 완료 (전송 대기: {count}건)",
+            stateSyncing: "동기화 적용 중... ⏳",
+            stateSyncAborted: "동기화 중지됨 ⏹",
+            stateSyncDone: "동기화 완료 ✅",
+            stateSyncFailed: "동기화 실패 ❌",
+            syncWorkingText: "현재 작업:",
+            syncAbortedSpan: "동기화 중지됨 (총 {total}개 중 {success}개 완료)",
+            syncDoneSpan: "축하합니다! 모든 파일 격리 및 병합 동기화 작업이 성공적으로 완착되었습니다.",
+            syncFailedSpan: "작업 실패 중단: {message}",
+            historyStatusSuccess: "성공",
+            historyStatusAborted: "중단됨 (사용자 요청)"
+        },
+        en: {
+            desc: "Analyzes the manifest change history to high-speed skip unmodified files and moves deleted files into the .trash directory of each folder.",
+            btnSrc: "1. Select Source Folder",
+            btnTgt: "2. Select Target Folder",
+            pathNotSelected: "Not Selected",
+            syncDirection: "🔁 Synchronization Direction",
+            directionBidi: "Bidirectional Sync (Source ⇄ Target)",
+            directionUni: "Unidirectional Sync (Source ➔ Target)",
+            conflictPolicy: "⚡ File Conflict Resolution Policy",
+            conflictLatest: "Keep Latest File (Compare Date)",
+            conflictOverwrite: "Always Overwrite (Force Replace)",
+            conflictSkip: "Skip Existing Files",
+            conflictRename: "Rename to Keep Both Files",
+            excludeDirs: "🚫 Exclude Subfolders (comma-separated)",
+            btnGenDefault: "📄 Create Default JSON",
+            btnExport: "💾 Backup Data (JSON)",
+            btnImport: "📂 Restore Data",
+            btnCompare: "🔍 Compare Changes",
+            btnSync: "▶ Run Synchronization",
+            btnAbort: "⏹ Stop Sync",
+            srcFolderTitle: "📁 Source Folder",
+            tgtFolderTitle: "📁 Target Folder",
+            fileCount: "Files: {count}",
+            thPath: "File Name / Path",
+            thSize: "Size",
+            thDate: "Modified Date",
+            thStatus: "Analysis Status",
+            comparePrompt: "Please specify folders and compare changes.",
+            noFiles: "No files found.",
+            sysLog: "📋 Real-time System Log",
+            statusWaiting: "Waiting",
+            historyTitle: "📜 Past Synchronization History (JSON-linked)",
+            btnClearHistory: "Clear History",
+            historyThTime: "Run Time",
+            historyThDir: "Direction",
+            historyThFiles: "Files Processed",
+            historyThStatus: "Status",
+            historyEmpty: "No history recorded.",
+            footerLicense: "is Open Source software licensed under the <b>MIT License</b>.",
+            footerDisclaimerTitle: "[Legal Disclaimer]",
+            footerDisclaimerText: "This software is developed and validated with care, but it is a utility tool that directly modifies, moves, replaces, and deletes files within the user's local directories. This program is provided \"AS IS\" without warranty of any kind, express or implied. Users bear the sole responsibility to securely back up critical data before running this program. The developer shall not be liable for any direct or indirect damages or legal disputes, including file loss, corruption, or system failure arising from the use, misuse, malfunction, or interruption of this program. Using this program constitutes agreement to this disclaimer.",
+            logInit: "✨ First run detected: Default config JSON structure has been stored locally.",
+            logLoadState: "🔄 Existing configuration and history data loaded successfully.",
+            logCompareStart: "Scanning folder states and comparing manifest histories...",
+            logCompareDone: "Comparison complete (Pending change queue: {count} items)",
+            logCompareError: "Error during analysis: {message}",
+            logSyncStart: "Starting synchronization transactions...",
+            logSyncAborted: "⏹ Synchronization was forcefully stopped by user request.",
+            logSyncAbortProcess: "⏳ Stopping signal detected. Finishing the current file task to preserve data integrity...",
+            logSyncAbortWarning: "Stopping in progress... Safely wrapping up current file to protect data integrity...",
+            logSyncFileStream: "[{icon}] Processing copy and isolation stream for {path}... ({current}/{total})",
+            logSyncDone: "Sync complete: Successfully applied {count} local transactions to master data.",
+            logSyncError: "Critical error occurred during sync execution: {message}",
+            logFolderSrcCancel: "📁 Source folder selection was cancelled.",
+            logFolderSrcFail: "❌ Source folder binding failed: {message}",
+            logFolderTgtCancel: "📁 Target folder selection was cancelled.",
+            logFolderTgtFail: "❌ Target folder binding failed: {message}",
+            logGenDefault: "📄 Default template config file (default_sync_config.json) created and downloaded.",
+            logBackupExport: "💾 Current configuration and history backup JSON exported.",
+            logBackupImport: "📂 Restored configuration database from external backup file successfully.",
+            logClearHistory: "History and status databases have been cleared.",
+            logMountSrc: "Authorized sandbox write permissions and mounted Source folder. ({name})",
+            logMountTgt: "Authorized sandbox write permissions and mounted Target folder. ({name})",
+            alertImportInvalid: "The file is not a valid File-nally state backup JSON.",
+            alertImportParseError: "An error occurred while parsing the JSON backup file.",
+            alertClearHistoryConfirm: "Warning: Are you sure you want to clear all past sync histories and manifest snapshot databases? (Options like Direction and Exclude folders will be kept.)",
+            badgeNoChange: "No Change",
+            badgeUpdateSend: "🔵 ➔ Send Update",
+            badgeUpdateRecv: "🔵 ⇠ Pending Update",
+            badgeUpdateSendBidi: "🟠 ➔ Send Update",
+            badgeUpdateRecvBidi: "🟠 ⇠ Pending Update",
+            badgeDeleteWait: "🗑️ Deletion Isolation Pending",
+            badgeNewSend: "🔵 ➔ Send New File",
+            badgeNewSendBidi: "🟠 ➔ Send New File",
+            badgeProtected: "Same (Target protected)",
+            badgeProtectedTgt: "Same (Protected)",
+            badgeKeepTgtOnly: "Keep (Target-only)",
+            stateComparing: "Analyzing changes...⏳",
+            stateCompareDone: "Compare Complete (Pending: {count})",
+            stateSyncing: "Synchronizing... ⏳",
+            stateSyncAborted: "Sync Stopped ⏹",
+            stateSyncDone: "Sync Complete ✅",
+            stateSyncFailed: "Sync Failed ❌",
+            syncWorkingText: "Current Task:",
+            syncAbortedSpan: "Sync Stopped ({success} of {total} completed)",
+            syncDoneSpan: "Congratulations! All file isolation and merge sync tasks completed successfully.",
+            syncFailedSpan: "Sync aborted with error: {message}",
+            historyStatusSuccess: "Success",
+            historyStatusAborted: "Stopped (User Request)"
+        }
+    };
+
     const DEFAULT_CONFIG = {
         config: {
             direction: 'bidirectional',
             conflictPolicy: 'latest',
-            excludeDirs: 'node_modules, .git, dist, temp, .trash'
+            excludeDirs: 'node_modules, .git, dist, temp, .trash',
+            lang: 'ko'
         },
         history: [],
         manifest: {}
@@ -225,16 +415,126 @@
     const progressPercentText = document.getElementById('progressPercentText');
     const progressBar = document.getElementById('progressBar');
 
+    function t(key, params = {}) {
+        const lang = (appState && appState.config && appState.config.lang) || 'ko';
+        let text = TRANSLATIONS[lang]?.[key] || TRANSLATIONS['ko']?.[key] || key;
+        for (const [k, v] of Object.entries(params)) {
+            text = text.replace(`{${k}}`, v);
+        }
+        return text;
+    }
+
+    function updateStaticLanguage() {
+        const lang = appState.config.lang || 'ko';
+        
+        // Header desc
+        document.querySelector('.desc').innerText = t('desc');
+        
+        // Control center
+        document.getElementById('btnSrc').innerText = t('btnSrc');
+        document.getElementById('btnTgt').innerText = t('btnTgt');
+        
+        if (!srcHandle) document.getElementById('pathSrc').innerText = t('pathNotSelected');
+        if (!tgtHandle) document.getElementById('pathTgt').innerText = t('pathNotSelected');
+        
+        document.querySelector('label[for="syncDirection"]').innerText = t('syncDirection');
+        document.querySelector('#syncDirection option[value="bidirectional"]').innerText = t('directionBidi');
+        document.querySelector('#syncDirection option[value="unidirectional"]').innerText = t('directionUni');
+        
+        document.querySelector('label[for="conflictPolicy"]').innerText = t('conflictPolicy');
+        document.querySelector('#conflictPolicy option[value="latest"]').innerText = t('conflictLatest');
+        document.querySelector('#conflictPolicy option[value="overwrite"]').innerText = t('conflictOverwrite');
+        document.querySelector('#conflictPolicy option[value="skip"]').innerText = t('conflictSkip');
+        document.querySelector('#conflictPolicy option[value="rename"]').innerText = t('conflictRename');
+        
+        document.querySelector('label[for="excludeDirs"]').innerText = t('excludeDirs');
+        
+        document.getElementById('btnGenDefault').innerText = t('btnGenDefault');
+        document.getElementById('btnExport').innerText = t('btnExport');
+        document.getElementById('btnImport').innerText = t('btnImport');
+        
+        document.getElementById('btnCompare').innerText = t('btnCompare');
+        document.getElementById('btnSync').innerText = t('btnSync');
+        document.getElementById('btnAbort').innerText = t('btnAbort');
+        
+        // Viewer labels
+        document.querySelector('.viewer-container .card:nth-child(1) .viewer-title span:nth-child(1)').innerText = t('srcFolderTitle');
+        document.querySelector('.viewer-container .card:nth-child(2) .viewer-title span:nth-child(1)').innerText = t('tgtFolderTitle');
+        
+        // Table heads
+        document.querySelectorAll('.table-wrapper table thead').forEach((thead, i) => {
+            thead.innerHTML = `<tr><th style="width:50%">${t('thPath')}</th><th style="width:15%">${t('thSize')}</th><th style="width:15%">${t('thDate')}</th><th style="width:20%">${t('thStatus')}</th></tr>`;
+        });
+        
+        // Table placeholders
+        const srcBody = document.getElementById('srcFileBody');
+        const tgtBody = document.getElementById('tgtFileBody');
+        if (srcBody.innerHTML.includes('폴더를 지정하고') || srcBody.innerHTML.includes('Please specify folders')) {
+            srcBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('comparePrompt')}</td></tr>`;
+        } else if (srcBody.innerHTML.includes('파일이 없습니다') || srcBody.innerHTML.includes('No files')) {
+            srcBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('noFiles')}</td></tr>`;
+        }
+        
+        if (tgtBody.innerHTML.includes('폴더를 지정하고') || tgtBody.innerHTML.includes('Please specify folders')) {
+            tgtBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('comparePrompt')}</td></tr>`;
+        } else if (tgtBody.innerHTML.includes('파일이 없습니다') || tgtBody.innerHTML.includes('No files')) {
+            tgtBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('noFiles')}</td></tr>`;
+        }
+        
+        // System log & past history labels
+        document.querySelector('.history-log-grid .card:nth-child(1) h3 span:nth-child(1)').innerText = t('sysLog');
+        if (syncStatus.innerText === '대기 중' || syncStatus.innerText === 'Waiting') {
+            syncStatus.innerText = t('statusWaiting');
+        }
+        
+        document.querySelector('.history-log-grid .card:nth-child(2) h3 span:nth-child(1)').innerText = t('historyTitle');
+        document.getElementById('btnClearHistory').innerText = t('btnClearHistory');
+        
+        // History table header
+        document.querySelector('.history-table thead').innerHTML = `<tr><th>${t('historyThTime')}</th><th>${t('historyThDir')}</th><th>${t('historyThFiles')}</th><th>${t('historyThStatus')}</th></tr>`;
+        
+        // History empty check
+        if (historyBody.innerHTML.includes('기록된 이력이 없습니다') || historyBody.innerHTML.includes('No history recorded')) {
+            historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF;">${t('historyEmpty')}</td></tr>`;
+        }
+        
+        // Footer
+        document.querySelector('footer div:nth-child(1)').innerHTML = `<b>File-nally</b> ${t('footerLicense')}`;
+        document.querySelector('footer .footer-law').innerHTML = `<b>${t('footerDisclaimerTitle')}</b><br>${t('footerDisclaimerText')}`;
+        
+        // Toggle active state for Language Buttons
+        const btnKo = document.getElementById('btnLangKo');
+        const btnEn = document.getElementById('btnLangEn');
+        if (lang === 'ko') {
+            btnKo.style.backgroundColor = 'var(--primary)';
+            btnKo.style.color = 'white';
+            btnEn.style.backgroundColor = 'transparent';
+            btnEn.style.color = 'var(--text)';
+        } else {
+            btnEn.style.backgroundColor = 'var(--primary)';
+            btnEn.style.color = 'white';
+            btnKo.style.backgroundColor = 'transparent';
+            btnKo.style.color = 'var(--text)';
+        }
+    }
+
     function loadState() {
         const savedState = localStorage.getItem('smart_sync_state');
         if (!savedState) {
             appState = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+            const browserLang = navigator.language || navigator.userLanguage;
+            appState.config.lang = browserLang.startsWith('ko') ? 'ko' : 'en';
             saveState();
-            addLog('✨ 최초 실행 감지: 기본 설정 JSON 구조가 저장소에 자동 안착되었습니다.');
+            addLog(t('logInit'));
         } else {
             try {
                 appState = JSON.parse(savedState);
-                addLog('🔄 기존 로컬 환경설정 및 이력 데이터를 로드했습니다.');
+                if (!appState.config.lang) {
+                    const browserLang = navigator.language || navigator.userLanguage;
+                    appState.config.lang = browserLang.startsWith('ko') ? 'ko' : 'en';
+                    saveState();
+                }
+                addLog(t('logLoadState'));
             } catch (e) {
                 console.error('State parse error, fallback to default', e);
                 appState = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
@@ -245,10 +545,12 @@
         syncDirection.value = appState.config.direction || 'bidirectional';
         conflictPolicy.value = appState.config.conflictPolicy || 'latest';
         excludeDirsInput.value = appState.config.excludeDirs || 'node_modules, .git, dist, temp, .trash';
+        updateStaticLanguage();
         renderHistoryTable();
     }
 
     function saveState() {
+        if (!appState) return;
         appState.config.direction = syncDirection.value;
         appState.config.conflictPolicy = conflictPolicy.value;
         appState.config.excludeDirs = excludeDirsInput.value;
@@ -266,17 +568,37 @@
 
     function renderHistoryTable() {
         if (!appState.history || appState.history.length === 0) {
-            historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF;">기록된 이력이 없습니다.</td></tr>`;
+            historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF;">${t('historyEmpty')}</td></tr>`;
             return;
         }
-        historyBody.innerHTML = appState.history.map(h => `
-            <tr>
-                <td><b>${h.time}</b></td>
-                <td>${h.direction === 'bidirectional' ? '양방향' : '단방향'}</td>
-                <td style="text-align:center; color:blue; font-weight:bold;">${h.filesCount}개</td>
-                <td style="color:${h.status === '성공' ? 'green' : h.status.includes('중단') ? 'orange' : 'red'};">${h.status}</td>
-            </tr>
-        `).join('');
+        historyBody.innerHTML = appState.history.map(h => {
+            let statusText = h.status;
+            let statusColor = 'red';
+            if (h.status === '성공') {
+                statusText = appState.config.lang === 'ko' ? '성공' : 'Success';
+                statusColor = 'green';
+            } else if (h.status.includes('중단') || h.status.includes('Stopped')) {
+                statusText = appState.config.lang === 'ko' ? '중단됨' : 'Stopped';
+                statusColor = 'orange';
+            } else {
+                statusText = appState.config.lang === 'ko' ? '실패' : 'Failed';
+            }
+
+            const directionText = h.direction === 'bidirectional' 
+                ? (appState.config.lang === 'ko' ? '양방향' : 'Bidirectional')
+                : (appState.config.lang === 'ko' ? '단방향' : 'Unidirectional');
+
+            const filesCountText = appState.config.lang === 'ko' ? `${h.filesCount}개` : `${h.filesCount} items`;
+
+            return `
+                <tr>
+                    <td><b>${h.time}</b></td>
+                    <td>${directionText}</td>
+                    <td style="text-align:center; color:blue; font-weight:bold;">${filesCountText}</td>
+                    <td style="color:${statusColor};">${statusText}</td>
+                </tr>
+            `;
+        }).join('');
     }
 
     async function scanDirectory(dirHandle, currentPath = '', excludeList = []) {
@@ -298,9 +620,9 @@
     async function compareFolders() {
         if (!srcHandle || !tgtHandle) return;
         isWorking = true; toggleUI(false);
-        syncStatus.innerText = '비교 분석 중...⏳';
+        syncStatus.innerText = t('stateComparing');
         syncStatus.style.color = '#3B82F6';
-        addLog('폴더 상태 스캔 및 매니페스트 이력 대조 중...');
+        addLog(t('logCompareStart'));
 
         progressContainer.style.display = 'none';
 
@@ -309,8 +631,8 @@
             const srcFiles = await scanDirectory(srcHandle, '', excludeList);
             const tgtFiles = await scanDirectory(tgtHandle, '', excludeList);
 
-            document.getElementById('srcCount').innerText = `파일: ${srcFiles.size}개`;
-            document.getElementById('tgtCount').innerText = `파일: ${tgtFiles.size}개`;
+            document.getElementById('srcCount').innerText = t('fileCount', {count: srcFiles.size});
+            document.getElementById('tgtCount').innerText = t('fileCount', {count: tgtFiles.size});
 
             const manifest = appState.manifest || {};
             const allPaths = new Set([...srcFiles.keys(), ...tgtFiles.keys(), ...Object.keys(manifest)]);
@@ -329,43 +651,43 @@
                 const hist = manifest[path]; 
 
                 let action = 'none';
-                let srcStateText = '동일', srcRowClass = 'row-same', srcBadge = 'badge-same';
-                let tgtStateText = '동일', tgtRowClass = 'row-same', tgtBadge = 'badge-same';
+                let srcStateText = t('badgeNoChange'), srcRowClass = 'row-same', srcBadge = 'badge-same';
+                let tgtStateText = t('badgeNoChange'), tgtRowClass = 'row-same', tgtBadge = 'badge-same';
 
                 if (src && tgt) {
                     if (hist && src.lastModified === hist.srcTime && tgt.lastModified === hist.tgtTime) {
-                        srcStateText = '변화 없음'; tgtStateText = '변화 없음';
+                        srcStateText = t('badgeNoChange'); tgtStateText = t('badgeNoChange');
                     } else if (src.lastModified > tgt.lastModified) {
                         action = 'copyToTarget';
-                        srcStateText = '🔵 ➔ 업데이트 전송'; srcRowClass = 'row-update'; srcBadge = 'badge-new-out';
-                        tgtStateText = '🔵 ⇠ 업데이트 예정'; tgtRowClass = 'row-incoming'; tgtBadge = 'badge-update-in';
+                        srcStateText = t('badgeUpdateSend'); srcRowClass = 'row-update'; srcBadge = 'badge-new-out';
+                        tgtStateText = t('badgeUpdateRecv'); tgtRowClass = 'row-incoming'; tgtBadge = 'badge-update-in';
                     } else if (tgt.lastModified > src.lastModified) {
                         if (syncDirection.value === 'bidirectional') {
                             action = 'copyToSource';
-                            srcStateText = '🟠 ⇠ 업데이트 예정'; srcRowClass = 'row-incoming'; srcBadge = 'badge-update-in';
-                            tgtStateText = '🟠 ➔ 업데이트 전송'; tgtRowClass = 'row-update'; tgtBadge = 'badge-new-out';
+                            srcStateText = t('badgeUpdateRecvBidi'); srcRowClass = 'row-incoming'; srcBadge = 'badge-update-in';
+                            tgtStateText = t('badgeUpdateSendBidi'); tgtRowClass = 'row-update'; srcBadge = 'badge-new-out';
                         } else {
-                            srcStateText = '동일 (대상 파일 보호됨)'; tgtStateText = '동일 (보호됨)';
+                            srcStateText = t('badgeProtected'); tgtStateText = t('badgeProtectedTgt');
                         }
                     }
                 } else if (src && !tgt) {
                     if (hist) {
                         action = 'trashSource';
-                        srcStateText = '🗑️ 반대편 삭제로 인한 격리 대기'; srcRowClass = 'row-trash'; srcBadge = 'badge-trash';
+                        srcStateText = t('badgeDeleteWait'); srcRowClass = 'row-trash'; srcBadge = 'badge-trash';
                     } else {
                         action = 'copyToTarget';
-                        srcStateText = '🔵 ➔ 신규 파일 전송'; srcRowClass = 'row-new'; srcBadge = 'badge-new-out';
+                        srcStateText = t('badgeNewSend'); srcRowClass = 'row-new'; srcBadge = 'badge-new-out';
                     }
                 } else if (!src && tgt) {
                     if (hist) {
                         action = 'trashTarget';
-                        tgtStateText = '🗑️ 반대편 삭제로 인한 격리 대기'; tgtRowClass = 'row-trash'; tgtBadge = 'badge-trash';
+                        tgtStateText = t('badgeDeleteWait'); tgtRowClass = 'row-trash'; tgtBadge = 'badge-trash';
                     } else {
                         if (syncDirection.value === 'bidirectional') {
                             action = 'copyToSource';
-                            tgtStateText = '🟠 ➔ 신규 파일 전송'; tgtRowClass = 'row-new'; tgtBadge = 'badge-new-out';
+                            tgtStateText = t('badgeNewSendBidi'); tgtRowClass = 'row-new'; tgtBadge = 'badge-new-out';
                         } else {
-                            tgtStateText = '유지 (대상 단독 파일)';
+                            tgtStateText = t('badgeKeepTgtOnly');
                         }
                     }
                 } else if (!src && !tgt) {
@@ -385,15 +707,15 @@
                 }
             }
 
-            srcFileBody.innerHTML = srcRenderRows.length ? srcRenderRows.join('') : `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">파일이 없습니다.</td></tr>`;
-            tgtFileBody.innerHTML = tgtRenderRows.length ? tgtRenderRows.join('') : `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">파일이 없습니다.</td></tr>`;
+            srcFileBody.innerHTML = srcRenderRows.length ? srcRenderRows.join('') : `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('noFiles')}</td></tr>`;
+            tgtFileBody.innerHTML = tgtRenderRows.length ? tgtRenderRows.join('') : `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">${t('noFiles')}</td></tr>`;
 
-            addLog(`비교 대조 완료 (실제 반영 필요한 변경 대상 대기열: ${syncQueue.length}개)`);
-            syncStatus.innerText = `비교 완료 (전송 대기: ${syncQueue.length}건)`;
+            addLog(t('logCompareDone', {count: syncQueue.length}));
+            syncStatus.innerText = t('stateCompareDone', {count: syncQueue.length});
             syncStatus.style.color = '#4B5563';
         } catch (e) {
-            addLog(`분석 중 오류 발생: ${e.message}`);
-            syncStatus.innerText = '오류 발생 ❌';
+            addLog(t('logCompareError', {message: e.message}));
+            syncStatus.innerText = t('stateSyncFailed');
             syncStatus.style.color = '#EF4444';
         } checkReady();
     }
@@ -423,9 +745,9 @@
     async function executeSync() {
         if (syncQueue.length === 0) return;
         isWorking = true; isAborted = false; toggleUI(false);
-        syncStatus.innerText = '동기화 적용 중... ⏳';
+        syncStatus.innerText = t('stateSyncing');
         syncStatus.style.color = '#3B82F6';
-        addLog('동기화 파일 트랜잭션 적용 작업을 시작합니다...');
+        addLog(t('logSyncStart'));
 
         progressContainer.style.display = 'block';
         progressBar.style.width = '0%';
@@ -437,12 +759,12 @@
         try {
             for (let i = 0; i < syncQueue.length; i++) {
                 if (isAborted) {
-                    addLog('⏹ 사용자의 요청으로 동기화 작업을 강제 중지했습니다.');
-                    syncStatus.innerText = '동기화 중지됨 ⏹';
+                    addLog(t('logSyncAborted'));
+                    syncStatus.innerText = t('stateSyncAborted');
                     syncStatus.style.color = '#EF4444';
-                    currentFileText.innerHTML = `<span style="color: #EF4444; font-weight: bold;">동기화 중지됨 (총 ${syncQueue.length}개 중 ${successCount}개 완료)</span>`;
+                    currentFileText.innerHTML = `<span style="color: #EF4444; font-weight: bold;">${t('syncAbortedSpan', {total: syncQueue.length, success: successCount})}</span>`;
                     
-                    appState.history.unshift({ time: new Date().toLocaleString(), direction: syncDirection.value, filesCount: successCount, status: '중단됨 (사용자 요청)' });
+                    appState.history.unshift({ time: new Date().toLocaleString(), direction: syncDirection.value, filesCount: successCount, status: t('historyStatusAborted') });
                     saveState(); renderHistoryTable();
                     return; 
                 }
@@ -453,11 +775,11 @@
                 progressPercentText.innerText = `${percent}% (${i}/${syncQueue.length})`;
                 
                 let actionIcon = '🔵 ➔';
-                if (item.action === 'copyToSource') actionIcon = 'orange ⇠';
-                if (item.action.startsWith('trash')) actionIcon = '🗑️ 격리';
+                if (item.action === 'copyToSource') actionIcon = '🟠 ⇠';
+                if (item.action.startsWith('trash')) actionIcon = '🗑️';
 
-                currentFileText.innerHTML = `현재 작업: <span style="font-weight:bold; color:var(--primary);">${actionIcon}</span> <small>${item.path}</small>`;
-                addLog(`[${actionIcon}] ${item.path} 복사 및 격리 스트림 처리 중... (${i+1}/${syncQueue.length})`);
+                currentFileText.innerHTML = `${t('syncWorkingText')} <span style="font-weight:bold; color:var(--primary);">${actionIcon}</span> <small>${item.path}</small>`;
+                addLog(t('logSyncFileStream', {icon: actionIcon, path: item.path, current: i+1, total: syncQueue.length}));
 
                 if (item.action === 'copyToTarget') {
                     const fileObj = await item.src.handle.getFile();
@@ -496,21 +818,21 @@
 
             progressBar.style.width = '100%';
             progressPercentText.innerText = `100% (${successCount}/${syncQueue.length})`;
-            currentFileText.innerHTML = `<span style="color: #10B981; font-weight: bold;">축하합니다! 모든 파일 격리 및 병합 동기화 작업이 성공적으로 완착되었습니다.</span>`;
+            currentFileText.innerHTML = `<span style="color: #10B981; font-weight: bold;">${t('syncDoneSpan')}</span>`;
 
             appState.history.unshift({ time: new Date().toLocaleString(), direction: syncDirection.value, filesCount: successCount, status: '성공' });
             if (appState.history.length > 30) appState.history.pop();
 
             saveState(); renderHistoryTable();
-            addLog(`작업 완료: 총 ${successCount}개의 로컬 트랜잭션을 마스터 데이터에 안전하게 영구 반영 완료.`);
-            syncStatus.innerText = '동기화 완료 ✅';
+            addLog(t('logSyncDone', {count: successCount}));
+            syncStatus.innerText = t('stateSyncDone');
             syncStatus.style.color = '#10B981';
             await compareFolders(); 
         } catch (e) {
-            addLog(`동기화 실행 중 크리티컬 에러 발생: ${e.message}`);
-            syncStatus.innerText = '동기화 실패 ❌';
+            addLog(t('logSyncError', {message: e.message}));
+            syncStatus.innerText = t('stateSyncFailed');
             syncStatus.style.color = '#EF4444';
-            currentFileText.innerHTML = `<span style="color: #EF4444; font-weight: bold;">작업 실패 중단: ${e.message}</span>`;
+            currentFileText.innerHTML = `<span style="color: #EF4444; font-weight: bold;">${t('syncFailedSpan', {message: e.message})}</span>`;
         } finally {
             isWorking = false; toggleUI(true);
         }
@@ -519,8 +841,8 @@
     btnAbort.addEventListener('click', () => {
         isAborted = true;
         btnAbort.disabled = true;
-        addLog('⏳ 사용자 중지 시그널 감지. 현재 임시 버퍼 세션 정착 완료 후 작업을 즉시 매듭짓습니다...');
-        currentFileText.innerHTML = `<span style="color: var(--warning); font-weight: bold;">중지 명령 처리 중... 데이터 무결성을 보호하기 위해 현재 파일까지만 안전 래핑 마감 중...</span>`;
+        addLog(t('logSyncAbortProcess'));
+        currentFileText.innerHTML = `<span style="color: var(--warning); font-weight: bold;">${t('logSyncAbortWarning')}</span>`;
     });
 
     function downloadJsonFile(objectData, fileName) {
@@ -535,12 +857,12 @@
 
     document.getElementById('btnGenDefault').addEventListener('click', () => {
         downloadJsonFile(DEFAULT_CONFIG, "default_sync_config.json");
-        addLog('📄 기본 템플릿 설정 파일(default_sync_config.json) 생성 및 다운로드 완료.');
+        addLog(t('logGenDefault'));
     });
 
     document.getElementById('btnExport').addEventListener('click', () => {
         downloadJsonFile(appState, `File-nally_backup_state_${new Date().toISOString().slice(0,10)}.json`);
-        addLog('💾 현재 마스터 구성 및 누적 데이터 백업 JSON 파일 추출 완착.');
+        addLog(t('logBackupExport'));
     });
 
     document.getElementById('btnImport').addEventListener('click', () => document.getElementById('fileImporter').click());
@@ -555,18 +877,18 @@
                     appState = parsed;
                     localStorage.setItem('smart_sync_state', JSON.stringify(appState));
                     loadState();
-                    addLog('📂 외부 파일에서 백업 데이터를 파싱하여 로컬 엔진에 성공적으로 주입 완료.');
+                    addLog(t('logBackupImport'));
                 } else {
-                    alert('유효한 File-nally 백업 JSON 마스터 규격이 아닙니다.');
+                    alert(t('alertImportInvalid'));
                 }
-            } catch (err) { alert('JSON 설정 파일을 복원하는 도중 파싱 에러가 발생했습니다.'); }
+            } catch (err) { alert(t('alertImportParseError')); }
         };
         reader.readAsText(file);
     });
 
     document.getElementById('btnClearHistory').addEventListener('click', () => {
-        if(confirm('주의: 모든 과거 동기화 성공 이력과 매니페스트 스냅샷 데이터베이스를 초기화하시겠습니까? (방향/제외 등 기본 옵션 설정은 보존됩니다.)')) {
-            appState.history = []; appState.manifest = {}; saveState(); renderHistoryTable(); addLog('이력 및 상태 데이터베이스 초기화 완료.');
+        if(confirm(t('alertClearHistoryConfirm'))) {
+            appState.history = []; appState.manifest = {}; saveState(); renderHistoryTable(); addLog(t('logClearHistory'));
         }
     });
 
@@ -582,11 +904,11 @@
         try {
             srcHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); 
             document.getElementById('pathSrc').innerText = `📁 ${srcHandle.name}`; 
-            addLog(`1번 원본 폴더(Source) 마운트 및 샌드박스 쓰기 권한을 인가했습니다. (${srcHandle.name})`);
+            addLog(t('logMountSrc', {name: srcHandle.name}));
             checkReady(); 
         } catch (e) {
-            if (e.name === 'AbortError') addLog('📁 원본 폴더 지정 작업이 취소되었습니다.');
-            else addLog(`❌ 원본 폴더 바인딩 실패: ${e.message}`);
+            if (e.name === 'AbortError') addLog(t('logFolderSrcCancel'));
+            else addLog(t('logFolderSrcFail', {message: e.message}));
         }
     });
 
@@ -594,11 +916,29 @@
         try {
             tgtHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); 
             document.getElementById('pathTgt').innerText = `📁 ${tgtHandle.name}`; 
-            addLog(`2번 대상 폴더(Target) 마운트 및 샌드박스 쓰기 권한을 인가했습니다. (${tgtHandle.name})`);
+            addLog(t('logMountTgt', {name: tgtHandle.name}));
             checkReady(); 
         } catch (e) {
-            if (e.name === 'AbortError') addLog('📁 대상 폴더 지정 작업이 취소되었습니다.');
-            else addLog(`❌ 대상 폴더 바인딩 실패: ${e.message}`);
+            if (e.name === 'AbortError') addLog(t('logFolderTgtCancel'));
+            else addLog(t('logFolderTgtFail', {message: e.message}));
+        }
+    });
+    
+    document.getElementById('btnLangKo').addEventListener('click', () => {
+        appState.config.lang = 'ko';
+        saveState();
+        updateStaticLanguage();
+        if (srcHandle && tgtHandle) {
+            compareFolders();
+        }
+    });
+    
+    document.getElementById('btnLangEn').addEventListener('click', () => {
+        appState.config.lang = 'en';
+        saveState();
+        updateStaticLanguage();
+        if (srcHandle && tgtHandle) {
+            compareFolders();
         }
     });
     
