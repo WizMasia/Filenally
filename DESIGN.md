@@ -138,6 +138,8 @@ Constraints:
 
 Accepted debt:
 
+The editable design source is `dev/css/file-nally.css`; the root HTML is generated and must not be edited directly.
+
 | Item | Location | Why accepted | Exit |
 |---|---|---|---|
-| Product code remains one large physical file | `file-nally.html` | Explicit product requirement: all runtime implementation in one HTML | Only when the product constraint changes |
+| Product delivery remains one generated physical file | `file-nally.html` | Explicit product requirement: runtime HTML, CSS, and JavaScript ship together | Edit `dev/` sources and regenerate with `npm run build`; split the artifact only if the product constraint changes |

@@ -1,66 +1,180 @@
-# File-nally (Beta v0.7.0)
+# File-nally
 
-[한국어](#한국어) · [English](#english)
+**Beta v0.7.0** · [한국어 설명서](docs/README_ko.md)
 
-File-nally는 Chrome 또는 Edge에서 두 로컬 폴더를 비교하고 동기화하는 단일 HTML 애플리케이션입니다. 제품 코드는 [file-nally.html](file-nally.html) 하나에만 있으며, 서버·빌드·런타임 의존성이 없습니다.
+File-nally is a self-contained browser application for comparing and synchronizing two local folders. The distributable runtime—HTML, CSS, and JavaScript—lives in the generated [file-nally.html](file-nally.html), so end users do not need a server, build process, or Node.js installation.
 
-## 한국어
+## Features
 
-### 주요 기능
+- Bidirectional synchronization or one-way Source → Target synchronization
+- A reviewable file-by-file plan before anything is written
+- Four explicit conflict policies: latest, source wins, skip, and preserve both
+- Versioned `.trash/<run timestamp>/...` isolation instead of permanent deletion
+- JSON schema v2 settings, folder-pair manifests, and synchronization history
+- Safe stop after the current file operation finishes
+- Per-folder-pair identity checks that reject same or nested directories
+- Responsive Korean and English interface
 
-- 양방향 또는 원본 → 대상 단방향 동기화
-- 실행 전에 파일별 변경 계획 미리보기
-- `최신 파일`, `원본 우선`, `건너뛰기`, `이름 변경 보존` 충돌 정책
-- 삭제 감지 시 영구 삭제 대신 `.trash/<실행 시각>/...`으로 격리
-- 폴더 쌍별 매니페스트·이력 관리와 JSON schema v2 백업/복원
-- 실행 중 현재 파일 작업을 마친 뒤 안전하게 중단
-- 한국어·영어 UI, 375px부터 지원하는 반응형 레이아웃
+## Requirements
 
-### 사용법
+- Current Google Chrome or Microsoft Edge with the File System Access API
+- Permission to read and write both selected folders
+- An independent backup of important data
 
-1. `file-nally.html`을 Chrome 또는 Edge에서 엽니다.
-2. 원본 폴더와 대상 폴더를 선택하고 읽기·쓰기 권한을 허용합니다.
-3. 방향, 충돌 정책, 제외할 하위 폴더명을 확인합니다.
-4. **변경사항 비교**로 작업 대기열을 검토합니다.
-5. **동기화 실행**을 누릅니다.
+File-nally runs locally in the browser and does not upload your files. Browser permissions, disk failures, operating-system limits, and unexpected shutdowns can still cause data loss, so it is not a replacement for a backup system.
 
-같은 폴더를 양쪽에 지정하거나 한 폴더 안에 다른 폴더를 지정하는 구성은 데이터 순환을 막기 위해 거부됩니다. `.trash`는 사용자가 제외 목록에서 지워도 항상 검사 대상에서 제외됩니다.
+## Start the application
 
-### 충돌 정책
+1. Download `file-nally.html` from the repository or the [GitHub Releases page](https://github.com/WizMasia/Filenally/releases).
+2. Open the HTML file in Chrome or Edge.
+3. Select the **Source folder** and **Target folder** and grant read/write permission.
+4. Review the synchronization direction, conflict policy, and excluded directory names.
+5. Select **Compare changes**.
+6. Review the queued actions in both file tables.
+7. Select **Run synchronization**.
 
-- **최신 파일 유지:** 수정 시간이 더 최신인 파일을 반대편에 복사합니다. 시간이 같고 내용 크기가 다르면 자동 처리하지 않습니다.
-- **원본 우선 덮어쓰기:** 양쪽이 모두 변경된 충돌에서 원본 파일을 선택합니다.
-- **기존 파일 건너뛰기:** 반대편 경로가 이미 있으면 덮어쓰지 않습니다.
-- **이름을 바꿔 두 버전 보존:** 양쪽 파일을 각각 `.conflict-source-*`, `.conflict-target-*` 이름으로 반대편에 복사합니다.
+The application rejects a folder pair when both selections refer to the same directory or when one directory is inside the other. This prevents recursive synchronization and accidental self-copying.
 
-### JSON과 개인정보
+## Synchronization directions
 
-설정, 폴더 쌍 프로필, 매니페스트, 실행 이력은 `smart_sync_state` 키의 JSON으로 브라우저에 저장됩니다. 디렉터리 핸들은 JSON에 포함하지 않고 IndexedDB에 별도로 보관합니다. 백업 JSON은 최대 5MB까지 가져올 수 있습니다. 복원된 프로필과 구버전 v0.6.1 전역 매니페스트는 폴더 쌍을 다시 확인하기 전까지 삭제 판단에 사용하지 않습니다.
+### Bidirectional
 
-중요한 파일은 실행 전에 별도로 백업하세요. 브라우저 권한 해제, 디스크 오류, 운영체제 제한까지 복구할 수 있는 백업 도구를 대체하지는 않습니다.
+New and changed files can move from Source to Target or from Target to Source. When a trusted previous manifest shows that a file was deleted on one side and remained unchanged on the other, the remaining copy is moved into that side's versioned `.trash` directory.
 
-### 개발 및 검증
+### One-way: Source → Target
 
-제품 실행에는 Node.js가 필요하지 않습니다. 아래 명령은 개발 회귀 테스트에만 사용합니다.
+Source is authoritative for copy operations. Target-only files without a previous synchronized record are protected. A deletion recorded after an earlier successful synchronization can still be propagated by moving the corresponding Target file into `.trash`.
+
+## Conflict policies
+
+| Policy | Behavior |
+|---|---|
+| **Keep latest** | Copies the file with the newer modification time. A tied timestamp with a different size remains unresolved for manual review. |
+| **Source wins** | Uses the Source version when both sides changed. |
+| **Skip existing** | Never overwrites an existing destination path; new missing paths can still be copied. |
+| **Rename and preserve both** | Keeps each original and copies the other version using `.conflict-source-*` and `.conflict-target-*` names. |
+
+File-nally compares file size and modification time. It does not read every file to calculate a content hash, so two files with identical size and modification time are treated as equivalent.
+
+## Deletion safety and `.trash`
+
+File-nally does not permanently delete a synchronized file. Confirmed deletion propagation moves the remaining file to:
+
+```text
+.trash/<run timestamp>/<original relative path>
+```
+
+Repeated names in the same trash run receive a numeric suffix instead of being overwritten. The `.trash` directory is always excluded from synchronization, even if it is removed from the visible exclusion list. Recovery is manual: inspect `.trash` and move the required file back to its original location.
+
+## JSON settings and folder profiles
+
+Serializable application data is stored under the `smart_sync_state` localStorage key:
+
+- Synchronization direction and conflict policy
+- Excluded directory names and interface language
+- Folder-pair profiles and manifests
+- Per-profile and global synchronization history
+- Incomplete-run checkpoints
+
+Non-serializable directory handles are stored separately in IndexedDB. JSON backup files never contain the file contents or directory handles.
+
+Use the application controls to:
+
+- **Default JSON:** download a clean schema v2 configuration
+- **Back up JSON:** export the current settings, profiles, manifests, and history
+- **Restore JSON:** validate and import a backup up to 5 MB
+
+Restored profiles and legacy v0.6.1 manifests remain unverified until the matching folder pair is selected again. An unverified manifest cannot trigger deletion propagation.
+
+## Safe stop and failures
+
+**Stop safely** requests cancellation between file actions. File-nally finishes the currently active write before stopping and does not start the next queued action. Successfully completed actions are checkpointed. A write failure stops later actions, records a failed run, and leaves the page ready for a fresh comparison.
+
+Always compare again after an aborted or failed run before attempting another synchronization.
+
+## Supported environments and limitations
+
+| Classification | Environment |
+|---|---|
+| Supported target | Current desktop Chrome or Edge on Windows, macOS, Linux, and ChromeOS |
+| Verified in this project | Current macOS Chrome plus mocked Chrome filesystem flows |
+| Experimental / not supported | Android Chromium |
+| Unsupported | Safari, Firefox, iOS/iPadOS browsers, and Brave without its feature flag |
+
+### Permissions and filesystems
+
+- Folder access always depends on a user gesture and browser permission. Protected system directories, read-only locations, and paths blocked by the operating system or storage provider cannot be synchronized.
+- OS-reserved names, maximum path lengths, removable media, network drives, and cloud-provider placeholders or hydration rules can reject or delay operations.
+- Filename case sensitivity and Unicode normalization differ by filesystem. Names that are distinct on one platform can collide or compare differently on another, especially between Windows, case-insensitive APFS, case-sensitive filesystems, and decomposed/composed Unicode forms.
+- File-nally compares size and modification time without content hashes. It does not preserve original timestamps, ownership, permission bits, ACLs, extended attributes, macOS resource forks, or symbolic-link identity.
+
+### Language and application behavior
+
+- The interface is translated only into Korean and English. Browser, operating-system, and storage-provider error text may remain untranslated, and unusual Unicode filenames can render or sort differently across platforms.
+- Checkpoints are saved after individual actions; there is no transaction covering the whole plan. A failure can therefore leave a partially completed run that must be compared again.
+- Recovery from `.trash` is manual. There is no background folder monitor, scheduler, unattended synchronization, or automatic rollback.
+- Very large folders can require substantial memory and comparison time. Private browsing, clearing browser data, permission revocation, disconnected removable media, unavailable network/cloud storage, or provider-side changes can invalidate saved handles and profiles.
+
+Compatibility references:
+
+- [Chrome File System Access documentation](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)
+- [File System Access specification](https://wicg.github.io/file-system-access/)
+- [MDN `showDirectoryPicker()` compatibility](https://developer.mozilla.org/en-US/docs/Web/API/Window/showDirectoryPicker)
+- [WebKit origin-private filesystem](https://webkit.org/blog/12257/the-file-system-access-api-with-origin-private-file-system/)
+- [Microsoft case-sensitivity guidance](https://learn.microsoft.com/en-us/windows/wsl/case-sensitivity)
+- [Apple APFS filename behavior](https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/APFS_Guide/FAQ/FAQ.html)
+
+## Troubleshooting
+
+### The folder picker does not open
+
+Use a current Chrome or Edge release. Other browsers may not implement `showDirectoryPicker()` or writable directory handles.
+
+### Compare changes is disabled
+
+Select both folders. If the page reports an invalid pair, choose two separate, non-nested directories. Restored JSON profiles must also be rebound to their original folder pair.
+
+### Access stops working after reopening the page
+
+The browser may require folder permission again. Select the folders and approve read/write access. File-nally stores only the directory handle, not a way to bypass browser permission prompts.
+
+### A file is reported as a conflict
+
+Review both modification times and sizes, then choose an appropriate conflict policy. A deletion on one side combined with a modification on the other is intentionally left unresolved.
+
+### I need to recover a deleted file
+
+Look inside the affected folder's `.trash/<run timestamp>/` directory and restore the file manually.
+
+## Development
+
+Node.js and Playwright are development-only dependencies; end users only need `file-nally.html`. Edit only the three files under `dev/`; the root HTML is generated and must not be edited directly. See the [bilingual build guide](docs/BUILD.md) for the complete workflow and release checklist.
 
 ```bash
 npm install
+npm run build
+npm run build:check
 npm test
 npm run test:visual
 ```
 
-테스트는 실제 Chrome에서 메모리 기반 File System Access API를 사용해 JSON 마이그레이션, 폴더 쌍 검증, 충돌 정책, 복사, 버전 휴지통, 중단, 쓰기 실패, XSS 방어, 모바일 오버플로를 검증합니다. UI 설계 계약은 [DESIGN.md](DESIGN.md)에 있습니다.
+The Chrome regression suite covers state migration, JSON validation, folder-pair verification, conflict policies, copying, versioned trash, safe stop, write failures, untrusted filenames, accessibility labels, and mobile overflow. Responsive screenshots are written to the ignored `artifacts/visual/` directory.
 
-## English
+## Repository layout
 
-File-nally is a single-file Chrome/Edge application for comparing and synchronizing two local folders. Open `file-nally.html`, select the source and target, review the generated plan, then run synchronization.
+```text
+dev/file-nally.html          # Editable development HTML
+dev/css/file-nally.css       # Editable styles
+dev/js/file-nally.js         # Editable application behavior
+scripts/build.cjs            # Deterministic single-file builder
+file-nally.html              # Generated standalone production artifact
+README.md                    # English manual
+docs/README_ko.md            # Korean manual
+docs/BUILD.md                # Bilingual build guide
+DESIGN.md                    # UI and accessibility contract
+tests/                       # Builder and Chrome regression tests
+```
 
-It supports one-way and bidirectional operation, four explicit conflict policies, versioned `.trash/<run timestamp>/...` isolation, per-folder-pair manifests, JSON schema v2 backup/restore, safe stop between file operations, Korean/English UI, and responsive layouts. Same or nested folder pairs are rejected, and `.trash` is always excluded from scans.
+## Design and license
 
-Application state remains JSON in localStorage; non-serializable directory handles are stored separately in IndexedDB. Restored profiles and legacy v0.6.1 manifests are unverified and cannot trigger deletion until the folder pair is verified again. Back up important data independently before use.
-
-Node.js and Playwright are development-only. Run `npm test` for functional regression coverage and `npm run test:visual` for responsive screenshots.
-
-## License
-
-MIT. See [LICENSE](LICENSE).
+See [DESIGN.md](DESIGN.md) for the design system and accessibility constraints. File-nally is provided under the MIT license notice included in the application.
