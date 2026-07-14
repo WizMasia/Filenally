@@ -1,0 +1,612 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File-nally : 로컬 폴더 양방향 동기화 시스템</title>
+    <style>
+        :root { 
+            --primary: #4F46E5; --hover: #4338CA; --bg: #F3F4F6; --surface: #FFFFFF; 
+            --border: #E5E7EB; --text: #1F2937; --green-light: #E6F4EA; --green-text: #137333;
+            --blue-light: #E8F0FE; --blue-text: #1A73E8; --gray-light: #F1F3F4; --gray-text: #5F6368;
+            --orange-light: #FEF7E0; --orange-text: #B06000; --warning: #F59E0B; --warning-hover: #D97706;
+            --danger-light: #FCE8E6; --danger-text: #C5221F;
+        }
+        body { font-family: 'Pretendard', system-ui, sans-serif; background-color: var(--bg); color: var(--text); padding: 1.5rem; margin: 0; display: flex; flex-direction: column; align-items: center; }
+        .container { max-width: 1200px; width: 100%; min-height: 100vh; display: flex; flex-direction: column; }
+        .content { flex: 1; }
+        h1 { font-size: 1.8rem; margin-bottom: 0.5rem; text-align: center; }
+        p.desc { text-align: center; color: #6B7280; margin-bottom: 1.5rem; font-size: 0.95rem; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 1.2rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        .flex-row { display: flex; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+        button { background-color: var(--primary); color: white; border: none; padding: 0.6rem 1.2rem; border-radius: 6px; font-size: 0.95rem; cursor: pointer; font-weight: 500; transition: all 0.2s; white-space: nowrap; }
+        button:hover:not(:disabled) { background-color: var(--hover); }
+        button:disabled { background-color: #D1D5DB; cursor: not-allowed; }
+        .btn-secondary { background-color: #4B5563; }
+        .btn-secondary:hover:not(:disabled) { background-color: #374151; }
+        .btn-warning { background-color: var(--warning); }
+        .btn-warning:hover:not(:disabled) { background-color: var(--warning-hover); }
+        .btn-danger { background-color: #EF4444; }
+        .btn-danger:hover:not(:disabled) { background-color: #DC2626; }
+        .path-display { flex-grow: 1; padding: 0.6rem; background: #F9FAFB; border: 1px solid var(--border); border-radius: 6px; color: #4B5563; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .option-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-top: 1rem; padding-top: 1rem; border-top: 1px dashed var(--border); }
+        .option-item { display: flex; flex-direction: column; gap: 0.4rem; }
+        .option-item label { font-weight: 600; font-size: 0.85rem; color: #4B5563; }
+        select, input[type="text"] { padding: 0.5rem; border-radius: 6px; border: 1px solid var(--border); background-color: white; font-size: 0.9rem; outline: none; }
+        
+        .progress-container { margin-top: 1.2rem; padding: 1rem; background-color: #F9FAFB; border: 1px solid var(--border); border-radius: 8px; display: none; }
+        .progress-header { display: flex; justify-content: space-between; align-items: center; font-size: 0.88rem; margin-bottom: 0.5rem; }
+        .progress-bar-bg { width: 100%; background-color: #E5E7EB; height: 8px; border-radius: 4px; overflow: hidden; }
+        .progress-bar-fill { width: 0%; background-color: #10B981; height: 100%; transition: width 0.15s ease-out; }
+        
+        .viewer-container { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem; }
+        .viewer-title { font-size: 1.1rem; font-weight: bold; margin-bottom: 0.8rem; display: flex; justify-content: space-between; align-items: center; padding-bottom: 0.5rem; border-bottom: 2px solid var(--border); }
+        .table-wrapper { max-height: 350px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; background: white; }
+        table { width: 100%; border-collapse: collapse; text-align: left; font-size: 0.85rem; }
+        th, td { padding: 0.6rem 0.8rem; border-bottom: 1px solid var(--border); }
+        th { background-color: #F9FAFB; font-weight: 600; position: sticky; top: 0; z-index: 10; }
+        
+        .row-new { background-color: var(--green-light); }
+        .row-update { background-color: var(--blue-light); }
+        .row-same { background-color: transparent; color: #9CA3AF; }
+        .row-incoming { background-color: var(--orange-light); }
+        .row-trash { background-color: var(--danger-light); }
+        
+        .badge { display: inline-block; padding: 0.15rem 0.4rem; border-radius: 4px; font-size: 0.75rem; font-weight: bold; }
+        .badge-new-out { background-color: #C2E7D9; color: var(--green-text); }
+        .badge-update-out { background-color: #D2E3FC; color: var(--blue-text); }
+        .badge-update-in { background-color: #FEF0D5; color: var(--orange-text); }
+        .badge-trash { background-color: #FAD2E1; color: var(--danger-text); }
+        .badge-same { background-color: #E8EAED; color: var(--gray-text); }
+        
+        .sync-btn-container { text-align: center; margin-top: 1rem; display: flex; justify-content: center; gap: 1rem; }
+        #btnSync { background-color: #10B981; font-size: 1.1rem; padding: 0.7rem 2rem; }
+        #btnSync:hover:not(:disabled) { background-color: #059669; }
+        #btnAbort { font-size: 1.1rem; padding: 0.7rem 2rem; }
+        
+        .history-log-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 2rem; }
+        .log-box { max-height: 200px; overflow-y: auto; background: #1E293B; color: #F8FAFC; padding: 0.8rem; border-radius: 8px; font-family: monospace; font-size: 0.8rem; margin: 0; }
+        .history-table th { background-color: #334155; color: white; }
+        .history-table td { color: #334155; }
+
+        /* 배포용 라이선스 및 법적 고지 푸터 스타일 */
+        footer { width: 100%; border-top: 1px solid var(--border); padding-top: 1.5rem; padding-bottom: 1rem; margin-top: auto; font-size: 0.8rem; color: #6B7280; text-align: center; line-height: 1.5; }
+        .footer-law { max-width: 900px; margin: 0.5rem auto 0 auto; text-align: justify; text-justify: inter-word; font-size: 0.75rem; color: #9CA3AF; padding: 0 1rem; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <div class="content">
+        <h1>🔄 File-nally <span style="font-size: 1.1rem; color: #4F46E5; vertical-align: middle;">Beta v0.6.1</span></h1>
+        <p class="desc">매니페스트 변경 이력을 분석하여 변경 없는 파일은 고속 스킵하고, 지워진 파일은 각 폴더의 .trash 위치로 격리 이동합니다.</p>
+
+        <!-- 1. 제어 센터 -->
+        <div class="card">
+            <div class="flex-row">
+                <button id="btnSrc">1. 원본 폴더 (Source)</button>
+                <div class="path-display" id="pathSrc">선택되지 않음</div>
+            </div>
+            <div class="flex-row">
+                <button id="btnTgt">2. 대상 폴더 (Target)</button>
+                <div class="path-display" id="pathTgt">선택되지 않음</div>
+            </div>
+            
+            <div class="option-grid">
+                <div class="option-item">
+                    <label for="syncDirection">🔁 동기화 방향</label>
+                    <select id="syncDirection">
+                        <option value="bidirectional">양방향 동기화 (Source ⇄ Target)</option>
+                        <option value="unidirectional">단방향 동기화 (Source ➔ Target)</option>
+                    </select>
+                </div>
+                <div class="option-item">
+                    <label for="conflictPolicy">⚡ 파일 충돌 해결 정책</label>
+                    <select id="conflictPolicy">
+                        <option value="latest">최신 파일 유지 (날짜 비교)</option>
+                        <option value="overwrite">무조건 덮어쓰기 (강제 대체)</option>
+                        <option value="skip">기존 파일 건너뛰기</option>
+                        <option value="rename">이름 변경하여 둘 다 유지</option>
+                    </select>
+                </div>
+                <div class="option-item">
+                    <label for="excludeDirs">🚫 제외할 하위 폴더명 (쉼표 구분)</label>
+                    <input type="text" id="excludeDirs" value="node_modules, .git, dist, temp, .trash">
+                </div>
+                <div class="option-item" style="justify-content: flex-end; flex-direction: row; gap: 0.5rem; padding-top: 1.2rem; flex-wrap: wrap;">
+                    <button id="btnGenDefault" class="btn-secondary" title="깨끗한 기본 설정 JSON 템플릿 파일 생성 및 다운로드">📄 기본값 JSON 생성</button>
+                    <button id="btnExport" class="btn-secondary" title="현재 구성 및 이력 데이터를 통합 JSON으로 백업 다운로드">💾 데이터 백업 (JSON)</button>
+                    <button id="btnImport" class="btn-secondary" title="백업된 설정 JSON 파일을 업로드하여 환경 복원">📂 데이터 복원</button>
+                    <input type="file" id="fileImporter" accept=".json" style="display: none;">
+                </div>
+            </div>
+
+            <div class="sync-btn-container">
+                <button id="btnCompare" disabled>🔍 변경사항 비교하기</button>
+                <button id="btnSync" disabled>▶ 동기화 실행</button>
+                <button id="btnAbort" class="btn-warning" disabled>⏹ 동기화 중지</button>
+            </div>
+
+            <div id="progressContainer" class="progress-container">
+                <div class="progress-header">
+                    <span id="currentFileText" style="color: var(--text); font-weight: 500; max-width: 75%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">준비 중...</span>
+                    <span id="progressPercentText" style="color: var(--primary); font-weight: bold;">0% (0/0)</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div id="progressBar" class="progress-bar-fill"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 2. 파일 비교 테이블 뷰어 -->
+        <div class="viewer-container">
+            <div class="card" style="margin-bottom:0;">
+                <div class="viewer-title"><span>📁 원본 폴더 (Source)</span><span id="srcCount" style="font-size:0.8rem; color:#6B7280;">파일: 0개</span></div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th style="width:50%">파일명/경로</th><th style="width:15%">크기</th><th style="width:15%">수정일</th><th style="width:20%">분석 상태</th></tr></thead>
+                        <tbody id="srcFileBody"><tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">폴더를 지정하고 비교해 보세요.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="card" style="margin-bottom:0;">
+                <div class="viewer-title"><span>📁 대상 폴더 (Target)</span><span id="tgtCount" style="font-size:0.8rem; color:#6B7280;">파일: 0개</span></div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead><tr><th style="width:50%">파일명/경로</th><th style="width:15%">크기</th><th style="width:15%">수정일</th><th style="width:20%">분석 상태</th></tr></thead>
+                        <tbody id="tgtFileBody"><tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">폴더를 지정하고 비교해 보세요.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. 실시간 시스템 로그 및 과거 이력 테이블 -->
+        <div class="history-log-grid">
+            <div class="card" style="margin-bottom:0;">
+                <h3 style="margin-top:0; font-size:0.95rem; display: flex; justify-content: space-between; align-items: center;">
+                    <span>📋 실시간 시스템 로그</span>
+                    <span id="syncStatus" style="font-size:0.85rem; font-weight:normal; color:#6B7280;">대기 중</span>
+                </h3>
+                <div id="logBox" class="log-box" style="height: 150px;"></div>
+            </div>
+            <div class="card" style="margin-bottom:0;">
+                <h3 style="margin-top:0; font-size:0.95rem; display: flex; justify-content: space-between;">
+                    <span>📜 과거 동기화 성공 이력 (JSON 연동)</span>
+                    <button id="btnClearHistory" class="btn-danger" style="padding: 0.2rem 0.5rem; font-size: 0.75rem; border-radius: 4px;">이력 초기화</button>
+                </h3>
+                <div class="table-wrapper" style="height: 150px; border: none;">
+                    <table class="history-table">
+                        <thead><tr><th>실행 시간</th><th>방향</th><th>처리된 파일 수</th><th>상태</th></tr></thead>
+                        <tbody id="historyBody"><tr><td colspan="4" style="text-align:center; color:#9CA3AF;">기록된 이력이 없습니다.</td></tr></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. 법적 고지 및 오픈소스 라이선스 푸터 레이어 -->
+    <footer>
+        <div><b>File-nally</b> is Open Source software licensed under the <b>MIT License</b>.</div>
+        <div class="footer-law">
+            <b>[법적 면책 고지 / Legal Disclaimer]</b><br>
+            본 소프트웨어는 최선을 다해 개발 및 검증되었으나, 사용자의 로컬 드렉터리 내부 파일을 직접 수정, 이동, 대체 및 삭제 제어하는 유틸리티 도구입니다. 본 프로그램은 어떠한 종류의 명시적 또는 묵시적인 보증 없이 "있는 그대로(AS IS)" 제공됩니다. 사용자는 본 프로그램을 가동하기 전 반드시 누락되면 안 되는 핵심 데이터를 별도로 안전하게 백업해야 할 책임이 있습니다. 개발자는 본 프로그램의 사용, 오용, 오작동 또는 중간 작업 중단으로 인하여 발생하는 파일 유실, 손상, 시스템 장애를 포함한 어떠한 직·간접적인 손해나 법적 분쟁에 대해서도 일체의 책임을 지지 않습니다. 본 프로그램을 사용하는 것은 이 면책 조항에 동의하는 것으로 간주됩니다.
+        </div>
+        <div style="margin-top:0.6rem; color:#9CA3AF;">Copyright 2026. File-nally Dev. All rights reserved.</div>
+    </footer>
+</div>
+
+<script>
+    const DEFAULT_CONFIG = {
+        config: {
+            direction: 'bidirectional',
+            conflictPolicy: 'latest',
+            excludeDirs: 'node_modules, .git, dist, temp, .trash'
+        },
+        history: [],
+        manifest: {}
+    };
+
+    let appState = null;
+    let srcHandle = null, tgtHandle = null, isWorking = false, syncQueue = [];
+    let isAborted = false;
+
+    const syncDirection = document.getElementById('syncDirection');
+    const conflictPolicy = document.getElementById('conflictPolicy');
+    const excludeDirsInput = document.getElementById('excludeDirs');
+    const logBox = document.getElementById('logBox');
+    const historyBody = document.getElementById('historyBody');
+    const btnCompare = document.getElementById('btnCompare');
+    const btnSync = document.getElementById('btnSync');
+    const btnAbort = document.getElementById('btnAbort');
+    const syncStatus = document.getElementById('syncStatus');
+
+    const progressContainer = document.getElementById('progressContainer');
+    const currentFileText = document.getElementById('currentFileText');
+    const progressPercentText = document.getElementById('progressPercentText');
+    const progressBar = document.getElementById('progressBar');
+
+    function loadState() {
+        const savedState = localStorage.getItem('smart_sync_state');
+        if (!savedState) {
+            appState = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+            saveState();
+            addLog('✨ 최초 실행 감지: 기본 설정 JSON 구조가 저장소에 자동 안착되었습니다.');
+        } else {
+            try {
+                appState = JSON.parse(savedState);
+                addLog('🔄 기존 로컬 환경설정 및 이력 데이터를 로드했습니다.');
+            } catch (e) {
+                console.error('State parse error, fallback to default', e);
+                appState = JSON.parse(JSON.stringify(DEFAULT_CONFIG));
+                saveState();
+            }
+        }
+        
+        syncDirection.value = appState.config.direction || 'bidirectional';
+        conflictPolicy.value = appState.config.conflictPolicy || 'latest';
+        excludeDirsInput.value = appState.config.excludeDirs || 'node_modules, .git, dist, temp, .trash';
+        renderHistoryTable();
+    }
+
+    function saveState() {
+        appState.config.direction = syncDirection.value;
+        appState.config.conflictPolicy = conflictPolicy.value;
+        appState.config.excludeDirs = excludeDirsInput.value;
+        localStorage.setItem('smart_sync_state', JSON.stringify(appState));
+    }
+
+    [syncDirection, conflictPolicy, excludeDirsInput].forEach(el => el.addEventListener('change', saveState));
+    excludeDirsInput.addEventListener('input', saveState);
+
+    function addLog(msg) {
+        const time = new Date().toLocaleTimeString();
+        logBox.innerHTML += `<div>[${time}] ${msg}</div>`;
+        logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function renderHistoryTable() {
+        if (!appState.history || appState.history.length === 0) {
+            historyBody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:#9CA3AF;">기록된 이력이 없습니다.</td></tr>`;
+            return;
+        }
+        historyBody.innerHTML = appState.history.map(h => `
+            <tr>
+                <td><b>${h.time}</b></td>
+                <td>${h.direction === 'bidirectional' ? '양방향' : '단방향'}</td>
+                <td style="text-align:center; color:blue; font-weight:bold;">${h.filesCount}개</td>
+                <td style="color:${h.status === '성공' ? 'green' : h.status.includes('중단') ? 'orange' : 'red'};">${h.status}</td>
+            </tr>
+        `).join('');
+    }
+
+    async function scanDirectory(dirHandle, currentPath = '', excludeList = []) {
+        const fileMap = new Map();
+        for await (const entry of dirHandle.values()) {
+            const itemPath = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+            if (entry.kind === 'file') {
+                const file = await entry.getFile();
+                fileMap.set(itemPath, { name: entry.name, path: itemPath, size: file.size, lastModified: file.lastModified, handle: entry });
+            } else if (entry.kind === 'directory') {
+                if (excludeList.includes(entry.name)) continue;
+                const subMap = await scanDirectory(entry, itemPath, excludeList);
+                for (const [key, value] of subMap) fileMap.set(key, value);
+            }
+        }
+        return fileMap;
+    }
+
+    async function compareFolders() {
+        if (!srcHandle || !tgtHandle) return;
+        isWorking = true; toggleUI(false);
+        syncStatus.innerText = '비교 분석 중...⏳';
+        syncStatus.style.color = '#3B82F6';
+        addLog('폴더 상태 스캔 및 매니페스트 이력 대조 중...');
+
+        progressContainer.style.display = 'none';
+
+        try {
+            const excludeList = excludeDirsInput.value.split(',').map(s => s.trim()).filter(s => s.length > 0);
+            const srcFiles = await scanDirectory(srcHandle, '', excludeList);
+            const tgtFiles = await scanDirectory(tgtHandle, '', excludeList);
+
+            document.getElementById('srcCount').innerText = `파일: ${srcFiles.size}개`;
+            document.getElementById('tgtCount').innerText = `파일: ${tgtFiles.size}개`;
+
+            const manifest = appState.manifest || {};
+            const allPaths = new Set([...srcFiles.keys(), ...tgtFiles.keys(), ...Object.keys(manifest)]);
+            syncQueue = [];
+            
+            const srcFileBody = document.getElementById('srcFileBody');
+            const tgtFileBody = document.getElementById('tgtFileBody');
+            srcFileBody.innerHTML = ''; tgtFileBody.innerHTML = '';
+
+            const srcRenderRows = [];
+            const tgtRenderRows = [];
+
+            for (const path of allPaths) {
+                const src = srcFiles.get(path);
+                const tgt = tgtFiles.get(path);
+                const hist = manifest[path]; 
+
+                let action = 'none';
+                let srcStateText = '동일', srcRowClass = 'row-same', srcBadge = 'badge-same';
+                let tgtStateText = '동일', tgtRowClass = 'row-same', tgtBadge = 'badge-same';
+
+                if (src && tgt) {
+                    if (hist && src.lastModified === hist.srcTime && tgt.lastModified === hist.tgtTime) {
+                        srcStateText = '변화 없음'; tgtStateText = '변화 없음';
+                    } else if (src.lastModified > tgt.lastModified) {
+                        action = 'copyToTarget';
+                        srcStateText = '🔵 ➔ 업데이트 전송'; srcRowClass = 'row-update'; srcBadge = 'badge-new-out';
+                        tgtStateText = '🔵 ⇠ 업데이트 예정'; tgtRowClass = 'row-incoming'; tgtBadge = 'badge-update-in';
+                    } else if (tgt.lastModified > src.lastModified) {
+                        if (syncDirection.value === 'bidirectional') {
+                            action = 'copyToSource';
+                            srcStateText = '🟠 ⇠ 업데이트 예정'; srcRowClass = 'row-incoming'; srcBadge = 'badge-update-in';
+                            tgtStateText = '🟠 ➔ 업데이트 전송'; tgtRowClass = 'row-update'; tgtBadge = 'badge-new-out';
+                        } else {
+                            srcStateText = '동일 (대상 파일 보호됨)'; tgtStateText = '동일 (보호됨)';
+                        }
+                    }
+                } else if (src && !tgt) {
+                    if (hist) {
+                        action = 'trashSource';
+                        srcStateText = '🗑️ 반대편 삭제로 인한 격리 대기'; srcRowClass = 'row-trash'; srcBadge = 'badge-trash';
+                    } else {
+                        action = 'copyToTarget';
+                        srcStateText = '🔵 ➔ 신규 파일 전송'; srcRowClass = 'row-new'; srcBadge = 'badge-new-out';
+                    }
+                } else if (!src && tgt) {
+                    if (hist) {
+                        action = 'trashTarget';
+                        tgtStateText = '🗑️ 반대편 삭제로 인한 격리 대기'; tgtRowClass = 'row-trash'; tgtBadge = 'badge-trash';
+                    } else {
+                        if (syncDirection.value === 'bidirectional') {
+                            action = 'copyToSource';
+                            tgtStateText = '🟠 ➔ 신규 파일 전송'; tgtRowClass = 'row-new'; tgtBadge = 'badge-new-out';
+                        } else {
+                            tgtStateText = '유지 (대상 단독 파일)';
+                        }
+                    }
+                } else if (!src && !tgt) {
+                    delete appState.manifest[path];
+                    continue;
+                }
+
+                if (action !== 'none') {
+                    syncQueue.push({ path, src, tgt, action });
+                }
+
+                if (src) {
+                    srcRenderRows.push(`<tr class="${srcRowClass}"><td>📄 ${src.name}<br><small style="color:#6B7280">${path}</small></td><td>${(src.size/1024).toFixed(1)} KB</td><td>${new Date(src.lastModified).toLocaleDateString()}</td><td><span class="badge ${srcBadge}">${srcStateText}</span></td></tr>`);
+                }
+                if (tgt) {
+                    tgtRenderRows.push(`<tr class="${tgtRowClass}"><td>📄 ${tgt.name}<br><small style="color:#6B7280">${path}</small></td><td>${(tgt.size/1024).toFixed(1)} KB</td><td>${new Date(tgt.lastModified).toLocaleDateString()}</td><td><span class="badge ${tgtBadge}">${tgtStateText}</span></td></tr>`);
+                }
+            }
+
+            srcFileBody.innerHTML = srcRenderRows.length ? srcRenderRows.join('') : `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">파일이 없습니다.</td></tr>`;
+            tgtFileBody.innerHTML = tgtRenderRows.length ? tgtRenderRows.join('') : `<tr><td colspan="4" style="text-align:center; color:#9CA3AF; padding: 2rem 0;">파일이 없습니다.</td></tr>`;
+
+            addLog(`비교 대조 완료 (실제 반영 필요한 변경 대상 대기열: ${syncQueue.length}개)`);
+            syncStatus.innerText = `비교 완료 (전송 대기: ${syncQueue.length}건)`;
+            syncStatus.style.color = '#4B5563';
+        } catch (e) {
+            addLog(`분석 중 오류 발생: ${e.message}`);
+            syncStatus.innerText = '오류 발생 ❌';
+            syncStatus.style.color = '#EF4444';
+        } checkReady();
+    }
+
+    async function getDeepDirectoryHandle(baseDirHandle, pathParts) {
+        let currentDir = baseDirHandle;
+        for (const part of pathParts) currentDir = await currentDir.getDirectoryHandle(part, { create: true });
+        return currentDir;
+    }
+
+    async function moveToTrashFolder(baseHandle, relPath, fileHandle) {
+        const pathParts = relPath.split('/');
+        const fileName = pathParts.pop();
+        
+        const trashDirHandle = await getDeepDirectoryHandle(baseHandle, ['.trash', ...pathParts]);
+        const fileObj = await fileHandle.getFile();
+        
+        const destFileHandle = await trashDirHandle.getFileHandle(fileName, { create: true });
+        const writable = await destFileHandle.createWritable();
+        await writable.write(fileObj);
+        await writable.close();
+        
+        const parentDirHandle = await getDeepDirectoryHandle(baseHandle, pathParts);
+        await parentDirHandle.removeEntry(fileName);
+    }
+
+    async function executeSync() {
+        if (syncQueue.length === 0) return;
+        isWorking = true; isAborted = false; toggleUI(false);
+        syncStatus.innerText = '동기화 적용 중... ⏳';
+        syncStatus.style.color = '#3B82F6';
+        addLog('동기화 파일 트랜잭션 적용 작업을 시작합니다...');
+
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+        progressPercentText.innerText = `0% (0/${syncQueue.length})`;
+
+        let successCount = 0;
+        const policy = conflictPolicy.value;
+
+        try {
+            for (let i = 0; i < syncQueue.length; i++) {
+                if (isAborted) {
+                    addLog('⏹ 사용자의 요청으로 동기화 작업을 강제 중지했습니다.');
+                    syncStatus.innerText = '동기화 중지됨 ⏹';
+                    syncStatus.style.color = '#EF4444';
+                    currentFileText.innerHTML = `<span style="color: #EF4444; font-weight: bold;">동기화 중지됨 (총 ${syncQueue.length}개 중 ${successCount}개 완료)</span>`;
+                    
+                    appState.history.unshift({ time: new Date().toLocaleString(), direction: syncDirection.value, filesCount: successCount, status: '중단됨 (사용자 요청)' });
+                    saveState(); renderHistoryTable();
+                    return; 
+                }
+
+                const item = syncQueue[i];
+                const percent = Math.round((i / syncQueue.length) * 100);
+                progressBar.style.width = `${percent}%`;
+                progressPercentText.innerText = `${percent}% (${i}/${syncQueue.length})`;
+                
+                let actionIcon = '🔵 ➔';
+                if (item.action === 'copyToSource') actionIcon = 'orange ⇠';
+                if (item.action.startsWith('trash')) actionIcon = '🗑️ 격리';
+
+                currentFileText.innerHTML = `현재 작업: <span style="font-weight:bold; color:var(--primary);">${actionIcon}</span> <small>${item.path}</small>`;
+                addLog(`[${actionIcon}] ${item.path} 복사 및 격리 스트림 처리 중... (${i+1}/${syncQueue.length})`);
+
+                if (item.action === 'copyToTarget') {
+                    const fileObj = await item.src.handle.getFile();
+                    const pathParts = item.path.split('/');
+                    const fileName = pathParts.pop();
+                    const targetDir = await getDeepDirectoryHandle(tgtHandle, pathParts);
+                    const destFileHandle = await targetDir.getFileHandle(fileName, { create: true });
+                    const writable = await destFileHandle.createWritable();
+                    await writable.write(fileObj);
+                    await writable.close();
+
+                    const updatedFile = await destFileHandle.getFile();
+                    appState.manifest[item.path] = { srcTime: fileObj.lastModified, tgtTime: updatedFile.lastModified, size: fileObj.size };
+                } else if (item.action === 'copyToSource') {
+                    const fileObj = await item.tgt.handle.getFile();
+                    const pathParts = item.path.split('/');
+                    const fileName = pathParts.pop();
+                    const targetDir = await getDeepDirectoryHandle(srcHandle, pathParts);
+                    const destFileHandle = await targetDir.getFileHandle(fileName, { create: true });
+                    const writable = await destFileHandle.createWritable();
+                    await writable.write(fileObj);
+                    await writable.close();
+
+                    const updatedFile = await destFileHandle.getFile();
+                    appState.manifest[item.path] = { srcTime: updatedFile.lastModified, tgtTime: fileObj.lastModified, size: fileObj.size };
+                } else if (item.action === 'trashSource') {
+                    await moveToTrashFolder(srcHandle, item.path, item.src.handle);
+                    delete appState.manifest[item.path];
+                } else if (item.action === 'trashTarget') {
+                    await moveToTrashFolder(tgtHandle, item.path, item.tgt.handle);
+                    delete appState.manifest[item.path];
+                }
+
+                successCount++;
+            }
+
+            progressBar.style.width = '100%';
+            progressPercentText.innerText = `100% (${successCount}/${syncQueue.length})`;
+            currentFileText.innerHTML = `<span style="color: #10B981; font-weight: bold;">축하합니다! 모든 파일 격리 및 병합 동기화 작업이 성공적으로 완착되었습니다.</span>`;
+
+            appState.history.unshift({ time: new Date().toLocaleString(), direction: syncDirection.value, filesCount: successCount, status: '성공' });
+            if (appState.history.length > 30) appState.history.pop();
+
+            saveState(); renderHistoryTable();
+            addLog(`작업 완료: 총 ${successCount}개의 로컬 트랜잭션을 마스터 데이터에 안전하게 영구 반영 완료.`);
+            syncStatus.innerText = '동기화 완료 ✅';
+            syncStatus.style.color = '#10B981';
+            await compareFolders(); 
+        } catch (e) {
+            addLog(`동기화 실행 중 크리티컬 에러 발생: ${e.message}`);
+            syncStatus.innerText = '동기화 실패 ❌';
+            syncStatus.style.color = '#EF4444';
+            currentFileText.innerHTML = `<span style="color: #EF4444; font-weight: bold;">작업 실패 중단: ${e.message}</span>`;
+        } finally {
+            isWorking = false; toggleUI(true);
+        }
+    }
+
+    btnAbort.addEventListener('click', () => {
+        isAborted = true;
+        btnAbort.disabled = true;
+        addLog('⏳ 사용자 중지 시그널 감지. 현재 임시 버퍼 세션 정착 완료 후 작업을 즉시 매듭짓습니다...');
+        currentFileText.innerHTML = `<span style="color: var(--warning); font-weight: bold;">중지 명령 처리 중... 데이터 무결성을 보호하기 위해 현재 파일까지만 안전 래핑 마감 중...</span>`;
+    });
+
+    function downloadJsonFile(objectData, fileName) {
+        const jsonString = JSON.stringify(objectData, null, 2);
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = fileName;
+        link.click();
+        URL.revokeObjectURL(link.href);
+    }
+
+    document.getElementById('btnGenDefault').addEventListener('click', () => {
+        downloadJsonFile(DEFAULT_CONFIG, "default_sync_config.json");
+        addLog('📄 기본 템플릿 설정 파일(default_sync_config.json) 생성 및 다운로드 완료.');
+    });
+
+    document.getElementById('btnExport').addEventListener('click', () => {
+        downloadJsonFile(appState, `File-nally_backup_state_${new Date().toISOString().slice(0,10)}.json`);
+        addLog('💾 현재 마스터 구성 및 누적 데이터 백업 JSON 파일 추출 완착.');
+    });
+
+    document.getElementById('btnImport').addEventListener('click', () => document.getElementById('fileImporter').click());
+    document.getElementById('fileImporter').addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            try {
+                const parsed = JSON.parse(event.target.result);
+                if (parsed.config && parsed.history && parsed.manifest) {
+                    appState = parsed;
+                    localStorage.setItem('smart_sync_state', JSON.stringify(appState));
+                    loadState();
+                    addLog('📂 외부 파일에서 백업 데이터를 파싱하여 로컬 엔진에 성공적으로 주입 완료.');
+                } else {
+                    alert('유효한 File-nally 백업 JSON 마스터 규격이 아닙니다.');
+                }
+            } catch (err) { alert('JSON 설정 파일을 복원하는 도중 파싱 에러가 발생했습니다.'); }
+        };
+        reader.readAsText(file);
+    });
+
+    document.getElementById('btnClearHistory').addEventListener('click', () => {
+        if(confirm('주의: 모든 과거 동기화 성공 이력과 매니페스트 스냅샷 데이터베이스를 초기화하시겠습니까? (방향/제외 등 기본 옵션 설정은 보존됩니다.)')) {
+            appState.history = []; appState.manifest = {}; saveState(); renderHistoryTable(); addLog('이력 및 상태 데이터베이스 초기화 완료.');
+        }
+    });
+
+    function toggleUI(enable) {
+        btnCompare.disabled = !enable;
+        btnSync.disabled = !enable || syncQueue.length === 0;
+        btnAbort.disabled = enable; 
+        document.getElementById('btnSrc').disabled = !enable;
+        document.getElementById('btnTgt').disabled = !enable;
+    }
+
+    document.getElementById('btnSrc').addEventListener('click', async () => { 
+        try {
+            srcHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); 
+            document.getElementById('pathSrc').innerText = `📁 ${srcHandle.name}`; 
+            addLog(`1번 원본 폴더(Source) 마운트 및 샌드박스 쓰기 권한을 인가했습니다. (${srcHandle.name})`);
+            checkReady(); 
+        } catch (e) {
+            if (e.name === 'AbortError') addLog('📁 원본 폴더 지정 작업이 취소되었습니다.');
+            else addLog(`❌ 원본 폴더 바인딩 실패: ${e.message}`);
+        }
+    });
+
+    document.getElementById('btnTgt').addEventListener('click', async () => { 
+        try {
+            tgtHandle = await window.showDirectoryPicker({ mode: 'readwrite' }); 
+            document.getElementById('pathTgt').innerText = `📁 ${tgtHandle.name}`; 
+            addLog(`2번 대상 폴더(Target) 마운트 및 샌드박스 쓰기 권한을 인가했습니다. (${tgtHandle.name})`);
+            checkReady(); 
+        } catch (e) {
+            if (e.name === 'AbortError') addLog('📁 대상 폴더 지정 작업이 취소되었습니다.');
+            else addLog(`❌ 대상 폴더 바인딩 실패: ${e.message}`);
+        }
+    });
+    
+    function checkReady() { if (srcHandle && tgtHandle && !isWorking) toggleUI(true); }
+    btnCompare.addEventListener('click', compareFolders);
+    btnSync.addEventListener('click', executeSync);
+
+    loadState();
+</script>
+</body>
+</html>
