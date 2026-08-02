@@ -120,6 +120,9 @@ select, input[type="text"] { width: 100%; min-height: 40px; border: 1px solid va
 .workspace-grid, .history-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); min-width: 0; }
 .workspace-grid { margin-bottom: var(--space-4); }
 .history-grid { margin-bottom: var(--space-6); }
+.workspace-toolbar { grid-column: 1 / -1; display: flex; justify-content: flex-end; }
+.filter-toggle { display: inline-flex; align-items: center; min-height: 40px; gap: var(--space-2); padding: 0 var(--space-2); color: var(--text-secondary); font-size: 0.8125rem; font-weight: 700; cursor: pointer; }
+.filter-toggle input { width: 1rem; height: 1rem; margin: 0; accent-color: var(--accent-primary); }
 .panel-header { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); padding: var(--space-4); border-bottom: 1px solid var(--border-default); }
 .panel-title { display: flex; align-items: center; gap: var(--space-2); margin: 0; font-size: 1rem; line-height: 1.4; }
 .count { color: var(--text-secondary); font-size: 0.75rem; font-weight: 700; }

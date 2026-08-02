@@ -100,7 +100,7 @@ async function main() {
       background: getComputedStyle(document.body).backgroundColor,
       errors: window.__testUnhandledErrors || [],
     }));
-    assert.equal(result.version, 'Beta v0.7.0');
+    assert.equal(result.version, 'Beta v0.8.0');
     assert.equal(result.background, 'rgb(244, 246, 250)');
     assert.deepEqual(result.errors, []);
   });
@@ -112,6 +112,42 @@ async function main() {
     });
     await compare(page);
     assert.equal(await page.locator('#btnSync').isEnabled(), true);
+  });
+
+  add('changed-only filter hides stable files and persists for the tab session', async ({ page }) => {
+    await mountPair(page, {
+      source: {
+        'changed.txt': { content: 'before', lastModified: 100 },
+        'stable.txt': { content: 'stable', lastModified: 100 },
+      },
+      target: {
+        'changed.txt': { content: 'before', lastModified: 100 },
+        'stable.txt': { content: 'stable', lastModified: 100 },
+      },
+    });
+    await compare(page);
+    await page.locator('#btnSync').click();
+    await page.waitForFunction(() => window.FileNallyTest?.getModel().phase === 'success');
+    await page.evaluate(() => window.__setMockFile('source', 'changed.txt', { content: 'after', lastModified: 300 }));
+    await compare(page);
+
+    const filter = page.getByLabel('변경된 파일만 보기', { exact: true });
+    assert.equal(await filter.count(), 1);
+    assert.match(await page.locator('#srcFileBody').innerText(), /changed\.txt[\s\S]*stable\.txt/);
+    assert.match(await page.locator('#tgtFileBody').innerText(), /changed\.txt[\s\S]*stable\.txt/);
+
+    await filter.press('Space');
+
+    assert.equal(await filter.isChecked(), true);
+    assert.match(await page.locator('#srcFileBody').innerText(), /changed\.txt/);
+    assert.doesNotMatch(await page.locator('#srcFileBody').innerText(), /stable\.txt/);
+    assert.match(await page.locator('#tgtFileBody').innerText(), /changed\.txt/);
+    assert.doesNotMatch(await page.locator('#tgtFileBody').innerText(), /stable\.txt/);
+    assert.equal(await page.locator('#srcCount').innerText(), '1');
+    assert.equal(await page.locator('#tgtCount').innerText(), '1');
+
+    await page.reload();
+    assert.equal(await page.getByLabel('변경된 파일만 보기', { exact: true }).isChecked(), true);
   });
 
   add('skip policy never overwrites an existing destination', async ({ page }) => {
@@ -440,14 +476,18 @@ async function main() {
         source: {
           'reports': { type: 'directory', entries: { 'q2-final.pdf': { content: 'source report', lastModified: 300 } } },
           'notes.txt': { content: 'source notes', lastModified: 200 },
+          'stable.txt': { content: 'stable', lastModified: 100 },
         },
         target: {
           'notes.txt': { content: 'target notes', lastModified: 100 },
           'archive.txt': { content: 'archive', lastModified: 150 },
+          'stable.txt': { content: 'stable', lastModified: 100 },
         },
       });
       await compare(page);
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-planned.png`), fullPage: true });
+      await page.getByLabel('변경된 파일만 보기', { exact: true }).check();
+      await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-changed-only.png`), fullPage: true });
       await context.close();
     }
   }

@@ -99,6 +99,9 @@ Base unit: 4px.
 - Empty and error rows span all columns.
 - External strings are inserted with `textContent` only.
 - Horizontal scroll belongs to the wrapper, not the page.
+- One native checkbox above both tables filters out `unchanged` and `baseline` rows.
+- Filtered counts reflect visible files, and the empty state explains when no changed files remain.
+- The filter has a 40px target, controls both table bodies, and persists only for the current browser tab session.
 
 ### Progress
 - Native semantic values through `role="progressbar"` and ARIA values.

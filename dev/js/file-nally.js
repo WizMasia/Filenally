@@ -2,6 +2,7 @@
     'use strict';
 
     const STORAGE_KEY = 'smart_sync_state';
+    const SHOW_CHANGED_ONLY_KEY = 'file_nally_show_changed_only';
     const STATE_VERSION = 2;
     const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
     const MAX_PROFILES = 100;
@@ -17,9 +18,9 @@
             profileNone: '선택된 동기화 프로필이 없습니다.', profileUnverified: '폴더 쌍 미확인', profileVerified: '폴더 쌍 확인됨', profileLabel: '{source} ⇄ {target}',
             directionLabel: '동기화 방향', directionBoth: '양방향 (원본 ⇄ 대상)', directionOne: '단방향 (원본 → 대상)', policyLabel: '충돌 해결 정책', policyLatest: '최신 파일 유지', policySource: '원본 우선 덮어쓰기', policySkip: '기존 파일 건너뛰기', policyRename: '이름을 바꿔 두 버전 보존', excludeLabel: '제외할 하위 폴더명',
             defaultJson: '기본 JSON', exportJson: 'JSON 백업', importJson: 'JSON 복원', compare: '변경사항 비교', sync: '동기화 실행', abort: '안전하게 중지', waiting: '폴더를 선택해 주세요.', preparing: '준비 중',
-            sourceTitle: '원본 폴더', targetTitle: '대상 폴더', pathHead: '파일명과 경로', sizeHead: '크기', dateHead: '수정일', stateHead: '상태', logTitle: '실시간 로그', idle: '대기', historyTitle: '동기화 이력', clearHistory: '이력 초기화', timeHead: '실행 시간', directionHead: '방향', processedHead: '처리',
+            sourceTitle: '원본 폴더', targetTitle: '대상 폴더', showChangedOnly: '변경된 파일만 보기', pathHead: '파일명과 경로', sizeHead: '크기', dateHead: '수정일', stateHead: '상태', logTitle: '실시간 로그', idle: '대기', historyTitle: '동기화 이력', clearHistory: '이력 초기화', timeHead: '실행 시간', directionHead: '방향', processedHead: '처리',
             disclaimer: '중요한 데이터는 동기화 전에 별도로 백업하세요. 브라우저와 운영체제의 파일 권한 또는 예기치 않은 중단으로 인한 손실 가능성이 있습니다.',
-            emptyFiles: '표시할 파일이 없습니다.', emptyHistory: '기록된 동기화 이력이 없습니다.', selected: '{name} 선택됨', pairReady: '폴더 쌍이 확인되었습니다. 변경사항을 비교할 수 있습니다.', sameFolder: '같은 폴더를 원본과 대상으로 사용할 수 없습니다.', nestedFolder: '한 폴더가 다른 폴더 안에 있습니다. 중첩 폴더는 동기화할 수 없습니다.', pickCancelled: '폴더 선택이 취소되었습니다.', pickFailed: '폴더를 선택하지 못했습니다: {message}',
+            emptyFiles: '표시할 파일이 없습니다.', emptyChangedFiles: '변경된 파일이 없습니다.', emptyHistory: '기록된 동기화 이력이 없습니다.', selected: '{name} 선택됨', pairReady: '폴더 쌍이 확인되었습니다. 변경사항을 비교할 수 있습니다.', sameFolder: '같은 폴더를 원본과 대상으로 사용할 수 없습니다.', nestedFolder: '한 폴더가 다른 폴더 안에 있습니다. 중첩 폴더는 동기화할 수 없습니다.', pickCancelled: '폴더 선택이 취소되었습니다.', pickFailed: '폴더를 선택하지 못했습니다: {message}',
             comparing: '폴더를 검사하고 변경 계획을 계산하는 중입니다.', compareDone: '비교 완료 · 실행할 작업 {count}건', compareNone: '비교 완료 · 실행할 변경사항이 없습니다.', compareFailed: '비교 중 오류가 발생했습니다: {message}',
             syncing: '동기화 실행 중 · {current}/{total}', syncDone: '동기화 완료 · {count}건 처리', syncAborted: '동기화가 안전하게 중단되었습니다. {count}건 처리됨', syncFailed: '동기화 중 오류가 발생했습니다: {message}', aborting: '현재 파일 작업을 마친 뒤 중단합니다.',
             importDone: 'JSON 데이터를 복원했습니다.', importFailed: 'JSON을 복원하지 못했습니다: {message}', exportDone: 'JSON 백업을 생성했습니다.', defaultDone: '기본 JSON을 생성했습니다.', historyCleared: '동기화 이력을 초기화했습니다.', confirmClear: '현재 프로필과 전체 동기화 이력을 초기화할까요?',
@@ -31,9 +32,9 @@
             profileNone: 'No synchronization profile is selected.', profileUnverified: 'Folder pair unverified', profileVerified: 'Folder pair verified', profileLabel: '{source} ⇄ {target}',
             directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', excludeLabel: 'Excluded directory names',
             defaultJson: 'Default JSON', exportJson: 'Back up JSON', importJson: 'Restore JSON', compare: 'Compare changes', sync: 'Run synchronization', abort: 'Stop safely', waiting: 'Select both folders to begin.', preparing: 'Preparing',
-            sourceTitle: 'Source folder', targetTitle: 'Target folder', pathHead: 'File and path', sizeHead: 'Size', dateHead: 'Modified', stateHead: 'Status', logTitle: 'Live log', idle: 'Idle', historyTitle: 'Synchronization history', clearHistory: 'Clear history', timeHead: 'Run time', directionHead: 'Direction', processedHead: 'Processed',
+            sourceTitle: 'Source folder', targetTitle: 'Target folder', showChangedOnly: 'Show changed files only', pathHead: 'File and path', sizeHead: 'Size', dateHead: 'Modified', stateHead: 'Status', logTitle: 'Live log', idle: 'Idle', historyTitle: 'Synchronization history', clearHistory: 'Clear history', timeHead: 'Run time', directionHead: 'Direction', processedHead: 'Processed',
             disclaimer: 'Back up important data before synchronization. Browser or operating-system permissions and unexpected interruption can still cause data loss.',
-            emptyFiles: 'No files to display.', emptyHistory: 'No synchronization history recorded.', selected: '{name} selected', pairReady: 'Folder pair verified. You can compare changes now.', sameFolder: 'The same folder cannot be both source and target.', nestedFolder: 'One selected folder is inside the other. Nested pairs are not supported.', pickCancelled: 'Folder selection was cancelled.', pickFailed: 'Could not select the folder: {message}',
+            emptyFiles: 'No files to display.', emptyChangedFiles: 'No changed files to display.', emptyHistory: 'No synchronization history recorded.', selected: '{name} selected', pairReady: 'Folder pair verified. You can compare changes now.', sameFolder: 'The same folder cannot be both source and target.', nestedFolder: 'One selected folder is inside the other. Nested pairs are not supported.', pickCancelled: 'Folder selection was cancelled.', pickFailed: 'Could not select the folder: {message}',
             comparing: 'Scanning folders and calculating the change plan.', compareDone: 'Compare Complete · {count} queued actions', compareNone: 'Compare Complete · no changes to apply', compareFailed: 'Comparison failed: {message}',
             syncing: 'Synchronizing · {current}/{total}', syncDone: 'Synchronization Complete · {count} actions processed', syncAborted: 'Synchronization stopped safely after {count} actions', syncFailed: 'Synchronization failed: {message}', aborting: 'Stopping after the current file operation finishes.',
             importDone: 'JSON data restored.', importFailed: 'Could not restore JSON: {message}', exportDone: 'JSON backup created.', defaultDone: 'Default JSON created.', historyCleared: 'Synchronization history cleared.', confirmClear: 'Clear the active profile and global synchronization history?',
@@ -401,11 +402,11 @@
         btnSrc: $('#btnSrc'), btnTgt: $('#btnTgt'), pathSrc: $('#pathSrc'), pathTgt: $('#pathTgt'), profileText: $('#profileText'), profileBadge: $('#profileBadge'),
         direction: $('#syncDirection'), policy: $('#conflictPolicy'), excludes: $('#excludeDirs'), btnCompare: $('#btnCompare'), btnSync: $('#btnSync'), btnAbort: $('#btnAbort'),
         status: $('#syncStatus'), statusText: $('#syncStatusText'), phaseLabel: $('#phaseLabel'), progress: $('#progressContainer'), progressText: $('#currentFileText'), progressPercent: $('#progressPercentText'), progressBar: $('#progressBar'), progressFill: $('#progressBar .progress-bar'),
-        srcBody: $('#srcFileBody'), tgtBody: $('#tgtFileBody'), srcCount: $('#srcCount'), tgtCount: $('#tgtCount'), log: $('#logBox'), history: $('#historyBody'),
+        changedOnly: $('#showChangedOnly'), srcBody: $('#srcFileBody'), tgtBody: $('#tgtFileBody'), srcCount: $('#srcCount'), tgtCount: $('#tgtCount'), log: $('#logBox'), history: $('#historyBody'),
     };
 
     const model = {
-        state: StateStore.load(), source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), plan: null, phase: 'idle', abortRequested: false, logs: [],
+        state: StateStore.load(), showChangedOnly: sessionStorage.getItem(SHOW_CHANGED_ONLY_KEY) === 'true', source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), plan: null, phase: 'idle', abortRequested: false, logs: [],
     };
 
     const language = () => model.state.config.lang === 'en' ? 'en' : 'ko';
@@ -454,6 +455,7 @@
         elements.excludes.value = model.state.config.excludeDirs.join(', ');
         elements.direction.value = model.state.config.direction;
         elements.policy.value = model.state.config.conflictPolicy;
+        elements.changedOnly.checked = model.showChangedOnly;
         renderPaths(); renderProfile(); renderHistory(); renderRows(); renderControls();
     };
     const renderPaths = () => {
@@ -496,14 +498,16 @@
             sourceStatus: 'unchanged',
             targetStatus: 'unchanged',
         }));
-        for (const row of rows) {
+        const visibleRows = model.showChangedOnly ? rows.filter((row) => !['unchanged', 'baseline'].includes(row.sourceStatus) || !['unchanged', 'baseline'].includes(row.targetStatus)) : rows;
+        for (const row of visibleRows) {
             if (row.source) appendFileRow(elements.srcBody, row.source, row.path, row.sourceStatus);
             if (row.target) appendFileRow(elements.tgtBody, row.target, row.path, row.targetStatus);
         }
-        if (!elements.srcBody.children.length) appendEmptyRow(elements.srcBody, t('emptyFiles'));
-        if (!elements.tgtBody.children.length) appendEmptyRow(elements.tgtBody, t('emptyFiles'));
-        elements.srcCount.textContent = String(model.sourceFiles.size || 0);
-        elements.tgtCount.textContent = String(model.targetFiles.size || 0);
+        const emptyKey = model.showChangedOnly ? 'emptyChangedFiles' : 'emptyFiles';
+        if (!elements.srcBody.children.length) appendEmptyRow(elements.srcBody, t(emptyKey));
+        if (!elements.tgtBody.children.length) appendEmptyRow(elements.tgtBody, t(emptyKey));
+        elements.srcCount.textContent = String(visibleRows.filter((row) => row.source).length);
+        elements.tgtCount.textContent = String(visibleRows.filter((row) => row.target).length);
     };
     const renderHistory = () => {
         elements.history.replaceChildren();
@@ -644,6 +648,7 @@
     elements.btnCompare.addEventListener('click', Controller.compare);
     elements.btnSync.addEventListener('click', Controller.sync);
     elements.btnAbort.addEventListener('click', Controller.abort);
+    elements.changedOnly.addEventListener('change', () => { model.showChangedOnly = elements.changedOnly.checked; sessionStorage.setItem(SHOW_CHANGED_ONLY_KEY, String(model.showChangedOnly)); renderRows(); });
     [elements.direction, elements.policy, elements.excludes].forEach((control) => control.addEventListener('change', () => { Controller.saveConfig(); Controller.invalidatePlan(); }));
     elements.excludes.addEventListener('input', () => { model.state.config.excludeDirs = normalizeExcludes(elements.excludes.value); StateStore.save(model.state); Controller.invalidatePlan(); });
     $('#btnLangKo').addEventListener('click', () => { model.state.config.lang = 'ko'; StateStore.save(model.state); renderStaticText(); });
