@@ -1,121 +1,128 @@
 # File-nally
 
-**Beta v0.8.0** · [한국어 설명서](docs/README_ko.md)
+**Beta v0.8.0** · [English manual](docs/README_en.md)
 
-File-nally is a self-contained browser application for comparing and synchronizing two local folders. The distributable runtime—HTML, CSS, and JavaScript—lives in the generated [file-nally.html](file-nally.html), so end users do not need a server, build process, or Node.js installation.
+File-nally는 두 로컬 폴더를 비교하고 동기화하는 독립 실행형 브라우저 애플리케이션입니다. 배포용 HTML, CSS, JavaScript는 생성된 [file-nally.html](file-nally.html) 하나에 들어 있으므로 일반 사용자는 서버, 빌드 과정, Node.js 설치 없이 사용할 수 있습니다.
 
-## Features
+## 주요 기능
 
-- Bidirectional synchronization or one-way Source → Target synchronization
-- A reviewable file-by-file plan before anything is written
-- Four explicit conflict policies: latest, source wins, skip, and preserve both
-- Versioned `.trash/<run timestamp>/...` isolation instead of permanent deletion
-- JSON schema v2 settings, folder-pair manifests, and synchronization history
-- Safe stop after the current file operation finishes
-- Per-folder-pair identity checks that reject same or nested directories
-- Responsive Korean and English interface
+- 양방향 또는 원본 → 대상 단방향 동기화
+- 파일을 쓰기 전에 파일별 작업 계획 검토
+- 최신 파일, 원본 우선, 건너뛰기, 두 버전 보존 충돌 정책
+- 영구 삭제 대신 `.trash/<실행 시각>/...`에 버전별 격리
+- JSON schema v2 설정, 폴더 쌍별 매니페스트와 동기화 이력
+- 현재 파일 작업을 마친 뒤 안전하게 중단
+- 동일하거나 중첩된 폴더를 거부하는 폴더 쌍 확인
+- 한국어·영어 반응형 인터페이스
 
-## Requirements
+## 실행 환경
 
-- Current Google Chrome or Microsoft Edge with the File System Access API
-- Permission to read and write both selected folders
-- An independent backup of important data
+- File System Access API를 지원하는 최신 Google Chrome 또는 Microsoft Edge
+- 선택한 두 폴더의 읽기·쓰기 권한
+- 중요 데이터의 별도 백업
 
-File-nally runs locally in the browser and does not upload your files. Browser permissions, disk failures, operating-system limits, and unexpected shutdowns can still cause data loss, so it is not a replacement for a backup system.
+File-nally는 브라우저 안에서 로컬로 실행되며 파일을 외부로 업로드하지 않습니다. 다만 브라우저 권한, 디스크 오류, 운영체제 제한, 예기치 않은 종료로 인한 손실 가능성은 있으므로 별도 백업을 대체하지 않습니다.
 
-## Start the application
+## 시작하기
 
-1. Download `file-nally.html` from the repository or the [GitHub Releases page](https://github.com/WizMasia/Filenally/releases).
-2. Open the HTML file in Chrome or Edge.
-3. Select the **Source folder** and **Target folder** and grant read/write permission.
-4. Review the synchronization direction, conflict policy, and excluded directory names.
-5. Select **Compare changes**.
-6. Review the queued actions in both file tables.
-7. Select **Run synchronization**.
+1. 저장소나 [GitHub Releases 페이지](https://github.com/WizMasia/Filenally/releases)에서 `file-nally.html`을 내려받습니다.
+2. HTML 파일을 Chrome 또는 Edge에서 엽니다.
+3. **원본 폴더**와 **대상 폴더**를 선택하고 읽기·쓰기 권한을 허용합니다.
+4. 동기화 방향, 충돌 정책, 비교 모드, 제외할 하위 폴더명을 확인합니다.
+5. **변경사항 비교**를 누릅니다.
+6. 양쪽 파일 표에 표시된 실행 대기 작업을 검토합니다.
+7. **동기화 실행**을 누릅니다.
 
-The application rejects a folder pair when both selections refer to the same directory or when one directory is inside the other. This prevents recursive synchronization and accidental self-copying.
+양쪽 선택이 같은 폴더를 가리키거나 한 폴더가 다른 폴더 안에 있으면 실행할 수 없습니다. 이는 재귀 동기화와 자기 자신으로의 복사를 방지하기 위한 안전장치입니다.
 
-## Synchronization directions
+## 동기화 방향
 
-### Bidirectional
+### 양방향
 
-New and changed files can move from Source to Target or from Target to Source. When a trusted previous manifest shows that a file was deleted on one side and remained unchanged on the other, the remaining copy is moved into that side's versioned `.trash` directory.
+신규·변경 파일이 원본에서 대상으로 또는 대상에서 원본으로 이동할 수 있습니다. 신뢰할 수 있는 이전 매니페스트에서 한쪽 파일의 삭제가 확인되고 반대편 파일은 변경되지 않았다면, 남아 있는 파일을 해당 폴더의 버전별 `.trash`로 옮깁니다.
 
-### One-way: Source → Target
+### 단방향: 원본 → 대상
 
-Source is authoritative for copy operations. Target-only files without a previous synchronized record are protected. A deletion recorded after an earlier successful synchronization can still be propagated by moving the corresponding Target file into `.trash`.
+파일 복사에서는 원본 폴더가 기준입니다. 이전 동기화 기록이 없는 대상 전용 파일은 보호됩니다. 다만 과거 동기화 이후 원본에서 삭제된 것으로 확인된 파일은 대상의 `.trash`로 이동하여 삭제 상태를 반영할 수 있습니다.
 
-## Conflict policies
+## 충돌 해결 정책
 
-| Policy | Behavior |
+| 정책 | 동작 |
 |---|---|
-| **Keep latest** | Copies the file with the newer modification time. A tied timestamp with a different size remains unresolved for manual review. |
-| **Source wins** | Uses the Source version when both sides changed. |
-| **Skip existing** | Never overwrites an existing destination path; new missing paths can still be copied. |
-| **Rename and preserve both** | Keeps each original and copies the other version using `.conflict-source-*` and `.conflict-target-*` names. |
+| **최신 파일 유지** | 수정 시간이 더 최신인 파일을 반대편에 복사합니다. 수정 시간이 같고 크기가 다르면 수동 확인을 위해 충돌로 남깁니다. |
+| **원본 우선 덮어쓰기** | 양쪽이 모두 변경된 충돌에서 원본 버전을 사용합니다. |
+| **기존 파일 건너뛰기** | 대상 경로에 파일이 있으면 덮어쓰지 않습니다. 대상에 없는 신규 경로는 복사할 수 있습니다. |
+| **이름을 바꿔 두 버전 보존** | 양쪽 원본을 유지하면서 반대편 버전을 `.conflict-source-*`, `.conflict-target-*` 이름으로 복사합니다. |
 
-File-nally compares file size and modification time. It does not read every file to calculate a content hash, so two files with identical size and modification time are treated as equivalent.
+## 비교 모드
 
-## Deletion safety and `.trash`
+| 모드 | 동작 |
+|---|---|
+| **빠른 비교 (기본값)** | 파일 크기와 수정 시각을 비교합니다. 크기와 수정 시각이 모두 같으면 같은 파일로 판단합니다. |
+| **정확 비교** | 크기가 같은 파일을 4 MiB 청크로 읽어 바이트 단위로 비교합니다. 내용이 다르면 첫 차이에서 멈추며, 내용이 같으면 수정 시각이 달라도 불필요하게 복사하지 않습니다. |
 
-File-nally does not permanently delete a synchronized file. Confirmed deletion propagation moves the remaining file to:
+정확 비교는 파일 내용을 읽으므로 빠른 비교보다 느리지만, 한 번에 두 청크만 메모리에 올립니다. 비교 중에는 **안전하게 중지**를 사용할 수 있습니다. 해시 알고리즘, 부분 청크 지문, 영구 해시 캐시는 사용하지 않습니다.
+
+## 삭제 안전성과 `.trash`
+
+File-nally는 동기화된 파일을 영구 삭제하지 않습니다. 삭제 전파가 확인되면 남아 있는 파일을 다음 위치로 옮깁니다.
 
 ```text
-.trash/<run timestamp>/<original relative path>
+.trash/<실행 시각>/<기존 상대 경로>
 ```
 
-Repeated names in the same trash run receive a numeric suffix instead of being overwritten. The `.trash` directory is always excluded from synchronization, even if it is removed from the visible exclusion list. Recovery is manual: inspect `.trash` and move the required file back to its original location.
+같은 휴지통 실행 경로에 같은 이름이 있으면 덮어쓰지 않고 숫자 접미사를 붙입니다. `.trash`는 화면의 제외 목록에서 지워도 항상 동기화 검사에서 제외됩니다. 복원은 수동으로 진행해야 합니다. `.trash`에서 필요한 파일을 찾아 원래 위치로 옮기세요.
 
-## JSON settings and folder profiles
+## JSON 설정과 폴더 프로필
 
-Serializable application data is stored under the `smart_sync_state` localStorage key:
+직렬화할 수 있는 애플리케이션 데이터는 localStorage의 `smart_sync_state` 키에 저장됩니다.
 
-- Synchronization direction and conflict policy
-- Excluded directory names and interface language
-- Folder-pair profiles and manifests
-- Per-profile and global synchronization history
-- Incomplete-run checkpoints
+- 동기화 방향, 충돌 정책, 비교 모드
+- 제외할 폴더명과 화면 언어
+- 폴더 쌍 프로필과 매니페스트
+- 프로필별·전체 동기화 이력
+- 완료되지 않은 실행 체크포인트
 
-Non-serializable directory handles are stored separately in IndexedDB. JSON backup files never contain the file contents or directory handles.
+직렬화할 수 없는 디렉터리 핸들은 IndexedDB에 별도로 저장됩니다. JSON 백업에는 파일 내용이나 디렉터리 핸들이 포함되지 않습니다.
 
-Use the application controls to:
+화면의 JSON 버튼은 다음과 같이 동작합니다.
 
-- **Default JSON:** download a clean schema v2 configuration
-- **Back up JSON:** export the current settings, profiles, manifests, and history
-- **Restore JSON:** validate and import a backup up to 5 MB
+- **기본 JSON:** 초기화된 schema v2 설정 다운로드
+- **JSON 백업:** 현재 설정, 프로필, 매니페스트, 이력 내보내기
+- **JSON 복원:** 최대 5MB의 백업 파일을 검증한 뒤 가져오기
 
-Restored profiles and legacy v0.6.1 manifests remain unverified until the matching folder pair is selected again. An unverified manifest cannot trigger deletion propagation.
+복원한 프로필과 구버전 v0.6.1 매니페스트는 원래 폴더 쌍을 다시 선택하기 전까지 미확인 상태로 유지됩니다. 미확인 매니페스트는 삭제 전파에 사용할 수 없습니다.
 
-## Safe stop and failures
+## 안전한 중단과 오류 처리
 
-**Stop safely** requests cancellation between file actions. File-nally finishes the currently active write before stopping and does not start the next queued action. Successfully completed actions are checkpointed. A write failure stops later actions, records a failed run, and leaves the page ready for a fresh comparison.
+**안전하게 중지**는 정확 비교 중에는 현재 청크 읽기를 마친 뒤 비교를 끝내며 파일을 쓰지 않습니다. 동기화 중에는 현재 진행 중인 쓰기를 마친 뒤 다음 작업을 시작하지 않습니다. 완료된 동기화 작업은 체크포인트로 저장됩니다. 쓰기 오류가 발생하면 이후 작업을 중지하고 실패 이력을 남기며, 새 비교를 진행할 수 있는 상태로 돌아갑니다.
 
-Always compare again after an aborted or failed run before attempting another synchronization.
+중단되거나 실패한 뒤에는 반드시 **변경사항 비교**를 다시 실행한 후 동기화를 재시도하세요.
 
-## Supported environments and limitations
+## 지원 환경과 한계
 
-| Classification | Environment |
+| 구분 | 환경 |
 |---|---|
-| Supported target | Current desktop Chrome or Edge on Windows, macOS, Linux, and ChromeOS |
-| Verified in this project | Current macOS Chrome plus mocked Chrome filesystem flows |
-| Experimental / not supported | Android Chromium |
-| Unsupported | Safari, Firefox, iOS/iPadOS browsers, and Brave without its feature flag |
+| 지원 대상 | Windows, macOS, Linux, ChromeOS의 최신 데스크톱 Chrome 또는 Edge |
+| 이 프로젝트에서 검증 | 최신 macOS Chrome과 모의 Chrome 파일시스템 흐름 |
+| 실험적 / 지원하지 않음 | Android Chromium |
+| 미지원 | Safari, Firefox, iOS/iPadOS 브라우저, 기능 플래그를 켜지 않은 Brave |
 
-### Permissions and filesystems
+### 권한과 파일시스템
 
-- Folder access always depends on a user gesture and browser permission. Protected system directories, read-only locations, and paths blocked by the operating system or storage provider cannot be synchronized.
-- OS-reserved names, maximum path lengths, removable media, network drives, and cloud-provider placeholders or hydration rules can reject or delay operations.
-- Filename case sensitivity and Unicode normalization differ by filesystem. Names that are distinct on one platform can collide or compare differently on another, especially between Windows, case-insensitive APFS, case-sensitive filesystems, and decomposed/composed Unicode forms.
-- File-nally compares size and modification time without content hashes. It does not preserve original timestamps, ownership, permission bits, ACLs, extended attributes, macOS resource forks, or symbolic-link identity.
+- 폴더 접근에는 항상 사용자 동작과 브라우저 권한이 필요합니다. 보호된 시스템 폴더, 읽기 전용 위치, 운영체제나 저장소 제공자가 차단한 경로는 동기화할 수 없습니다.
+- 운영체제 예약 이름, 최대 경로 길이, 이동식 미디어, 네트워크 드라이브, 클라우드 제공자의 자리표시자나 파일 다운로드 규칙 때문에 작업이 거부되거나 지연될 수 있습니다.
+- 파일명 대소문자 구분과 유니코드 정규화 방식은 파일시스템마다 다릅니다. Windows, 대소문자를 구분하지 않는 APFS, 대소문자 구분 파일시스템, 분해형·조합형 유니코드 사이에서 한쪽에서는 다른 이름이 다른 쪽에서는 충돌하거나 다르게 비교될 수 있습니다.
+- 기본 빠른 모드는 크기와 수정 시각만 비교합니다. 정확 모드는 내용을 읽지만 해시나 영구 캐시를 만들지 않습니다. 두 모드 모두 원래 수정 시각, 소유권, 권한 비트, ACL, 확장 속성, macOS 리소스 포크, 심볼릭 링크의 정체성은 보존하지 않습니다.
 
-### Language and application behavior
+### 언어와 애플리케이션 동작
 
-- The interface is translated only into Korean and English. Browser, operating-system, and storage-provider error text may remain untranslated, and unusual Unicode filenames can render or sort differently across platforms.
-- Checkpoints are saved after individual actions; there is no transaction covering the whole plan. A failure can therefore leave a partially completed run that must be compared again.
-- Recovery from `.trash` is manual. There is no background folder monitor, scheduler, unattended synchronization, or automatic rollback.
-- Very large folders can require substantial memory and comparison time. Private browsing, clearing browser data, permission revocation, disconnected removable media, unavailable network/cloud storage, or provider-side changes can invalidate saved handles and profiles.
+- 화면 번역은 한국어와 영어만 제공합니다. 브라우저, 운영체제, 저장소 제공자의 오류 문구는 번역되지 않을 수 있으며 특수한 유니코드 파일명은 플랫폼마다 표시·정렬 방식이 다를 수 있습니다.
+- 체크포인트는 개별 작업이 끝날 때 저장되며 전체 계획을 감싸는 트랜잭션은 없습니다. 오류가 발생하면 일부 작업만 완료된 상태가 남을 수 있으므로 다시 비교해야 합니다.
+- `.trash` 복구는 수동입니다. 백그라운드 폴더 감시, 스케줄러, 무인 동기화, 자동 롤백은 제공하지 않습니다.
+- 매우 큰 폴더는 많은 메모리와 비교 시간이 필요할 수 있습니다. 시크릿 모드, 브라우저 데이터 삭제, 권한 해제, 이동식 미디어 분리, 네트워크·클라우드 저장소 중단, 제공자 측 변경은 저장된 핸들과 프로필을 무효화할 수 있습니다.
 
-Compatibility references:
+호환성 참고 자료:
 
 - [Chrome File System Access documentation](https://developer.chrome.com/docs/capabilities/web-apis/file-system-access)
 - [File System Access specification](https://wicg.github.io/file-system-access/)
@@ -124,57 +131,63 @@ Compatibility references:
 - [Microsoft case-sensitivity guidance](https://learn.microsoft.com/en-us/windows/wsl/case-sensitivity)
 - [Apple APFS filename behavior](https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/APFS_Guide/FAQ/FAQ.html)
 
-## Troubleshooting
+## 문제 해결
 
-### The folder picker does not open
+### 폴더 선택 창이 열리지 않아요
 
-Use a current Chrome or Edge release. Other browsers may not implement `showDirectoryPicker()` or writable directory handles.
+최신 Chrome 또는 Edge를 사용하세요. 다른 브라우저는 `showDirectoryPicker()`나 쓰기 가능한 디렉터리 핸들을 지원하지 않을 수 있습니다.
 
-### Compare changes is disabled
+### 변경사항 비교 버튼이 비활성화되어 있어요
 
-Select both folders. If the page reports an invalid pair, choose two separate, non-nested directories. Restored JSON profiles must also be rebound to their original folder pair.
+두 폴더를 모두 선택하세요. 잘못된 폴더 쌍이라는 메시지가 표시되면 서로 분리되어 있고 중첩되지 않은 폴더를 선택해야 합니다. JSON으로 복원한 프로필도 기존 폴더 쌍을 다시 연결해야 합니다.
 
-### Access stops working after reopening the page
+### 페이지를 다시 연 뒤 폴더에 접근할 수 없어요
 
-The browser may require folder permission again. Select the folders and approve read/write access. File-nally stores only the directory handle, not a way to bypass browser permission prompts.
+브라우저가 폴더 권한을 다시 요구할 수 있습니다. 폴더를 선택하고 읽기·쓰기 권한을 허용하세요. File-nally는 브라우저 권한 확인을 우회할 수단을 저장하지 않습니다.
 
-### A file is reported as a conflict
+### 파일이 충돌로 표시돼요
 
-Review both modification times and sizes, then choose an appropriate conflict policy. A deletion on one side combined with a modification on the other is intentionally left unresolved.
+양쪽 수정 시간과 크기를 확인한 뒤 적절한 충돌 정책을 선택하세요. 한쪽에서는 삭제되고 반대편에서는 수정된 파일은 데이터 보호를 위해 자동 처리하지 않습니다.
 
-### I need to recover a deleted file
+### 삭제된 파일을 복구하고 싶어요
 
-Look inside the affected folder's `.trash/<run timestamp>/` directory and restore the file manually.
+파일이 있던 폴더의 `.trash/<실행 시각>/`을 확인한 뒤 필요한 파일을 원래 경로로 직접 옮기세요.
 
-## Development
+## 개발 및 검증
 
-Node.js and Playwright are development-only dependencies; end users only need `file-nally.html`. Edit only the three files under `dev/`; the root HTML is generated and must not be edited directly. See the [bilingual build guide](docs/BUILD.md) for the complete workflow and release checklist.
+Node.js와 Playwright는 개발할 때만 필요합니다. 일반 사용자는 `file-nally.html`만 있으면 됩니다. `dev/` 아래의 세 파일만 편집하고 루트 HTML은 직접 수정하지 마세요. 전체 절차와 릴리즈 체크리스트는 [빌드 가이드](docs/BUILD.md)를 확인하세요.
 
 ```bash
-npm install
+npm ci
 npm run build
 npm run build:check
 npm test
 npm run test:visual
 ```
 
-The Chrome regression suite covers state migration, JSON validation, folder-pair verification, conflict policies, copying, versioned trash, safe stop, write failures, untrusted filenames, accessibility labels, and mobile overflow. Responsive screenshots are written to the ignored `artifacts/visual/` directory.
+Chrome 회귀 테스트는 빠른/정확 비교, 비교 취소, 상태 마이그레이션, JSON 검증, 폴더 쌍 확인, 충돌 정책, 파일 복사, 버전 휴지통, 안전 중단, 쓰기 실패, 신뢰할 수 없는 파일명, 접근성 레이블, 모바일 오버플로를 검사합니다. 반응형 화면 캡처는 Git에서 제외된 `artifacts/visual/` 폴더에 생성됩니다.
 
-## Repository layout
+## 기여와 이슈 작성
+
+변경은 하나의 목적에 집중하고, 동작 변경에는 해당 회귀 테스트를 포함해 주세요. Pull Request 전에는 `npm test`와 UI 변경 시 `npm run test:visual`을 실행하세요. 생성된 `file-nally.html`은 `npm run build`로 갱신하고 직접 편집하지 않습니다.
+
+[GitHub Issues](https://github.com/WizMasia/Filenally/issues)에 문제를 등록할 때는 재현 단계, 브라우저와 운영체제, 예상 동작, 실제 동작을 포함해 주세요. 데이터 손실 가능성이 있는 문제는 사용한 동기화 방향과 충돌 정책도 함께 적어 주세요.
+
+## 저장소 구조
 
 ```text
-dev/file-nally.html          # Editable development HTML
-dev/css/file-nally.css       # Editable styles
-dev/js/file-nally.js         # Editable application behavior
-scripts/build.cjs            # Deterministic single-file builder
-file-nally.html              # Generated standalone production artifact
-README.md                    # English manual
-docs/README_ko.md            # Korean manual
-docs/BUILD.md                # Bilingual build guide
-DESIGN.md                    # UI and accessibility contract
-tests/                       # Builder and Chrome regression tests
+dev/file-nally.html          # 편집하는 개발 HTML
+dev/css/file-nally.css       # 편집하는 스타일
+dev/js/file-nally.js         # 편집하는 애플리케이션 동작
+scripts/build.cjs            # 결정적 단일 파일 빌더
+file-nally.html              # 생성된 독립 실행형 배포 결과물
+README.md                    # 한국어 메인 설명서
+docs/README_en.md            # 영어 보조 설명서
+docs/BUILD.md                # 양언어 빌드 가이드
+DESIGN.md                    # UI와 접근성 설계 계약
+tests/                       # 빌더 및 Chrome 회귀 테스트
 ```
 
-## Design and license
+## 디자인과 라이선스
 
-See [DESIGN.md](DESIGN.md) for the design system and accessibility constraints. File-nally is provided under the MIT license notice included in the application.
+디자인 시스템과 접근성 제약은 [DESIGN.md](DESIGN.md)를 확인하세요. File-nally는 [MIT License](LICENSE)에 따라 제공됩니다.
