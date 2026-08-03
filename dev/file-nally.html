@@ -80,6 +80,13 @@
                     </select>
                 </div>
                 <div class="field">
+                    <label for="comparisonMode" data-i18n="comparisonLabel">비교 모드</label>
+                    <select id="comparisonMode">
+                        <option value="quick" data-i18n="comparisonQuick">빠른 비교 (크기 + 수정 시각, 기본값)</option>
+                        <option value="exact" data-i18n="comparisonExact">정확 비교 (바이트 단위, 느림)</option>
+                    </select>
+                </div>
+                <div class="field">
                     <label for="excludeDirs" data-i18n="excludeLabel">제외할 하위 폴더명</label>
                     <input id="excludeDirs" type="text" value="node_modules, .git, dist, temp, .trash" spellcheck="false">
                 </div>

@@ -14,14 +14,32 @@ async function installMockFileSystem(page) {
       constructor(name, options = {}) {
         this.kind = 'file';
         this.name = name;
-        this.content = String(options.content ?? '');
+        this.content = Number.isInteger(options.contentSize) ? 'x'.repeat(options.contentSize) : String(options.content ?? '');
         this.lastModified = Number(options.lastModified ?? ++clock);
         this.failWrite = Boolean(options.failWrite);
+        this.readDelay = Number(options.readDelay ?? 0);
         this.writeDelay = Number(options.writeDelay ?? 0);
       }
 
       async getFile() {
-        return new File([this.content], this.name, { lastModified: this.lastModified });
+        const file = new File([this.content], this.name, { lastModified: this.lastModified });
+        if (this.readDelay) {
+          const originalSlice = file.slice.bind(file);
+          Object.defineProperty(file, 'slice', {
+            value: (...args) => {
+              const chunk = originalSlice(...args);
+              const arrayBuffer = chunk.arrayBuffer.bind(chunk);
+              Object.defineProperty(chunk, 'arrayBuffer', {
+                value: async () => {
+                  await new Promise((resolve) => setTimeout(resolve, this.readDelay));
+                  return arrayBuffer();
+                },
+              });
+              return chunk;
+            },
+          });
+        }
+        return file;
       }
 
       async createWritable() {

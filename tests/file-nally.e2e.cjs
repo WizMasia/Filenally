@@ -74,6 +74,12 @@ async function compare(page) {
   });
 }
 
+async function selectExactComparison(page) {
+  const control = page.getByLabel('비교 모드');
+  assert.equal(await control.count(), 1);
+  await control.selectOption('exact');
+}
+
 async function executeCurrentPlan(page) {
   await page.evaluate(async () => {
     if (window.FileNallyTest?.executeCurrentPlan) {
@@ -112,6 +118,65 @@ async function main() {
     });
     await compare(page);
     assert.equal(await page.locator('#btnSync').isEnabled(), true);
+  });
+
+  add('exact comparison detects different content with equal metadata', async ({ page }) => {
+    await selectExactComparison(page);
+    await mountPair(page, {
+      source: { 'same.txt': { content: 'AAAA', lastModified: 100 } },
+      target: { 'same.txt': { content: 'BBBB', lastModified: 100 } },
+    });
+    await compare(page);
+    const result = await page.evaluate(() => window.FileNallyTest.getModel().plan);
+    assert.deepEqual(result.actions, []);
+    assert.equal(result.summary.conflicts, 1);
+    assert.match(await page.locator('#srcFileBody').innerText(), /충돌|Conflict/);
+    assert.match(await page.locator('#tgtFileBody').innerText(), /충돌|Conflict/);
+  });
+
+  add('exact comparison avoids copying equal content with different modification times', async ({ page }) => {
+    await selectExactComparison(page);
+    await mountPair(page, {
+      source: { 'same.txt': { content: 'SAME', lastModified: 200 } },
+      target: { 'same.txt': { content: 'SAME', lastModified: 100 } },
+    });
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.deepEqual(actions, [{ type: 'baseline', path: 'same.txt' }]);
+  });
+
+  add('quick comparison preserves metadata-based equality by default', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'same.txt': { content: 'AAAA', lastModified: 100 } },
+      target: { 'same.txt': { content: 'BBBB', lastModified: 100 } },
+    });
+    await compare(page);
+    const result = await page.evaluate(() => ({
+      mode: JSON.parse(localStorage.getItem('smart_sync_state')).config.comparisonMode,
+      actions: window.FileNallyTest.getModel().plan.actions,
+    }));
+    assert.equal(result.mode, 'quick');
+    assert.deepEqual(result.actions, [{ type: 'baseline', path: 'same.txt' }]);
+  });
+
+  add('safe stop cancels an exact comparison without creating a plan', async ({ page }) => {
+    await selectExactComparison(page);
+    const contentSize = (4 * 1024 * 1024) + 1;
+    await mountPair(page, {
+      source: { 'large.bin': { contentSize, lastModified: 100, readDelay: 100 } },
+      target: { 'large.bin': { contentSize, lastModified: 100, readDelay: 100 } },
+    });
+    await page.locator('#btnCompare').click();
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'comparing');
+    assert.equal(await page.locator('#btnAbort').isEnabled(), true);
+    await page.locator('#btnAbort').click();
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'ready');
+    const result = await page.evaluate(() => ({
+      plan: window.FileNallyTest.getModel().plan,
+      status: document.querySelector('#syncStatusText').textContent,
+    }));
+    assert.equal(result.plan, null);
+    assert.match(result.status, /비교가 중지|comparison stopped/i);
   });
 
   add('changed-only filter hides stable files and persists for the tab session', async ({ page }) => {
@@ -263,6 +328,16 @@ async function main() {
     assert.equal(imported.profiles['profile-a'].manifest['gone.txt'].source.size, 1);
   });
 
+  add('legacy settings default to quick comparison', async ({ page }) => {
+    const comparisonMode = await page.evaluate(() => window.FileNallyTest.StateStore.importText(JSON.stringify({
+      schemaVersion: 2,
+      config: { direction: 'bidirectional', conflictPolicy: 'latest', excludeDirs: ['.trash'], lang: 'ko' },
+      profiles: {},
+      globalHistory: [],
+    })).config.comparisonMode);
+    assert.equal(comparisonMode, 'quick');
+  });
+
   add('planner handles verified deletion, modification conflict, and rename preservation', async ({ page }) => {
     const result = await page.evaluate(() => {
       const file = (path, size, lastModified) => ({ name: path.split('/').pop(), path, size, lastModified });
@@ -300,6 +375,56 @@ async function main() {
       ['source', 'target', 'shared.conflict-source-RUN.txt'],
       ['target', 'source', 'shared.conflict-target-RUN.txt'],
     ]);
+  });
+
+  add('planner treats unequal exact content with equal metadata as a conflict', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const file = { name: 'same.txt', path: 'same.txt', size: 4, lastModified: 100 };
+      const plan = window.FileNallyTest.SyncPlanner.plan({
+        source: { 'same.txt': file },
+        target: { 'same.txt': file },
+        contentEquality: new Map([['same.txt', false]]),
+      });
+      return { actions: plan.actions, rows: plan.rows, conflicts: plan.summary.conflicts };
+    });
+    assert.deepEqual(result.actions, []);
+    assert.equal(result.rows[0].sourceStatus, 'conflict');
+    assert.equal(result.rows[0].targetStatus, 'conflict');
+    assert.equal(result.conflicts, 1);
+  });
+
+  add('planner does not trust unchanged manifest metadata over unequal exact content', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const file = { name: 'same.txt', path: 'same.txt', size: 4, lastModified: 100 };
+      const snapshot = { size: 4, lastModified: 100 };
+      const plan = window.FileNallyTest.SyncPlanner.plan({
+        source: { 'same.txt': file },
+        target: { 'same.txt': file },
+        manifest: { 'same.txt': { source: snapshot, target: snapshot } },
+        trustedManifest: true,
+        contentEquality: new Map([['same.txt', false]]),
+      });
+      return { actions: plan.actions, rows: plan.rows, conflicts: plan.summary.conflicts };
+    });
+    assert.deepEqual(result.actions, []);
+    assert.equal(result.rows[0].sourceStatus, 'conflict');
+    assert.equal(result.rows[0].targetStatus, 'conflict');
+    assert.equal(result.conflicts, 1);
+  });
+
+  add('planner treats equal exact content with different modification times as baseline', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const plan = window.FileNallyTest.SyncPlanner.plan({
+        source: { 'same.txt': { name: 'same.txt', path: 'same.txt', size: 4, lastModified: 200 } },
+        target: { 'same.txt': { name: 'same.txt', path: 'same.txt', size: 4, lastModified: 100 } },
+        contentEquality: new Map([['same.txt', true]]),
+      });
+      return { actions: plan.actions, rows: plan.rows, conflicts: plan.summary.conflicts };
+    });
+    assert.deepEqual(result.actions, [{ type: 'baseline', path: 'same.txt' }]);
+    assert.equal(result.rows[0].sourceStatus, 'baseline');
+    assert.equal(result.rows[0].targetStatus, 'baseline');
+    assert.equal(result.conflicts, 0);
   });
 
   add('same source and target folder are rejected', async ({ page }) => {
@@ -472,6 +597,8 @@ async function main() {
       await installMockFileSystem(page);
       await page.goto(url);
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}.png`), fullPage: true });
+      await page.getByLabel('비교 모드').selectOption('exact');
+      await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-exact.png`), fullPage: true });
       await mountPair(page, {
         source: {
           'reports': { type: 'directory', entries: { 'q2-final.pdf': { content: 'source report', lastModified: 300 } } },

@@ -155,7 +155,7 @@
         .log-line + .log-line { margin-top: var(--space-2); }
         .history-panel .table-wrapper { max-height: 220px; }
         footer { border-top: 1px solid var(--border-default); padding-top: var(--space-5); color: var(--text-secondary); font-size: 0.8125rem; text-align: center; }
-        .footer-law { max-width: 90ch; margin: var(--space-2) auto 0; }
+        .footer-law { max-width: 90ch; margin: var(--space-2) auto 0; word-break: keep-all; }
         .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 
         @media (max-width: 900px) {
@@ -254,6 +254,13 @@
                     </select>
                 </div>
                 <div class="field">
+                    <label for="comparisonMode" data-i18n="comparisonLabel">비교 모드</label>
+                    <select id="comparisonMode">
+                        <option value="quick" data-i18n="comparisonQuick">빠른 비교 (크기 + 수정 시각, 기본값)</option>
+                        <option value="exact" data-i18n="comparisonExact">정확 비교 (바이트 단위, 느림)</option>
+                    </select>
+                </div>
+                <div class="field">
                     <label for="excludeDirs" data-i18n="excludeLabel">제외할 하위 폴더명</label>
                     <input id="excludeDirs" type="text" value="node_modules, .git, dist, temp, .trash" spellcheck="false">
                 </div>
@@ -334,33 +341,34 @@
     const MAX_MANIFEST_ENTRIES = 100000;
     const MAX_PROFILE_HISTORY = 30;
     const MAX_GLOBAL_HISTORY = 100;
+    const CONTENT_CHUNK_BYTES = 4 * 1024 * 1024;
     const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const DEFAULT_EXCLUDES = ['node_modules', '.git', 'dist', 'temp', '.trash'];
 
     const TEXT = {
         ko: {
-            desc: '두 로컬 폴더를 비교한 뒤 변경 계획을 검토하고 안전하게 동기화합니다.', controlTitle: '동기화 제어', selectSource: '원본 폴더 선택', selectTarget: '대상 폴더 선택', notSelected: '선택되지 않음', languageLabel: '언어', progressLabel: '동기화 진행률', workspaceLabel: '폴더 비교 결과', activityLabel: '동기화 기록',
+            desc: '두 로컬 폴더를 비교한 뒤 변경 계획을 검토하고 안전하게 동기화합니다.', controlTitle: '동기화 제어', selectSource: '원본 폴더 선택', selectTarget: '대상 폴더 선택', notSelected: '선택되지 않음', languageLabel: '언어', progressLabel: '작업 진행률', workspaceLabel: '폴더 비교 결과', activityLabel: '동기화 기록',
             profileNone: '선택된 동기화 프로필이 없습니다.', profileUnverified: '폴더 쌍 미확인', profileVerified: '폴더 쌍 확인됨', profileLabel: '{source} ⇄ {target}',
-            directionLabel: '동기화 방향', directionBoth: '양방향 (원본 ⇄ 대상)', directionOne: '단방향 (원본 → 대상)', policyLabel: '충돌 해결 정책', policyLatest: '최신 파일 유지', policySource: '원본 우선 덮어쓰기', policySkip: '기존 파일 건너뛰기', policyRename: '이름을 바꿔 두 버전 보존', excludeLabel: '제외할 하위 폴더명',
+            directionLabel: '동기화 방향', directionBoth: '양방향 (원본 ⇄ 대상)', directionOne: '단방향 (원본 → 대상)', policyLabel: '충돌 해결 정책', policyLatest: '최신 파일 유지', policySource: '원본 우선 덮어쓰기', policySkip: '기존 파일 건너뛰기', policyRename: '이름을 바꿔 두 버전 보존', comparisonLabel: '비교 모드', comparisonQuick: '빠른 비교 (크기 + 수정 시각, 기본값)', comparisonExact: '정확 비교 (바이트 단위, 느림)', excludeLabel: '제외할 하위 폴더명',
             defaultJson: '기본 JSON', exportJson: 'JSON 백업', importJson: 'JSON 복원', compare: '변경사항 비교', sync: '동기화 실행', abort: '안전하게 중지', waiting: '폴더를 선택해 주세요.', preparing: '준비 중',
             sourceTitle: '원본 폴더', targetTitle: '대상 폴더', showChangedOnly: '변경된 파일만 보기', pathHead: '파일명과 경로', sizeHead: '크기', dateHead: '수정일', stateHead: '상태', logTitle: '실시간 로그', idle: '대기', historyTitle: '동기화 이력', clearHistory: '이력 초기화', timeHead: '실행 시간', directionHead: '방향', processedHead: '처리',
             disclaimer: '중요한 데이터는 동기화 전에 별도로 백업하세요. 브라우저와 운영체제의 파일 권한 또는 예기치 않은 중단으로 인한 손실 가능성이 있습니다.',
             emptyFiles: '표시할 파일이 없습니다.', emptyChangedFiles: '변경된 파일이 없습니다.', emptyHistory: '기록된 동기화 이력이 없습니다.', selected: '{name} 선택됨', pairReady: '폴더 쌍이 확인되었습니다. 변경사항을 비교할 수 있습니다.', sameFolder: '같은 폴더를 원본과 대상으로 사용할 수 없습니다.', nestedFolder: '한 폴더가 다른 폴더 안에 있습니다. 중첩 폴더는 동기화할 수 없습니다.', pickCancelled: '폴더 선택이 취소되었습니다.', pickFailed: '폴더를 선택하지 못했습니다: {message}',
-            comparing: '폴더를 검사하고 변경 계획을 계산하는 중입니다.', compareDone: '비교 완료 · 실행할 작업 {count}건', compareNone: '비교 완료 · 실행할 변경사항이 없습니다.', compareFailed: '비교 중 오류가 발생했습니다: {message}',
+            comparing: '폴더를 검사하고 변경 계획을 계산하는 중입니다.', compareStopping: '현재 파일 비교를 마친 뒤 중지합니다.', compareStopped: '파일 비교가 중지되었습니다.', compareDone: '비교 완료 · 실행할 작업 {count}건', compareNone: '비교 완료 · 실행할 변경사항이 없습니다.', compareFailed: '비교 중 오류가 발생했습니다: {message}',
             syncing: '동기화 실행 중 · {current}/{total}', syncDone: '동기화 완료 · {count}건 처리', syncAborted: '동기화가 안전하게 중단되었습니다. {count}건 처리됨', syncFailed: '동기화 중 오류가 발생했습니다: {message}', aborting: '현재 파일 작업을 마친 뒤 중단합니다.',
             importDone: 'JSON 데이터를 복원했습니다.', importFailed: 'JSON을 복원하지 못했습니다: {message}', exportDone: 'JSON 백업을 생성했습니다.', defaultDone: '기본 JSON을 생성했습니다.', historyCleared: '동기화 이력을 초기화했습니다.', confirmClear: '현재 프로필과 전체 동기화 이력을 초기화할까요?',
             statusUnchanged: '변경 없음', statusBaseline: '기준 저장', statusCopyOut: '보내기', statusCopyIn: '받기', statusTrash: '휴지통 이동', statusConflict: '충돌 · 확인 필요', statusSkipped: '정책에 따라 건너뜀', statusProtected: '단방향 보호', statusNew: '신규',
             phaseReady: '준비', phaseComparing: '비교', phasePlanned: '계획됨', phaseSyncing: '실행', phaseSuccess: '완료', phaseError: '오류', phaseAborted: '중단', directionBothShort: '양방향', directionOneShort: '단방향', success: '성공', failed: '실패', aborted: '중단',
         },
         en: {
-            desc: 'Compare two local folders, review the change plan, and synchronize them safely.', controlTitle: 'Synchronization controls', selectSource: 'Select source folder', selectTarget: 'Select target folder', notSelected: 'Not selected', languageLabel: 'Language', progressLabel: 'Synchronization progress', workspaceLabel: 'Folder comparison results', activityLabel: 'Synchronization activity',
+            desc: 'Compare two local folders, review the change plan, and synchronize them safely.', controlTitle: 'Synchronization controls', selectSource: 'Select source folder', selectTarget: 'Select target folder', notSelected: 'Not selected', languageLabel: 'Language', progressLabel: 'Operation progress', workspaceLabel: 'Folder comparison results', activityLabel: 'Synchronization activity',
             profileNone: 'No synchronization profile is selected.', profileUnverified: 'Folder pair unverified', profileVerified: 'Folder pair verified', profileLabel: '{source} ⇄ {target}',
-            directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', excludeLabel: 'Excluded directory names',
+            directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', comparisonLabel: 'Comparison mode', comparisonQuick: 'Quick comparison (size + modified time, default)', comparisonExact: 'Exact comparison (byte-by-byte, slower)', excludeLabel: 'Excluded directory names',
             defaultJson: 'Default JSON', exportJson: 'Back up JSON', importJson: 'Restore JSON', compare: 'Compare changes', sync: 'Run synchronization', abort: 'Stop safely', waiting: 'Select both folders to begin.', preparing: 'Preparing',
             sourceTitle: 'Source folder', targetTitle: 'Target folder', showChangedOnly: 'Show changed files only', pathHead: 'File and path', sizeHead: 'Size', dateHead: 'Modified', stateHead: 'Status', logTitle: 'Live log', idle: 'Idle', historyTitle: 'Synchronization history', clearHistory: 'Clear history', timeHead: 'Run time', directionHead: 'Direction', processedHead: 'Processed',
             disclaimer: 'Back up important data before synchronization. Browser or operating-system permissions and unexpected interruption can still cause data loss.',
             emptyFiles: 'No files to display.', emptyChangedFiles: 'No changed files to display.', emptyHistory: 'No synchronization history recorded.', selected: '{name} selected', pairReady: 'Folder pair verified. You can compare changes now.', sameFolder: 'The same folder cannot be both source and target.', nestedFolder: 'One selected folder is inside the other. Nested pairs are not supported.', pickCancelled: 'Folder selection was cancelled.', pickFailed: 'Could not select the folder: {message}',
-            comparing: 'Scanning folders and calculating the change plan.', compareDone: 'Compare Complete · {count} queued actions', compareNone: 'Compare Complete · no changes to apply', compareFailed: 'Comparison failed: {message}',
+            comparing: 'Scanning folders and calculating the change plan.', compareStopping: 'Stopping after the current content chunk.', compareStopped: 'File comparison stopped.', compareDone: 'Compare Complete · {count} queued actions', compareNone: 'Compare Complete · no changes to apply', compareFailed: 'Comparison failed: {message}',
             syncing: 'Synchronizing · {current}/{total}', syncDone: 'Synchronization Complete · {count} actions processed', syncAborted: 'Synchronization stopped safely after {count} actions', syncFailed: 'Synchronization failed: {message}', aborting: 'Stopping after the current file operation finishes.',
             importDone: 'JSON data restored.', importFailed: 'Could not restore JSON: {message}', exportDone: 'JSON backup created.', defaultDone: 'Default JSON created.', historyCleared: 'Synchronization history cleared.', confirmClear: 'Clear the active profile and global synchronization history?',
             statusUnchanged: 'No change', statusBaseline: 'Save baseline', statusCopyOut: 'Send', statusCopyIn: 'Receive', statusTrash: 'Move to trash', statusConflict: 'Conflict · review', statusSkipped: 'Skipped by policy', statusProtected: 'Protected by one-way mode', statusNew: 'New',
@@ -391,7 +399,7 @@
     const StateStore = (() => {
         const createDefault = () => ({
             schemaVersion: STATE_VERSION,
-            config: { direction: 'bidirectional', conflictPolicy: 'latest', excludeDirs: [...DEFAULT_EXCLUDES], lang: navigator.language?.startsWith('ko') ? 'ko' : 'en' },
+            config: { direction: 'bidirectional', conflictPolicy: 'latest', comparisonMode: 'quick', excludeDirs: [...DEFAULT_EXCLUDES], lang: navigator.language?.startsWith('ko') ? 'ko' : 'en' },
             activeProfileId: null,
             profiles: {},
             globalHistory: [],
@@ -409,6 +417,7 @@
         const cleanConfig = (raw = {}) => ({
             direction: raw.direction === 'unidirectional' ? 'unidirectional' : 'bidirectional',
             conflictPolicy: ['latest', 'source-overwrite', 'skip', 'rename'].includes(raw.conflictPolicy) ? raw.conflictPolicy : raw.conflictPolicy === 'overwrite' ? 'source-overwrite' : 'latest',
+            comparisonMode: raw.comparisonMode === 'exact' ? 'exact' : 'quick',
             excludeDirs: normalizeExcludes(raw.excludeDirs || DEFAULT_EXCLUDES),
             lang: raw.lang === 'en' ? 'en' : 'ko',
         });
@@ -585,9 +594,10 @@
             return [...parts, `${stem}.conflict-${side}-${stamp}${ext}`].join('/');
         };
 
-        const plan = ({ source, target, manifest = {}, trustedManifest = false, direction = 'bidirectional', conflictPolicy = 'latest', stamp = runStamp() }) => {
+        const plan = ({ source, target, manifest = {}, trustedManifest = false, direction = 'bidirectional', conflictPolicy = 'latest', contentEquality, stamp = runStamp() }) => {
             const src = asMap(source);
             const tgt = asMap(target);
+            const exact = asMap(contentEquality);
             const actions = [];
             const rows = [];
             let conflicts = 0;
@@ -615,7 +625,8 @@
                 let targetStatus = targetFile ? 'unchanged' : 'missing';
 
                 if (sourceFile && targetFile) {
-                    const sourceEqualsTarget = sourceFile.size === targetFile.size && sourceFile.lastModified === targetFile.lastModified;
+                    const hasExactResult = exact.has(path);
+                    const sourceEqualsTarget = hasExactResult ? exact.get(path) : sourceFile.size === targetFile.size && sourceFile.lastModified === targetFile.lastModified;
                     if (!previous) {
                         if (sourceEqualsTarget) { actions.push({ type: 'baseline', path }); sourceStatus = targetStatus = 'baseline'; }
                         else if (direction === 'unidirectional') {
@@ -625,7 +636,9 @@
                     } else {
                         const sourceChanged = !sameSnapshot(sourceFile, previous.source);
                         const targetChanged = !sameSnapshot(targetFile, previous.target);
-                        if (!sourceChanged && !targetChanged) { sourceStatus = targetStatus = 'unchanged'; }
+                        if (!sourceChanged && !targetChanged && hasExactResult && !sourceEqualsTarget) { sourceStatus = targetStatus = 'conflict'; conflicts += 1; }
+                        else if (sourceEqualsTarget && (sourceChanged || targetChanged)) { actions.push({ type: 'baseline', path }); sourceStatus = targetStatus = 'baseline'; }
+                        else if (!sourceChanged && !targetChanged) { sourceStatus = targetStatus = 'unchanged'; }
                         else if (direction === 'unidirectional') {
                             if (conflictPolicy === 'skip') sourceStatus = targetStatus = 'skipped';
                             else { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in'; }
@@ -668,6 +681,27 @@
                 }
             }
             return files;
+        };
+        const compareContent = async (source, target, onProgress, isCancelled) => {
+            if (source.size !== target.size) return false;
+            const [sourceFile, targetFile] = await Promise.all([source.handle.getFile(), target.handle.getFile()]);
+            const totalBytes = sourceFile.size * 2;
+            if (!totalBytes) { onProgress(0, 0); return true; }
+            for (let offset = 0; offset < sourceFile.size; offset += CONTENT_CHUNK_BYTES) {
+                if (isCancelled()) throw new DOMException('Comparison stopped', 'AbortError');
+                const end = Math.min(offset + CONTENT_CHUNK_BYTES, sourceFile.size);
+                const [sourceBuffer, targetBuffer] = await Promise.all([
+                    sourceFile.slice(offset, end).arrayBuffer(),
+                    targetFile.slice(offset, end).arrayBuffer(),
+                ]);
+                if (isCancelled()) throw new DOMException('Comparison stopped', 'AbortError');
+                const sourceBytes = new Uint8Array(sourceBuffer);
+                const targetBytes = new Uint8Array(targetBuffer);
+                if (sourceBytes.length !== targetBytes.length) return false;
+                for (let index = 0; index < sourceBytes.length; index += 1) if (sourceBytes[index] !== targetBytes[index]) return false;
+                onProgress(end * 2, totalBytes);
+            }
+            return true;
         };
         const directoryFor = async (root, parts, create) => {
             let directory = root;
@@ -720,12 +754,12 @@
             const originalDirectory = await directoryFor(root, originalParts, false);
             await originalDirectory.removeEntry(name);
         };
-        return Object.freeze({ copy, moveToTrash, scan });
+        return Object.freeze({ compareContent, copy, moveToTrash, scan });
     })();
 
     const elements = {
         btnSrc: $('#btnSrc'), btnTgt: $('#btnTgt'), pathSrc: $('#pathSrc'), pathTgt: $('#pathTgt'), profileText: $('#profileText'), profileBadge: $('#profileBadge'),
-        direction: $('#syncDirection'), policy: $('#conflictPolicy'), excludes: $('#excludeDirs'), btnCompare: $('#btnCompare'), btnSync: $('#btnSync'), btnAbort: $('#btnAbort'),
+        direction: $('#syncDirection'), policy: $('#conflictPolicy'), comparison: $('#comparisonMode'), excludes: $('#excludeDirs'), btnCompare: $('#btnCompare'), btnSync: $('#btnSync'), btnAbort: $('#btnAbort'),
         status: $('#syncStatus'), statusText: $('#syncStatusText'), phaseLabel: $('#phaseLabel'), progress: $('#progressContainer'), progressText: $('#currentFileText'), progressPercent: $('#progressPercentText'), progressBar: $('#progressBar'), progressFill: $('#progressBar .progress-bar'),
         changedOnly: $('#showChangedOnly'), srcBody: $('#srcFileBody'), tgtBody: $('#tgtFileBody'), srcCount: $('#srcCount'), tgtCount: $('#tgtCount'), log: $('#logBox'), history: $('#historyBody'),
     };
@@ -763,10 +797,10 @@
         const busy = ['comparing', 'syncing', 'aborting'].includes(model.phase);
         const paired = Boolean(model.source && model.target && model.profile && model.trustedProfile);
         elements.btnSrc.disabled = busy; elements.btnTgt.disabled = busy;
-        elements.direction.disabled = busy; elements.policy.disabled = busy; elements.excludes.disabled = busy;
+        elements.direction.disabled = busy; elements.policy.disabled = busy; elements.comparison.disabled = busy; elements.excludes.disabled = busy;
         elements.btnCompare.disabled = busy || !paired;
         elements.btnSync.disabled = model.phase !== 'planned' || !model.plan?.actions.length;
-        elements.btnAbort.disabled = !['syncing'].includes(model.phase);
+        elements.btnAbort.disabled = !['comparing', 'syncing'].includes(model.phase) || model.abortRequested;
     };
     const renderStaticText = () => {
         document.documentElement.lang = language();
@@ -780,6 +814,7 @@
         elements.excludes.value = model.state.config.excludeDirs.join(', ');
         elements.direction.value = model.state.config.direction;
         elements.policy.value = model.state.config.conflictPolicy;
+        elements.comparison.value = model.state.config.comparisonMode;
         elements.changedOnly.checked = model.showChangedOnly;
         renderPaths(); renderProfile(); renderHistory(); renderRows(); renderControls();
     };
@@ -846,9 +881,11 @@
             const status = row.insertCell(); status.textContent = t(item.status === 'success' ? 'success' : item.status === 'aborted' ? 'aborted' : 'failed');
         }
     };
-    const updateProgress = (current, total, path = '') => {
+    const formatBytes = (value) => value < 1024 ? `${value} B` : value < 1024 * 1024 ? `${(value / 1024).toFixed(1)} KB` : `${(value / (1024 * 1024)).toFixed(1)} MB`;
+    const updateProgress = (current, total, path = '', unit = 'items') => {
         const percent = total ? Math.round((current / total) * 100) : 0;
-        elements.progress.dataset.visible = 'true'; elements.progressText.textContent = path || t('preparing'); elements.progressPercent.textContent = `${percent}% (${current}/${total})`;
+        const detail = unit === 'bytes' ? `${formatBytes(current)} / ${formatBytes(total)}` : `${current}/${total}`;
+        elements.progress.dataset.visible = 'true'; elements.progressText.textContent = path || t('preparing'); elements.progressPercent.textContent = `${percent}% (${detail})`;
         elements.progressFill.style.width = `${percent}%`; elements.progressBar.setAttribute('aria-valuenow', String(percent));
     };
 
@@ -883,7 +920,7 @@
 
     const Controller = (() => {
         const saveConfig = () => {
-            model.state.config = { direction: elements.direction.value, conflictPolicy: elements.policy.value, excludeDirs: normalizeExcludes(elements.excludes.value), lang: language() };
+            model.state.config = { direction: elements.direction.value, conflictPolicy: elements.policy.value, comparisonMode: elements.comparison.value, excludeDirs: normalizeExcludes(elements.excludes.value), lang: language() };
             StateStore.save(model.state);
         };
         const invalidatePlan = () => { model.plan = null; if (model.source && model.target && model.profile) setPhase('ready'); else setPhase('idle'); renderRows(); };
@@ -920,18 +957,46 @@
         };
         const compare = async () => {
             if (!model.profile || !model.source || !model.target) return;
+            model.abortRequested = false;
             setPhase('comparing'); setStatus(t('comparing'), 'info', 'compare'); elements.progress.dataset.visible = 'false';
             try {
                 const excludes = normalizeExcludes(elements.excludes.value);
                 [model.sourceFiles, model.targetFiles] = await Promise.all([FileAdapter.scan(model.source, excludes), FileAdapter.scan(model.target, excludes)]);
-                model.plan = SyncPlanner.plan({ source: model.sourceFiles, target: model.targetFiles, manifest: model.profile.manifest, trustedManifest: model.trustedProfile, direction: elements.direction.value, conflictPolicy: elements.policy.value });
+                if (model.abortRequested) throw new DOMException('Comparison stopped', 'AbortError');
+                const contentEquality = new Map();
+                if (elements.comparison.value === 'exact') {
+                    const pairs = [...model.sourceFiles.entries()].filter(([path]) => model.targetFiles.has(path));
+                    const totalBytes = pairs.reduce((total, [path, source]) => {
+                        const target = model.targetFiles.get(path);
+                        return total + (source.size === target.size ? source.size * 2 : 0);
+                    }, 0);
+                    let completedBytes = 0;
+                    for (const [path, source] of pairs) {
+                        if (model.abortRequested) throw new DOMException('Comparison stopped', 'AbortError');
+                        const target = model.targetFiles.get(path);
+                        if (source.size !== target.size) contentEquality.set(path, false);
+                        else {
+                            const equal = await FileAdapter.compareContent(source, target, (current) => {
+                                updateProgress(completedBytes + current, totalBytes, path, 'bytes');
+                            }, () => model.abortRequested);
+                            contentEquality.set(path, equal);
+                            completedBytes += source.size * 2;
+                        }
+                    }
+                }
+                model.plan = SyncPlanner.plan({ source: model.sourceFiles, target: model.targetFiles, manifest: model.profile.manifest, trustedManifest: model.trustedProfile, direction: elements.direction.value, conflictPolicy: elements.policy.value, contentEquality });
                 renderRows();
                 setPhase(model.plan.actions.length ? 'planned' : 'ready');
                 setStatus(t(model.plan.actions.length ? 'compareDone' : 'compareNone', { count: model.plan.actions.length }), model.plan.summary.conflicts ? 'warning' : 'success', model.plan.summary.conflicts ? 'alert' : 'check');
                 addLog(t(model.plan.actions.length ? 'compareDone' : 'compareNone', { count: model.plan.actions.length }));
             } catch (error) {
-                model.plan = null; setPhase('error'); setStatus(t('compareFailed', { message: safeMessage(error) }), 'danger', 'alert'); addLog(t('compareFailed', { message: safeMessage(error) }));
-            } finally { renderControls(); }
+                model.plan = null;
+                if (error?.name === 'AbortError' && model.abortRequested) {
+                    elements.progress.dataset.visible = 'false'; setPhase('ready'); setStatus(t('compareStopped'), 'warning', 'stop'); addLog(t('compareStopped'));
+                } else {
+                    setPhase('error'); setStatus(t('compareFailed', { message: safeMessage(error) }), 'danger', 'alert'); addLog(t('compareFailed', { message: safeMessage(error) }));
+                }
+            } finally { model.abortRequested = false; renderControls(); }
         };
         const sync = async () => {
             if (!model.plan?.actions.length || !model.profile) return;
@@ -953,7 +1018,10 @@
                 setPhase('error'); setStatus(t('syncFailed', { message: safeMessage(error) }), 'danger', 'alert'); addLog(t('syncFailed', { message: safeMessage(error) }));
             } finally { model.abortRequested = false; renderControls(); }
         };
-        const abort = () => { if (model.phase === 'syncing') { model.abortRequested = true; setPhase('aborting'); setStatus(t('aborting'), 'warning', 'stop'); } };
+        const abort = () => {
+            if (model.phase === 'comparing') { model.abortRequested = true; setStatus(t('compareStopping'), 'warning', 'stop'); renderControls(); }
+            else if (model.phase === 'syncing') { model.abortRequested = true; setPhase('aborting'); setStatus(t('aborting'), 'warning', 'stop'); }
+        };
         const importState = async (file) => {
             try {
                 if (file.size > MAX_IMPORT_BYTES) throw new Error('JSON file exceeds 5MB');
@@ -974,7 +1042,7 @@
     elements.btnSync.addEventListener('click', Controller.sync);
     elements.btnAbort.addEventListener('click', Controller.abort);
     elements.changedOnly.addEventListener('change', () => { model.showChangedOnly = elements.changedOnly.checked; sessionStorage.setItem(SHOW_CHANGED_ONLY_KEY, String(model.showChangedOnly)); renderRows(); });
-    [elements.direction, elements.policy, elements.excludes].forEach((control) => control.addEventListener('change', () => { Controller.saveConfig(); Controller.invalidatePlan(); }));
+    [elements.direction, elements.policy, elements.comparison, elements.excludes].forEach((control) => control.addEventListener('change', () => { Controller.saveConfig(); Controller.invalidatePlan(); }));
     elements.excludes.addEventListener('input', () => { model.state.config.excludeDirs = normalizeExcludes(elements.excludes.value); StateStore.save(model.state); Controller.invalidatePlan(); });
     $('#btnLangKo').addEventListener('click', () => { model.state.config.lang = 'ko'; StateStore.save(model.state); renderStaticText(); });
     $('#btnLangEn').addEventListener('click', () => { model.state.config.lang = 'en'; StateStore.save(model.state); renderStaticText(); });
