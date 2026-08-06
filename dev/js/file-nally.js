@@ -13,11 +13,14 @@
     const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const DEFAULT_EXCLUDES = ['node_modules', '.git', 'dist', 'temp', '.trash'];
 
+    const MAX_BOOKMARKS = 20;
+    const MAX_RECENT_FOLDERS = 5;
+
     const TEXT = {
         ko: {
             desc: '두 로컬 폴더를 비교한 뒤 변경 계획을 검토하고 안전하게 동기화합니다.', controlTitle: '동기화 제어', selectSource: '원본 폴더 선택', selectTarget: '대상 폴더 선택', notSelected: '선택되지 않음', languageLabel: '언어', progressLabel: '작업 진행률', workspaceLabel: '폴더 비교 결과', activityLabel: '동기화 기록',
             profileNone: '선택된 동기화 프로필이 없습니다.', profileUnverified: '폴더 쌍 미확인', profileVerified: '폴더 쌍 확인됨', profileLabel: '{source} ⇄ {target}',
-            directionLabel: '동기화 방향', directionBoth: '양방향 (원본 ⇄ 대상)', directionOne: '단방향 (원본 → 대상)', policyLabel: '충돌 해결 정책', policyLatest: '최신 파일 유지', policySource: '원본 우선 덮어쓰기', policySkip: '기존 파일 건너뛰기', policyRename: '이름을 바꿔 두 버전 보존', comparisonLabel: '비교 모드', comparisonQuick: '빠른 비교 (크기 + 수정 시각, 기본값)', comparisonExact: '정확 비교 (바이트 단위, 느림)', excludeLabel: '제외할 하위 폴더명',
+            directionLabel: '동기화 방향', directionBoth: '양방향 (원본 ⇄ 대상)', directionOne: '단방향 (원본 → 대상)', directionReverse: '역방향 (대상 → 원본)', policyLabel: '충돌 해결 정책', policyLatest: '최신 파일 유지', policySource: '원본 우선 덮어쓰기', policySkip: '기존 파일 건너뛰기', policyRename: '이름을 바꿔 두 버전 보존', comparisonLabel: '비교 모드', comparisonQuick: '빠른 비교 (크기 + 수정 시각, 기본값)', comparisonExact: '정확 비교 (바이트 단위, 느림)', excludeLabel: '제외할 하위 폴더명',
             defaultJson: '기본 JSON', exportJson: 'JSON 백업', importJson: 'JSON 복원', compare: '변경사항 비교', sync: '동기화 실행', abort: '안전하게 중지', waiting: '폴더를 선택해 주세요.', preparing: '준비 중',
             sourceTitle: '원본 폴더', targetTitle: '대상 폴더', showChangedOnly: '변경된 파일만 보기', pathHead: '파일명과 경로', sizeHead: '크기', dateHead: '수정일', stateHead: '상태', logTitle: '실시간 로그', idle: '대기', historyTitle: '동기화 이력', clearHistory: '이력 초기화', timeHead: '실행 시간', directionHead: '방향', processedHead: '처리',
             disclaimer: '중요한 데이터는 동기화 전에 별도로 백업하세요. 브라우저와 운영체제의 파일 권한 또는 예기치 않은 중단으로 인한 손실 가능성이 있습니다.',
@@ -25,13 +28,14 @@
             comparing: '폴더를 검사하고 변경 계획을 계산하는 중입니다.', compareStopping: '현재 파일 비교를 마친 뒤 중지합니다.', compareStopped: '파일 비교가 중지되었습니다.', compareDone: '비교 완료 · 실행할 작업 {count}건', compareNone: '비교 완료 · 실행할 변경사항이 없습니다.', compareFailed: '비교 중 오류가 발생했습니다: {message}',
             syncing: '동기화 실행 중 · {current}/{total}', syncDone: '동기화 완료 · {count}건 처리', syncAborted: '동기화가 안전하게 중단되었습니다. {count}건 처리됨', syncFailed: '동기화 중 오류가 발생했습니다: {message}', aborting: '현재 파일 작업을 마친 뒤 중단합니다.',
             importDone: 'JSON 데이터를 복원했습니다.', importFailed: 'JSON을 복원하지 못했습니다: {message}', exportDone: 'JSON 백업을 생성했습니다.', defaultDone: '기본 JSON을 생성했습니다.', historyCleared: '동기화 이력을 초기화했습니다.', confirmClear: '현재 프로필과 전체 동기화 이력을 초기화할까요?',
-            statusUnchanged: '변경 없음', statusBaseline: '기준 저장', statusCopyOut: '보내기', statusCopyIn: '받기', statusTrash: '휴지통 이동', statusConflict: '충돌 · 확인 필요', statusSkipped: '정책에 따라 건너뜀', statusProtected: '단방향 보호', statusNew: '신규',
-            phaseReady: '준비', phaseComparing: '비교', phasePlanned: '계획됨', phaseSyncing: '실행', phaseSuccess: '완료', phaseError: '오류', phaseAborted: '중단', directionBothShort: '양방향', directionOneShort: '단방향', success: '성공', failed: '실패', aborted: '중단',
+            statusUnchanged: '변경 없음', statusBaseline: '기준 저장', statusCopyOut: '보내기', statusCopyIn: '받기', statusTrash: '휴지통 이동', statusConflict: '충돌 · 확인 필요', statusSkipped: '정책에 따라 건너뜀', statusProtected: '단방향 보호', statusNew: '신규', statusRename: '이름 변경',
+            phaseReady: '준비', phaseComparing: '비교', phasePlanned: '계획됨', phaseSyncing: '실행', phaseSuccess: '완료', phaseError: '오류', phaseAborted: '중단', directionBothShort: '양방향', directionOneShort: '단방향', directionReverseShort: '역방향', success: '성공', failed: '실패', aborted: '중단',
+            bookmarkAdded: '북마크가 추가되었습니다.', bookmarkRemoved: '북마크가 해제되었습니다.',
         },
         en: {
             desc: 'Compare two local folders, review the change plan, and synchronize them safely.', controlTitle: 'Synchronization controls', selectSource: 'Select source folder', selectTarget: 'Select target folder', notSelected: 'Not selected', languageLabel: 'Language', progressLabel: 'Operation progress', workspaceLabel: 'Folder comparison results', activityLabel: 'Synchronization activity',
             profileNone: 'No synchronization profile is selected.', profileUnverified: 'Folder pair unverified', profileVerified: 'Folder pair verified', profileLabel: '{source} ⇄ {target}',
-            directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', comparisonLabel: 'Comparison mode', comparisonQuick: 'Quick comparison (size + modified time, default)', comparisonExact: 'Exact comparison (byte-by-byte, slower)', excludeLabel: 'Excluded directory names',
+            directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', directionReverse: 'Reverse (Target → Source)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', comparisonLabel: 'Comparison mode', comparisonQuick: 'Quick comparison (size + modified time, default)', comparisonExact: 'Exact comparison (byte-by-byte, slower)', excludeLabel: 'Excluded directory names',
             defaultJson: 'Default JSON', exportJson: 'Back up JSON', importJson: 'Restore JSON', compare: 'Compare changes', sync: 'Run synchronization', abort: 'Stop safely', waiting: 'Select both folders to begin.', preparing: 'Preparing',
             sourceTitle: 'Source folder', targetTitle: 'Target folder', showChangedOnly: 'Show changed files only', pathHead: 'File and path', sizeHead: 'Size', dateHead: 'Modified', stateHead: 'Status', logTitle: 'Live log', idle: 'Idle', historyTitle: 'Synchronization history', clearHistory: 'Clear history', timeHead: 'Run time', directionHead: 'Direction', processedHead: 'Processed',
             disclaimer: 'Back up important data before synchronization. Browser or operating-system permissions and unexpected interruption can still cause data loss.',
@@ -39,8 +43,9 @@
             comparing: 'Scanning folders and calculating the change plan.', compareStopping: 'Stopping after the current content chunk.', compareStopped: 'File comparison stopped.', compareDone: 'Compare Complete · {count} queued actions', compareNone: 'Compare Complete · no changes to apply', compareFailed: 'Comparison failed: {message}',
             syncing: 'Synchronizing · {current}/{total}', syncDone: 'Synchronization Complete · {count} actions processed', syncAborted: 'Synchronization stopped safely after {count} actions', syncFailed: 'Synchronization failed: {message}', aborting: 'Stopping after the current file operation finishes.',
             importDone: 'JSON data restored.', importFailed: 'Could not restore JSON: {message}', exportDone: 'JSON backup created.', defaultDone: 'Default JSON created.', historyCleared: 'Synchronization history cleared.', confirmClear: 'Clear the active profile and global synchronization history?',
-            statusUnchanged: 'No change', statusBaseline: 'Save baseline', statusCopyOut: 'Send', statusCopyIn: 'Receive', statusTrash: 'Move to trash', statusConflict: 'Conflict · review', statusSkipped: 'Skipped by policy', statusProtected: 'Protected by one-way mode', statusNew: 'New',
-            phaseReady: 'Ready', phaseComparing: 'Comparing', phasePlanned: 'Planned', phaseSyncing: 'Running', phaseSuccess: 'Complete', phaseError: 'Error', phaseAborted: 'Stopped', directionBothShort: 'Bidirectional', directionOneShort: 'One-way', success: 'Success', failed: 'Failed', aborted: 'Stopped',
+            statusUnchanged: 'No change', statusBaseline: 'Save baseline', statusCopyOut: 'Send', statusCopyIn: 'Receive', statusTrash: 'Move to trash', statusConflict: 'Conflict · review', statusSkipped: 'Skipped by policy', statusProtected: 'Protected by one-way mode', statusNew: 'New', statusRename: 'Rename',
+            phaseReady: 'Ready', phaseComparing: 'Comparing', phasePlanned: 'Planned', phaseSyncing: 'Running', phaseSuccess: 'Complete', phaseError: 'Error', phaseAborted: 'Stopped', directionBothShort: 'Bidirectional', directionOneShort: 'One-way', directionReverseShort: 'Reverse', success: 'Success', failed: 'Failed', aborted: 'Stopped',
+            bookmarkAdded: 'Bookmark added.', bookmarkRemoved: 'Bookmark removed.',
         },
     };
 
@@ -71,6 +76,8 @@
             activeProfileId: null,
             profiles: {},
             globalHistory: [],
+            bookmarks: [],
+            recentFolders: [],
         });
 
         const rejectForbidden = (value, seen = new Set()) => {
@@ -83,7 +90,7 @@
         };
 
         const cleanConfig = (raw = {}) => ({
-            direction: raw.direction === 'unidirectional' ? 'unidirectional' : 'bidirectional',
+            direction: ['bidirectional', 'unidirectional', 'reverse'].includes(raw.direction) ? raw.direction : 'bidirectional',
             conflictPolicy: ['latest', 'source-overwrite', 'skip', 'rename'].includes(raw.conflictPolicy) ? raw.conflictPolicy : raw.conflictPolicy === 'overwrite' ? 'source-overwrite' : 'latest',
             comparisonMode: raw.comparisonMode === 'exact' ? 'exact' : 'quick',
             excludeDirs: normalizeExcludes(raw.excludeDirs || DEFAULT_EXCLUDES),
@@ -115,11 +122,25 @@
             const filesCount = Number(entry?.filesCount || 0);
             return {
                 time: String(entry?.time || ''),
-                direction: entry?.direction === 'unidirectional' ? 'unidirectional' : 'bidirectional',
+                direction: ['bidirectional', 'unidirectional', 'reverse'].includes(entry?.direction) ? entry.direction : 'bidirectional',
                 filesCount: Number.isFinite(filesCount) ? Math.max(0, filesCount) : 0,
                 status: ['success', 'failed', 'aborted', '성공'].includes(entry?.status) ? entry.status === '성공' ? 'success' : entry.status : 'failed',
             };
         }) : [];
+
+        const cleanBookmarks = (raw) => Array.isArray(raw) ? raw.slice(0, MAX_BOOKMARKS).filter(isObject).map((b) => ({
+            profileId: String(b.profileId || ''),
+            sourceName: String(b.sourceName || ''),
+            targetName: String(b.targetName || ''),
+            createdAt: String(b.createdAt || nowIso()),
+        })) : [];
+
+        const cleanRecentFolders = (raw) => Array.isArray(raw) ? raw.slice(0, MAX_RECENT_FOLDERS).filter(isObject).map((r) => ({
+            profileId: String(r.profileId || ''),
+            sourceName: String(r.sourceName || ''),
+            targetName: String(r.targetName || ''),
+            lastUsedAt: String(r.lastUsedAt || nowIso()),
+        })) : [];
 
         const cleanCheckpoint = (raw) => {
             if (!isObject(raw)) return null;
@@ -139,6 +160,8 @@
             const state = createDefault();
             state.config = cleanConfig(raw.config);
             state.globalHistory = cleanHistory(raw.globalHistory, MAX_GLOBAL_HISTORY);
+            state.bookmarks = cleanBookmarks(raw.bookmarks);
+            state.recentFolders = cleanRecentFolders(raw.recentFolders);
             if (isObject(raw.profiles)) {
                 for (const [id, profile] of Object.entries(raw.profiles).slice(0, MAX_PROFILES)) {
                     if (!isObject(profile) || FORBIDDEN_KEYS.has(id)) continue;
@@ -300,6 +323,9 @@
                         else if (direction === 'unidirectional') {
                             if (conflictPolicy === 'skip') sourceStatus = targetStatus = 'skipped';
                             else { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in'; }
+                        } else if (direction === 'reverse') {
+                            if (conflictPolicy === 'skip') sourceStatus = targetStatus = 'skipped';
+                            else { pushCopy(path, 'target', 'source'); sourceStatus = 'copy-in'; targetStatus = 'copy-out'; }
                         } else ({ sourceStatus, targetStatus } = resolveConflict(path, sourceFile, targetFile));
                     } else {
                         const sourceChanged = !sameSnapshot(sourceFile, previous.source);
@@ -310,6 +336,9 @@
                         else if (direction === 'unidirectional') {
                             if (conflictPolicy === 'skip') sourceStatus = targetStatus = 'skipped';
                             else { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in'; }
+                        } else if (direction === 'reverse') {
+                            if (conflictPolicy === 'skip') sourceStatus = targetStatus = 'skipped';
+                            else { pushCopy(path, 'target', 'source'); sourceStatus = 'copy-in'; targetStatus = 'copy-out'; }
                         } else if (sourceChanged && !targetChanged) { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in'; }
                         else if (!sourceChanged && targetChanged) { pushCopy(path, 'target', 'source'); sourceStatus = 'copy-in'; targetStatus = 'copy-out'; }
                         else ({ sourceStatus, targetStatus } = resolveConflict(path, sourceFile, targetFile));
@@ -318,16 +347,59 @@
                     if (previous?.source && previous?.target) {
                         if (sameSnapshot(sourceFile, previous.source)) { actions.push({ type: 'trash', path, side: 'source' }); sourceStatus = 'trash'; }
                         else { sourceStatus = 'conflict'; conflicts += 1; }
-                    } else { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; }
+                    } else if (direction === 'reverse') { sourceStatus = 'protected'; }
+                    else { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in'; }
                 } else if (targetFile) {
                     if (previous?.source && previous?.target) {
                         if (sameSnapshot(targetFile, previous.target)) { actions.push({ type: 'trash', path, side: 'target' }); targetStatus = 'trash'; }
                         else { targetStatus = 'conflict'; conflicts += 1; }
-                    } else if (direction === 'bidirectional') { pushCopy(path, 'target', 'source'); targetStatus = 'copy-out'; }
+                    } else if (direction === 'bidirectional' || direction === 'reverse') { pushCopy(path, 'target', 'source'); targetStatus = 'copy-out'; sourceStatus = 'copy-in'; }
                     else targetStatus = 'protected';
                 } else if (previous) actions.push({ type: 'forget', path });
 
                 if (sourceFile || targetFile) rows.push({ path, source: sourceFile, target: targetFile, sourceStatus, targetStatus });
+            }
+
+            // Detect renames (Issue #4): match deleted items (trash) with newly added items (copy) of matching size
+            const trashes = actions.filter((a) => a.type === 'trash');
+            const copies = actions.filter((a) => a.type === 'copy' && a.sourcePath === a.destinationPath);
+            const matchedTrashIndices = new Set();
+            const matchedCopyIndices = new Set();
+
+            for (let i = 0; i < trashes.length; i += 1) {
+                const trash = trashes[i];
+                const trashFile = trash.side === 'source' ? src.get(trash.path) || (trustedManifest && manifest[trash.path]?.source) : tgt.get(trash.path) || (trustedManifest && manifest[trash.path]?.target);
+                if (!trashFile || !trashFile.size) continue;
+
+                for (let j = 0; j < copies.length; j += 1) {
+                    if (matchedCopyIndices.has(j)) continue;
+                    const copy = copies[j];
+                    const copyFile = copy.fromSide === 'source' ? src.get(copy.sourcePath) : tgt.get(copy.sourcePath);
+                    if (!copyFile) continue;
+
+                    if (Number(trashFile.size) === Number(copyFile.size) && trash.side === copy.toSide) {
+                        matchedTrashIndices.add(i);
+                        matchedCopyIndices.add(j);
+                        copy.type = 'rename';
+                        copy.oldPath = trash.path;
+                        copy.side = copy.toSide;
+
+                        // Update row status
+                        const copyRow = rows.find((r) => r.path === copy.sourcePath);
+                        if (copyRow) {
+                            if (copy.toSide === 'target') copyRow.targetStatus = 'rename';
+                            else copyRow.sourceStatus = 'rename';
+                        }
+                        break;
+                    }
+                }
+            }
+
+            if (matchedTrashIndices.size > 0) {
+                const trashesToRemove = new Set(Array.from(matchedTrashIndices).map((idx) => trashes[idx]));
+                for (let i = actions.length - 1; i >= 0; i -= 1) {
+                    if (trashesToRemove.has(actions[i])) actions.splice(i, 1);
+                }
             }
             return { id: uid(), stamp, actions, rows, summary: { actions: actions.length, conflicts } };
         };
@@ -422,11 +494,44 @@
             const originalDirectory = await directoryFor(root, originalParts, false);
             await originalDirectory.removeEntry(name);
         };
-        return Object.freeze({ compareContent, copy, moveToTrash, scan });
+        const rename = async (action, handles) => {
+            const root = handles[action.side || action.toSide || 'target'];
+            const oldPath = action.oldPath || action.sourcePath;
+            const newPath = action.destinationPath || action.path;
+
+            const oldParts = safeSegments(oldPath);
+            const oldName = oldParts.pop();
+            const oldDirectory = await directoryFor(root, oldParts, false);
+
+            const newParts = safeSegments(newPath);
+            const newName = newParts.pop();
+            const newDirectory = await directoryFor(root, newParts, true);
+
+            const sourceHandle = await oldDirectory.getFileHandle(oldName);
+
+            if (typeof sourceHandle.move === 'function') {
+                try {
+                    await sourceHandle.move(newDirectory, newName);
+                    return;
+                } catch {
+                    // Fallback to copy + remove
+                }
+            }
+
+            const sourceFile = await sourceHandle.getFile();
+            const newHandle = await newDirectory.getFileHandle(newName, { create: true });
+            const writable = await newHandle.createWritable();
+            await writable.write(sourceFile);
+            await writable.close();
+            await oldDirectory.removeEntry(oldName);
+        };
+        return Object.freeze({ compareContent, copy, moveToTrash, rename, scan });
     })();
 
     const elements = {
         btnSrc: $('#btnSrc'), btnTgt: $('#btnTgt'), pathSrc: $('#pathSrc'), pathTgt: $('#pathTgt'), profileText: $('#profileText'), profileBadge: $('#profileBadge'),
+        btnBookmark: $('#btnBookmark'), bookmarkChips: $('#bookmarkChips'), recentChips: $('#recentChips'),
+        directionToggle: $('#syncDirectionToggle'), dirBoth: $('#dirBoth'), dirOne: $('#dirOne'), dirReverse: $('#dirReverse'),
         direction: $('#syncDirection'), policy: $('#conflictPolicy'), comparison: $('#comparisonMode'), excludes: $('#excludeDirs'), btnCompare: $('#btnCompare'), btnSync: $('#btnSync'), btnAbort: $('#btnAbort'),
         status: $('#syncStatus'), statusText: $('#syncStatusText'), phaseLabel: $('#phaseLabel'), progress: $('#progressContainer'), progressText: $('#currentFileText'), progressPercent: $('#progressPercentText'), progressBar: $('#progressBar'), progressFill: $('#progressBar .progress-bar'),
         changedOnly: $('#showChangedOnly'), srcBody: $('#srcFileBody'), tgtBody: $('#tgtFileBody'), srcCount: $('#srcCount'), tgtCount: $('#tgtCount'), log: $('#logBox'), history: $('#historyBody'),
@@ -466,9 +571,56 @@
         const paired = Boolean(model.source && model.target && model.profile && model.trustedProfile);
         elements.btnSrc.disabled = busy; elements.btnTgt.disabled = busy;
         elements.direction.disabled = busy; elements.policy.disabled = busy; elements.comparison.disabled = busy; elements.excludes.disabled = busy;
+        if (elements.dirBoth) elements.dirBoth.disabled = busy;
+        if (elements.dirOne) elements.dirOne.disabled = busy;
+        if (elements.dirReverse) elements.dirReverse.disabled = busy;
         elements.btnCompare.disabled = busy || !paired;
         elements.btnSync.disabled = model.phase !== 'planned' || !model.plan?.actions.length;
         elements.btnAbort.disabled = !['comparing', 'syncing'].includes(model.phase) || model.abortRequested;
+    };
+    const renderDirectionToggle = () => {
+        const val = model.state.config.direction || 'bidirectional';
+        elements.direction.value = val;
+        elements.dirBoth?.setAttribute('aria-checked', String(val === 'bidirectional'));
+        elements.dirOne?.setAttribute('aria-checked', String(val === 'unidirectional'));
+        elements.dirReverse?.setAttribute('aria-checked', String(val === 'reverse'));
+    };
+    const renderRecentAndBookmarks = () => {
+        if (!elements.bookmarkChips || !elements.recentChips) return;
+        elements.bookmarkChips.replaceChildren();
+        elements.recentChips.replaceChildren();
+
+        const bookmarks = model.state.bookmarks || [];
+        const recents = model.state.recentFolders || [];
+        const bookmarkedIds = new Set(bookmarks.map((b) => b.profileId));
+
+        if (model.profile) {
+            const isBookmarked = bookmarkedIds.has(model.profile.id);
+            elements.btnBookmark.dataset.bookmarked = String(isBookmarked);
+            elements.btnBookmark.disabled = false;
+        } else {
+            elements.btnBookmark.dataset.bookmarked = 'false';
+            elements.btnBookmark.disabled = true;
+        }
+
+        for (const b of bookmarks) {
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'chip chip-bookmark';
+            chip.textContent = `★ ${b.sourceName || '?'} ⇄ ${b.targetName || '?'}`;
+            chip.addEventListener('click', () => Controller.selectProfile(b.profileId));
+            elements.bookmarkChips.append(chip);
+        }
+
+        for (const r of recents) {
+            if (bookmarkedIds.has(r.profileId)) continue;
+            const chip = document.createElement('button');
+            chip.type = 'button';
+            chip.className = 'chip';
+            chip.textContent = `🕒 ${r.sourceName || '?'} ⇄ ${r.targetName || '?'}`;
+            chip.addEventListener('click', () => Controller.selectProfile(r.profileId));
+            elements.recentChips.append(chip);
+        }
     };
     const renderStaticText = () => {
         document.documentElement.lang = language();
@@ -484,6 +636,8 @@
         elements.policy.value = model.state.config.conflictPolicy;
         elements.comparison.value = model.state.config.comparisonMode;
         elements.changedOnly.checked = model.showChangedOnly;
+        renderDirectionToggle();
+        renderRecentAndBookmarks();
         renderPaths(); renderProfile(); renderHistory(); renderRows(); renderControls();
     };
     const renderPaths = () => {
@@ -497,14 +651,16 @@
             elements.profileText.textContent = t('profileNone');
             elements.profileBadge.dataset.verified = 'false';
             elements.profileBadge.querySelector('span').textContent = t('profileUnverified');
+            renderRecentAndBookmarks();
             return;
         }
         elements.profileText.textContent = t('profileLabel', { source: model.profile.sourceName, target: model.profile.targetName });
         elements.profileBadge.dataset.verified = String(model.trustedProfile);
         elements.profileBadge.querySelector('span').textContent = t(model.trustedProfile ? 'profileVerified' : 'profileUnverified');
+        renderRecentAndBookmarks();
     };
     const statusPresentation = (code) => ({
-        unchanged: ['statusUnchanged', 'neutral'], baseline: ['statusBaseline', 'info'], 'copy-out': ['statusCopyOut', 'success'], 'copy-in': ['statusCopyIn', 'info'], trash: ['statusTrash', 'danger'], conflict: ['statusConflict', 'warning'], skipped: ['statusSkipped', 'warning'], protected: ['statusProtected', 'neutral'], missing: ['statusNew', 'neutral'],
+        unchanged: ['statusUnchanged', 'neutral'], baseline: ['statusBaseline', 'info'], 'copy-out': ['statusCopyOut', 'success'], 'copy-in': ['statusCopyIn', 'info'], trash: ['statusTrash', 'danger'], conflict: ['statusConflict', 'warning'], skipped: ['statusSkipped', 'warning'], protected: ['statusProtected', 'neutral'], missing: ['statusNew', 'neutral'], rename: ['statusRename', 'info'],
     }[code] || ['statusUnchanged', 'neutral']);
     const appendEmptyRow = (body, text) => { body.replaceChildren(); const row = body.insertRow(); const cell = row.insertCell(); cell.colSpan = 4; cell.className = 'empty-cell'; cell.textContent = text; };
     const appendFileRow = (body, file, path, status) => {
@@ -544,7 +700,7 @@
         for (const item of history.slice(0, MAX_PROFILE_HISTORY)) {
             const row = elements.history.insertRow();
             row.insertCell().textContent = item.time;
-            row.insertCell().textContent = t(item.direction === 'unidirectional' ? 'directionOneShort' : 'directionBothShort');
+            row.insertCell().textContent = t(item.direction === 'unidirectional' ? 'directionOneShort' : item.direction === 'reverse' ? 'directionReverseShort' : 'directionBothShort');
             row.insertCell().textContent = String(item.filesCount);
             const status = row.insertCell(); status.textContent = t(item.status === 'success' ? 'success' : item.status === 'aborted' ? 'aborted' : 'failed');
         }
@@ -572,6 +728,7 @@
                 updateProgress(completed, plan.actions.length, action.path);
                 try {
                     if (action.type === 'copy') await FileAdapter.copy(action, context.handles);
+                    else if (action.type === 'rename') await FileAdapter.rename(action, context.handles);
                     else if (action.type === 'trash') await FileAdapter.moveToTrash(action, context.handles, plan.stamp);
                 } catch (error) {
                     return { status: 'failed', completed, total: plan.actions.length, errors: [safeMessage(error)] };
@@ -608,8 +765,52 @@
             }
             profile.sourceName = model.source.name; profile.targetName = model.target.name; profile.bindingStatus = 'verified'; profile.lastUsedAt = nowIso();
             model.state.activeProfileId = profile.id; model.profile = profile; model.trustedProfile = true;
+            const recents = model.state.recentFolders.filter((r) => r.profileId !== profile.id);
+            recents.unshift({ profileId: profile.id, sourceName: profile.sourceName, targetName: profile.targetName, lastUsedAt: nowIso() });
+            model.state.recentFolders = recents.slice(0, MAX_RECENT_FOLDERS);
             await HandleStore.put(profile.id, model.source, model.target); StateStore.save(model.state);
             setPhase('ready'); setStatus(t('pairReady'), 'success', 'check'); renderProfile(); renderHistory();
+        };
+        const selectProfile = async (profileId) => {
+            const profile = model.state.profiles[profileId];
+            if (!profile) return;
+            const record = await HandleStore.get(profileId);
+            if (record) {
+                model.source = record.sourceHandle;
+                model.target = record.targetHandle;
+                model.profile = profile;
+                model.trustedProfile = profile.bindingStatus === 'verified';
+                model.state.activeProfileId = profile.id;
+                elements.pathSrc.textContent = model.source.name;
+                elements.pathSrc.title = model.source.name;
+                elements.pathTgt.textContent = model.target.name;
+                elements.pathTgt.title = model.target.name;
+                invalidatePlan();
+                setPhase('ready');
+                setStatus(t('pairReady'), 'success', 'check');
+                renderProfile();
+                renderHistory();
+            }
+        };
+        const toggleBookmark = () => {
+            if (!model.profile) return;
+            const id = model.profile.id;
+            const existingIndex = model.state.bookmarks.findIndex((b) => b.profileId === id);
+            if (existingIndex >= 0) {
+                model.state.bookmarks.splice(existingIndex, 1);
+                setStatus(t('bookmarkRemoved'), 'info', 'info');
+            } else {
+                model.state.bookmarks.unshift({
+                    profileId: id,
+                    sourceName: model.profile.sourceName,
+                    targetName: model.profile.targetName,
+                    createdAt: nowIso(),
+                });
+                model.state.bookmarks = model.state.bookmarks.slice(0, MAX_BOOKMARKS);
+                setStatus(t('bookmarkAdded'), 'success', 'check');
+            }
+            StateStore.save(model.state);
+            renderRecentAndBookmarks();
         };
         const pick = async (side) => {
             try {
@@ -696,7 +897,7 @@
                 model.state = StateStore.importText(await file.text()); model.source = model.target = model.profile = null; model.trustedProfile = false; model.plan = null; StateStore.save(model.state); setPhase('idle'); renderStaticText(); setStatus(t('importDone'), 'success', 'check'); addLog(t('importDone'));
             } catch (error) { setPhase('error'); setStatus(t('importFailed', { message: safeMessage(error) }), 'danger', 'alert'); }
         };
-        return Object.freeze({ abort, bindPair, compare, importState, invalidatePlan, pick, saveConfig, sync });
+        return Object.freeze({ abort, bindPair, compare, importState, invalidatePlan, pick, saveConfig, selectProfile, sync, toggleBookmark });
     })();
 
     const downloadJson = (data, name) => {
@@ -706,11 +907,21 @@
 
     elements.btnSrc.addEventListener('click', () => Controller.pick('source'));
     elements.btnTgt.addEventListener('click', () => Controller.pick('target'));
+    elements.btnBookmark?.addEventListener('click', Controller.toggleBookmark);
     elements.btnCompare.addEventListener('click', Controller.compare);
     elements.btnSync.addEventListener('click', Controller.sync);
     elements.btnAbort.addEventListener('click', Controller.abort);
     elements.changedOnly.addEventListener('change', () => { model.showChangedOnly = elements.changedOnly.checked; sessionStorage.setItem(SHOW_CHANGED_ONLY_KEY, String(model.showChangedOnly)); renderRows(); });
     [elements.direction, elements.policy, elements.comparison, elements.excludes].forEach((control) => control.addEventListener('change', () => { Controller.saveConfig(); Controller.invalidatePlan(); }));
+    [elements.dirBoth, elements.dirOne, elements.dirReverse].forEach((btn) => {
+        btn?.addEventListener('click', () => {
+            model.state.config.direction = btn.dataset.value;
+            elements.direction.value = btn.dataset.value;
+            renderDirectionToggle();
+            Controller.saveConfig();
+            Controller.invalidatePlan();
+        });
+    });
     elements.excludes.addEventListener('input', () => { model.state.config.excludeDirs = normalizeExcludes(elements.excludes.value); StateStore.save(model.state); Controller.invalidatePlan(); });
     $('#btnLangKo').addEventListener('click', () => { model.state.config.lang = 'ko'; StateStore.save(model.state); renderStaticText(); });
     $('#btnLangEn').addEventListener('click', () => { model.state.config.lang = 'en'; StateStore.save(model.state); renderStaticText(); });

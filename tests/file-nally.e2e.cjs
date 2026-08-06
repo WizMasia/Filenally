@@ -106,7 +106,7 @@ async function main() {
       background: getComputedStyle(document.body).backgroundColor,
       errors: window.__testUnhandledErrors || [],
     }));
-    assert.equal(result.version, 'Beta v0.9.0');
+    assert.equal(result.version, 'Beta v0.10.0');
     assert.equal(result.background, 'rgb(244, 246, 250)');
     assert.deepEqual(result.errors, []);
   });
@@ -563,6 +563,56 @@ async function main() {
       return found;
     });
     assert.deepEqual(issues, []);
+  });
+
+  add('reverse sync copies from target to source and preserves target-only files', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'old.txt': { content: 'old source', lastModified: 100 } },
+      target: { 'new.txt': { content: 'new target', lastModified: 200 } },
+    });
+    await page.locator('#dirReverse').click();
+    await compare(page);
+    const plan = await page.evaluate(() => window.FileNallyTest.getModel().plan);
+    assert.equal(plan.actions.length, 1);
+    assert.equal(plan.actions[0].type, 'copy');
+    assert.equal(plan.actions[0].fromSide, 'target');
+    assert.equal(plan.actions[0].toSide, 'source');
+    assert.equal(plan.actions[0].path, 'new.txt');
+  });
+
+  add('bookmark star button toggles active profile bookmark state', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'a.txt': { content: 'a' } },
+      target: { 'a.txt': { content: 'a' } },
+    });
+    const starBtn = page.locator('#btnBookmark');
+    assert.equal(await starBtn.getAttribute('data-bookmarked'), 'false');
+    await starBtn.click();
+    assert.equal(await starBtn.getAttribute('data-bookmarked'), 'true');
+    const bookmarkCount = await page.locator('#bookmarkChips .chip-bookmark').count();
+    assert.equal(bookmarkCount, 1);
+  });
+
+  add('rename detection converts deleted and added file with matching size to rename action', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'original.txt': { content: 'hello world' } },
+      target: { 'original.txt': { content: 'hello world' } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+
+    await page.evaluate(() => {
+      const source = window.__mockPair.source;
+      const originalFile = source.entries.get('original.txt');
+      source.entries.delete('original.txt');
+      originalFile.name = 'renamed.txt';
+      source.entries.set('renamed.txt', originalFile);
+    });
+
+    await compare(page);
+    const plan = await page.evaluate(() => window.FileNallyTest.getModel().plan);
+    const renameAction = plan.actions.find((a) => a.type === 'rename');
+    assert.ok(renameAction, 'expected a rename action');
   });
 
   const results = [];

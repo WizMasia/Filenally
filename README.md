@@ -1,6 +1,6 @@
 # File-nally
 
-**Beta v0.9.0** · [English manual](docs/README_en.md)
+**Beta v0.10.0** · [English manual](docs/README_en.md)
 
 File-nally는 두 로컬 폴더를 비교하고 동기화하는 독립 실행형 브라우저 애플리케이션입니다. 배포용 HTML, CSS, JavaScript는 생성된 [file-nally.html](file-nally.html) 하나에 들어 있으므로 일반 사용자는 서버, 빌드 과정, Node.js 설치 없이 사용할 수 있습니다.
 

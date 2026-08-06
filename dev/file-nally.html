@@ -24,6 +24,7 @@
     <symbol id="icon-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
     <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 3 2 21h20z"/><path d="M12 9v5"/><path d="M12 18h.01"/></symbol>
     <symbol id="icon-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="m7 7 1 14h8l1-14"/></symbol>
+    <symbol id="icon-star" viewBox="0 0 24 24"><path d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></symbol>
 </svg>
 
 <div class="app-shell">
@@ -32,7 +33,7 @@
             <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-sync"></use></svg></span>
             <div class="brand-copy">
                 <h1>File-nally</h1>
-                <div class="version">Beta v0.9.0</div>
+                <div class="version">Beta v0.10.0</div>
             </div>
         </div>
         <div class="language-switch" role="group" aria-label="Language">
@@ -60,14 +61,26 @@
             <div class="profile-line">
                 <span id="profileText" data-i18n="profileNone">선택된 동기화 프로필이 없습니다.</span>
                 <span id="profileBadge" class="profile-badge" data-verified="false"><svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg><span data-i18n="profileUnverified">폴더 쌍 미확인</span></span>
+                <button id="btnBookmark" class="bookmark-star-btn" type="button" aria-label="북마크" title="북마크 추가/해제" disabled><svg class="icon" aria-hidden="true"><use href="#icon-star"></use></svg></button>
+            </div>
+
+            <div id="recentBookmarkBar" class="recent-bookmark-bar" aria-label="최근 폴더 및 즐겨찾기">
+                <div id="bookmarkChips" class="chip-group"></div>
+                <div id="recentChips" class="chip-group"></div>
             </div>
 
             <div class="option-grid">
                 <div class="field">
-                    <label for="syncDirection" data-i18n="directionLabel">동기화 방향</label>
-                    <select id="syncDirection">
+                    <label id="directionLabel" for="syncDirection" data-i18n="directionLabel">동기화 방향</label>
+                    <div id="syncDirectionToggle" class="toggle-group" role="radiogroup" aria-labelledby="directionLabel">
+                        <button id="dirBoth" type="button" class="toggle-btn" data-value="bidirectional" role="radio" aria-checked="true"><span data-i18n="directionBothShort">양방향</span></button>
+                        <button id="dirOne" type="button" class="toggle-btn" data-value="unidirectional" role="radio" aria-checked="false"><span data-i18n="directionOneShort">단방향</span></button>
+                        <button id="dirReverse" type="button" class="toggle-btn" data-value="reverse" role="radio" aria-checked="false"><span data-i18n="directionReverseShort">역방향</span></button>
+                    </div>
+                    <select id="syncDirection" class="sr-only">
                         <option value="bidirectional" data-i18n="directionBoth">양방향 (원본 ⇄ 대상)</option>
                         <option value="unidirectional" data-i18n="directionOne">단방향 (원본 → 대상)</option>
+                        <option value="reverse" data-i18n="directionReverse">역방향 (대상 → 원본)</option>
                     </select>
                 </div>
                 <div class="field">
