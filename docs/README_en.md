@@ -15,6 +15,10 @@ File-nally is a self-contained browser application for comparing and synchronizi
 - Per-folder-pair identity checks that reject same or nested directories
 - Responsive Korean and English interface
 
+- Recent folders history and bookmarks (up to 5) — quickly reselect frequent folders, pin favorites as bookmarks.
+- Rename detection for files and folders — detect a rename instead of copy+delete and execute an atomic RENAME when possible.
+- Reverse synchronization (Target → Source) and a glassmorphic segmented toggle UI — three direction options: `Source ⇄ Target`, `Source → Target`, `Target → Source`.
+
 ## Requirements
 
 - Current Google Chrome or Microsoft Edge with the File System Access API
@@ -95,7 +99,7 @@ Restored profiles and legacy v0.6.1 manifests remain unverified until the matchi
 
 ## Safe stop and failures
 
-During exact comparison, **Stop safely** finishes the current chunk read and stops without writing files. During synchronization, it finishes the currently active write and does not start the next queued action. Successfully completed synchronization actions are checkpointed. A write failure stops later actions, records a failed run, and leaves the page ready for a fresh comparison.
+During exact comparison, **Stop safely** finishes the current chunk read and stops without writing files. During synchronization, it finishes the currently active write and does not start the next action.
 
 Always compare again after an aborted or failed run before attempting another synchronization.
 
@@ -112,15 +116,15 @@ Always compare again after an aborted or failed run before attempting another sy
 
 - Folder access always depends on a user gesture and browser permission. Protected system directories, read-only locations, and paths blocked by the operating system or storage provider cannot be synchronized.
 - OS-reserved names, maximum path lengths, removable media, network drives, and cloud-provider placeholders or hydration rules can reject or delay operations.
-- Filename case sensitivity and Unicode normalization differ by filesystem. Names that are distinct on one platform can collide or compare differently on another, especially between Windows, case-insensitive APFS, case-sensitive filesystems, and decomposed/composed Unicode forms.
-- Quick mode compares only size and modification time. Exact mode reads content but creates no hash or persistent content cache. Neither mode preserves original timestamps, ownership, permission bits, ACLs, extended attributes, macOS resource forks, or symbolic-link identity.
+- Filename case sensitivity and Unicode normalization differ by filesystem. Names that are distinct on one platform can collide or compare differently on another, especially between Windows, case-insensitive APFS, and case-sensitive filesystems.
+- Quick mode compares only size and modification time. Exact mode reads content but creates no hash or persistent content cache. Neither mode preserves original timestamps, ownership, permission bits, ACLs, extended attributes, macOS resource forks, or the identity of symbolic links.
 
 ### Language and application behavior
 
 - The interface is translated only into Korean and English. Browser, operating-system, and storage-provider error text may remain untranslated, and unusual Unicode filenames can render or sort differently across platforms.
 - Checkpoints are saved after individual actions; there is no transaction covering the whole plan. A failure can therefore leave a partially completed run that must be compared again.
 - Recovery from `.trash` is manual. There is no background folder monitor, scheduler, unattended synchronization, or automatic rollback.
-- Very large folders can require substantial memory and comparison time. Private browsing, clearing browser data, permission revocation, disconnected removable media, unavailable network/cloud storage, or provider-side changes can invalidate saved handles and profiles.
+- Very large folders can require substantial memory and comparison time. Private browsing, clearing browser data, permission revocation, disconnected removable media, unavailable network/cloud storage, or platform-specific file placeholders can affect operation.
 
 Compatibility references:
 
@@ -128,8 +132,6 @@ Compatibility references:
 - [File System Access specification](https://wicg.github.io/file-system-access/)
 - [MDN `showDirectoryPicker()` compatibility](https://developer.mozilla.org/en-US/docs/Web/API/Window/showDirectoryPicker)
 - [WebKit origin-private filesystem](https://webkit.org/blog/12257/the-file-system-access-api-with-origin-private-file-system/)
-- [Microsoft case-sensitivity guidance](https://learn.microsoft.com/en-us/windows/wsl/case-sensitivity)
-- [Apple APFS filename behavior](https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/APFS_Guide/FAQ/FAQ.html)
 
 ## Troubleshooting
 
@@ -155,7 +157,7 @@ Look inside the affected folder's `.trash/<run timestamp>/` directory and restor
 
 ## Development
 
-Node.js and Playwright are development-only dependencies; end users only need `file-nally.html`. Edit only the three files under `dev/`; the root HTML is generated and must not be edited directly. See the [bilingual build guide](BUILD.md) for the complete workflow and release checklist.
+Node.js and Playwright are development-only dependencies; end users only need `file-nally.html`. Edit only the three files under `dev/`; the root HTML is generated and must not be edited directly.
 
 ```bash
 npm ci
@@ -165,13 +167,13 @@ npm test
 npm run test:visual
 ```
 
-The Chrome regression suite covers quick/exact comparison, comparison cancellation, state migration, JSON validation, folder-pair verification, conflict policies, copying, versioned trash, safe stop, write failures, untrusted filenames, accessibility labels, and mobile overflow. Responsive screenshots are written to the ignored `artifacts/visual/` directory.
+The Chrome regression suite covers quick/exact comparison, comparison cancellation, state migration, JSON validation, folder-pair verification, conflict policies, copying, versioned trash, safe stop, write failure handling, and rename detection.
 
 ## Contributing and reporting issues
 
-Keep each change focused on one purpose and include a regression test for behavior changes. Run `npm test` before a pull request and `npm run test:visual` for UI changes. Regenerate `file-nally.html` with `npm run build`; do not edit it directly.
+Keep each change focused on one purpose and include a regression test for behavior changes. Run `npm test` before a pull request and `npm run test:visual` for UI changes. Regenerate `file-nally.html` with `npm run build` when modifying `dev/` sources.
 
-When filing a [GitHub issue](https://github.com/WizMasia/Filenally/issues), include reproduction steps, browser and operating system, expected behavior, and observed behavior. For potential data-loss reports, also include the synchronization direction and conflict policy.
+When filing a [GitHub issue](https://github.com/WizMasia/Filenally/issues), include reproduction steps, browser and operating system, expected behavior, and observed behavior. For potential data-loss issues, include which folder pair and whether a JSON backup exists.
 
 ## Repository layout
 
