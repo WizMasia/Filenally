@@ -119,6 +119,13 @@ Base unit: 4px.
 - The action table pages at 100 rows. JSON and CSV downloads always contain the complete run, never only the visible page.
 - Escape and an explicit close button dismiss the dialog, and focus returns to the history-row trigger.
 
+### Quick guide dialog
+- A ghost button in the header opens a native modal with five numbered steps for folder selection, option review, comparison, plan review, and synchronization.
+- Permission renewal/reselection and backup/`.trash` recovery are separate safety notes below the steps.
+- All copy follows the active Korean or English language whenever the dialog opens.
+- Escape and an explicit close button dismiss the dialog, and focus returns to the header trigger.
+- The surface reuses the run-detail dialog tokens and responsive behavior; it introduces no custom animation.
+
 ## 6. Motion & Interaction
 
 | Type | Duration | Easing | Usage |
