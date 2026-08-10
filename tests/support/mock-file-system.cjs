@@ -1,6 +1,7 @@
 async function installMockFileSystem(page) {
   await page.addInitScript(() => {
     window.__testUnhandledErrors = [];
+    window.__permissionCalls = [];
     window.addEventListener('error', (event) => {
       window.__testUnhandledErrors.push(event.error?.message || event.message || 'Unknown page error');
     });
@@ -71,6 +72,9 @@ async function installMockFileSystem(page) {
         this.name = name;
         this.entries = new Map();
         this.permission = options.permission || 'granted';
+        this.requestPermissionResult = options.requestPermissionResult || 'granted';
+        this.queryPermissionError = options.queryPermissionError || '';
+        this.requestPermissionError = options.requestPermissionError || '';
       }
 
       async *values() {
@@ -125,11 +129,15 @@ async function installMockFileSystem(page) {
       }
 
       async queryPermission() {
+        window.__permissionCalls.push({ method: 'query', name: this.name });
+        if (this.queryPermissionError) throw new DOMException(this.queryPermissionError, 'NotAllowedError');
         return this.permission;
       }
 
       async requestPermission() {
-        if (this.permission === 'prompt') this.permission = 'granted';
+        window.__permissionCalls.push({ method: 'request', name: this.name });
+        if (this.requestPermissionError) throw new DOMException(this.requestPermissionError, 'SecurityError');
+        if (this.permission === 'prompt') this.permission = this.requestPermissionResult;
         return this.permission;
       }
     }
@@ -172,6 +180,9 @@ async function installMockFileSystem(page) {
     window.__configureMockPair = (options = {}) => {
       const source = buildDirectory(options.sourceName || 'source', options.source || {}, {
         permission: options.sourcePermission || 'granted',
+        requestPermissionResult: options.sourceRequestPermissionResult || 'granted',
+        queryPermissionError: options.sourceQueryPermissionError || '',
+        requestPermissionError: options.sourceRequestPermissionError || '',
       });
       let target;
       if (options.sameEntry) target = source;
@@ -181,17 +192,33 @@ async function installMockFileSystem(page) {
       } else if (options.sourceInsideTarget) {
         target = buildDirectory(options.targetName || 'target', options.target || {}, {
           permission: options.targetPermission || 'granted',
+          requestPermissionResult: options.targetRequestPermissionResult || 'granted',
+          queryPermissionError: options.targetQueryPermissionError || '',
+          requestPermissionError: options.targetRequestPermissionError || '',
         });
         target.entries.set(source.name, source);
       } else {
         target = buildDirectory(options.targetName || 'target', options.target || {}, {
           permission: options.targetPermission || 'granted',
+          requestPermissionResult: options.targetRequestPermissionResult || 'granted',
+          queryPermissionError: options.targetQueryPermissionError || '',
+          requestPermissionError: options.targetRequestPermissionError || '',
         });
       }
       window.__mockPair = { source, target };
       window.__pickerQueue = [source, target];
       return { sourceName: source.name, targetName: target.name };
     };
+
+    window.__setMockPermission = (side, options = {}) => {
+      const handle = window.__mockPair[side];
+      if ('state' in options) handle.permission = options.state;
+      if ('requestResult' in options) handle.requestPermissionResult = options.requestResult;
+      if ('queryError' in options) handle.queryPermissionError = options.queryError;
+      if ('requestError' in options) handle.requestPermissionError = options.requestError;
+    };
+
+    window.__getPermissionCalls = () => [...window.__permissionCalls];
 
     window.__snapshotMockPair = async () => ({
       source: await snapshot(window.__mockPair.source),

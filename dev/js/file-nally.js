@@ -32,6 +32,7 @@
             statusUnchanged: '변경 없음', statusBaseline: '기준 저장', statusCopyOut: '보내기', statusCopyIn: '받기', statusTrash: '휴지통 이동', statusConflict: '충돌 · 확인 필요', statusSkipped: '정책에 따라 건너뜀', statusProtected: '단방향 보호', statusNew: '신규', statusRename: '이름 변경',
             phaseReady: '준비', phaseComparing: '비교', phasePlanned: '계획됨', phaseSyncing: '실행', phaseSuccess: '완료', phaseError: '오류', phaseAborted: '중단', directionBothShort: '양방향', directionOneShort: '단방향', directionReverseShort: '역방향', success: '성공', failed: '실패', aborted: '중단',
             bookmarkAdded: '북마크가 추가되었습니다.', bookmarkRemoved: '북마크가 해제되었습니다.', swapFolders: '원본과 대상 폴더 교환', foldersSwapped: '원본과 대상 폴더를 교환했습니다.', advancedOptions: '동기화 옵션', showOptions: '옵션 보기', hideOptions: '옵션 숨기기',
+            permissionChecking: '저장된 폴더 권한을 확인하는 중입니다.', permissionRestored: '폴더 권한이 확인되었습니다. 변경사항을 비교할 수 있습니다.', permissionDenied: '폴더 권한이 승인되지 않았습니다. 원본과 대상 폴더를 다시 선택해 주세요.', permissionNeedsAction: '저장된 폴더를 사용하려면 최근 폴더 또는 북마크를 눌러 권한을 승인해 주세요.', storedHandleMissing: '저장된 폴더 연결을 찾을 수 없습니다. 원본과 대상 폴더를 다시 선택해 주세요.', storedHandleUnavailable: '저장된 폴더에 접근할 수 없습니다. 원본과 대상 폴더를 다시 선택해 주세요.',
             detailsHead: '상세', details: '상세 보기', runDetailTitle: '실행 상세', runDetailDescription: '실행 중 처리한 모든 작업과 결과입니다.', close: '닫기', loadingDetails: '상세 기록을 불러오는 중입니다.', detailsUnavailable: '상세 기록을 찾을 수 없습니다.', durationHead: '소요 시간', sequenceHead: '순서', actionHead: '작업', errorHead: '오류', previousPage: '이전', nextPage: '다음', downloadCsv: 'CSV 다운로드', downloadRunJson: 'JSON 다운로드', entrySuccess: '성공', entryFailed: '실패', entryNotRun: '미실행', actionCopy: '복사', actionRename: '이름 변경', actionTrash: '휴지통 이동', actionBaseline: '기준 저장', actionUnknown: '기타',
         },
         en: {
@@ -48,6 +49,7 @@
             statusUnchanged: 'No change', statusBaseline: 'Save baseline', statusCopyOut: 'Send', statusCopyIn: 'Receive', statusTrash: 'Move to trash', statusConflict: 'Conflict · review', statusSkipped: 'Skipped by policy', statusProtected: 'Protected by one-way mode', statusNew: 'New', statusRename: 'Rename',
             phaseReady: 'Ready', phaseComparing: 'Comparing', phasePlanned: 'Planned', phaseSyncing: 'Running', phaseSuccess: 'Complete', phaseError: 'Error', phaseAborted: 'Stopped', directionBothShort: 'Bidirectional', directionOneShort: 'One-way', directionReverseShort: 'Reverse', success: 'Success', failed: 'Failed', aborted: 'Stopped',
             bookmarkAdded: 'Bookmark added.', bookmarkRemoved: 'Bookmark removed.', swapFolders: 'Swap source and target folders', foldersSwapped: 'Source and target folders swapped.', advancedOptions: 'Synchronization options', showOptions: 'Show options', hideOptions: 'Hide options',
+            permissionChecking: 'Checking access to the saved folders.', permissionRestored: 'Folder access verified. You can compare changes now.', permissionDenied: 'Folder access was not granted. Select the source and target folders again.', permissionNeedsAction: 'Select the recent folder or bookmark to approve access before reconnecting.', storedHandleMissing: 'The saved folder connection is unavailable. Select the source and target folders again.', storedHandleUnavailable: 'The saved folders cannot be accessed. Select the source and target folders again.',
             detailsHead: 'Details', details: 'View details', runDetailTitle: 'Run details', runDetailDescription: 'Every action processed during this synchronization run.', close: 'Close', loadingDetails: 'Loading run details.', detailsUnavailable: 'Run details are unavailable.', durationHead: 'Duration', sequenceHead: 'Sequence', actionHead: 'Action', errorHead: 'Error', previousPage: 'Previous', nextPage: 'Next', downloadCsv: 'Download CSV', downloadRunJson: 'Download JSON', entrySuccess: 'Success', entryFailed: 'Failed', entryNotRun: 'Not run', actionCopy: 'Copy', actionRename: 'Rename', actionTrash: 'Move to trash', actionBaseline: 'Save baseline', actionUnknown: 'Other',
         },
     };
@@ -251,7 +253,10 @@
                     request.onsuccess = () => resolve(request.result || []);
                     request.onerror = () => reject(request.error);
                 });
-                for (const item of stored) if (!values.some((value) => value.profileId === item.profileId)) values.push(item);
+                for (const item of stored) {
+                    if (!memory.has(item.profileId)) memory.set(item.profileId, item);
+                    if (!values.some((value) => value.profileId === item.profileId)) values.push(item);
+                }
             } catch { /* memory-only safe fallback */ }
             return values;
         };
@@ -275,8 +280,54 @@
             }
             return null;
         };
-        const get = async (profileId) => (await list()).find((record) => record.profileId === profileId) || null;
-        return Object.freeze({ findMatching, get, open, put });
+        const get = async (profileId) => memory.get(profileId) || (await list()).find((record) => record.profileId === profileId) || null;
+        const peek = (profileId) => memory.get(profileId) || null;
+        const warm = async () => { await list(); };
+        return Object.freeze({ findMatching, get, open, peek, put, warm });
+    })();
+
+    const PermissionGate = (() => {
+        const descriptor = { mode: 'readwrite' };
+        const normalize = (value) => ['granted', 'prompt', 'denied'].includes(value) ? value : 'unavailable';
+        const summarize = (source, target, error = '') => ({
+            state: source === 'granted' && target === 'granted'
+                ? 'granted'
+                : source === 'unavailable' || target === 'unavailable'
+                    ? 'unavailable'
+                    : source === 'denied' || target === 'denied'
+                        ? 'denied'
+                        : 'prompt',
+            source,
+            target,
+            error,
+        });
+        const inspect = async (record) => {
+            try {
+                const [source, target] = await Promise.all([
+                    record.sourceHandle.queryPermission(descriptor),
+                    record.targetHandle.queryPermission(descriptor),
+                ]);
+                return summarize(normalize(source), normalize(target));
+            } catch (error) {
+                return summarize('unavailable', 'unavailable', safeMessage(error));
+            }
+        };
+        const request = async (record) => {
+            let result = await inspect(record);
+            if (result.state !== 'prompt') return result;
+            for (const side of ['source', 'target']) {
+                if (result[side] !== 'prompt') continue;
+                try {
+                    await record[`${side}Handle`].requestPermission(descriptor);
+                } catch (error) {
+                    return summarize('unavailable', 'unavailable', safeMessage(error));
+                }
+                result = await inspect(record);
+                if (result.state !== 'prompt') return result;
+            }
+            return result;
+        };
+        return Object.freeze({ inspect, request });
     })();
 
     const RunLogStore = (() => {
@@ -608,7 +659,7 @@
     };
 
     const model = {
-        state: StateStore.load(), showChangedOnly: sessionStorage.getItem(SHOW_CHANGED_ONLY_KEY) === 'true', source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), plan: null, phase: 'idle', abortRequested: false, logs: [], advancedExpanded: null, selectedRun: null, runDetailPage: 0, runDetailTrigger: null,
+        state: StateStore.load(), showChangedOnly: sessionStorage.getItem(SHOW_CHANGED_ONLY_KEY) === 'true', source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), plan: null, phase: 'idle', abortRequested: false, profileConnectionPending: false, logs: [], advancedExpanded: null, selectedRun: null, runDetailPage: 0, runDetailTrigger: null,
     };
     model.advancedExpanded = typeof model.state.ui?.advancedExpanded === 'boolean'
         ? model.state.ui.advancedExpanded
@@ -623,6 +674,9 @@
         use.setAttribute('href', `#icon-${name}`); svg.append(use); return svg;
     };
     const setStatus = (message, tone = 'neutral', iconName = 'info') => {
+        const assertive = iconName === 'alert';
+        elements.status.setAttribute('role', assertive ? 'alert' : 'status');
+        elements.status.setAttribute('aria-live', assertive ? 'assertive' : 'polite');
         elements.status.dataset.tone = tone;
         const oldIcon = elements.status.querySelector('svg');
         oldIcon?.replaceWith(makeIcon(iconName));
@@ -690,6 +744,7 @@
             chip.type = 'button';
             chip.className = 'chip chip-bookmark';
             chip.textContent = `★ ${b.sourceName || '?'} ⇄ ${b.targetName || '?'}`;
+            chip.disabled = model.profileConnectionPending;
             chip.addEventListener('click', () => Controller.selectProfile(b.profileId));
             elements.bookmarkChips.append(chip);
         }
@@ -700,6 +755,7 @@
             chip.type = 'button';
             chip.className = 'chip';
             chip.textContent = `🕒 ${r.sourceName || '?'} ⇄ ${r.targetName || '?'}`;
+            chip.disabled = model.profileConnectionPending;
             chip.addEventListener('click', () => Controller.selectProfile(r.profileId));
             elements.recentChips.append(chip);
         }
@@ -954,27 +1010,64 @@
             await HandleStore.put(profile.id, model.source, model.target); StateStore.save(model.state);
             setPhase('ready'); setStatus(t('pairReady'), 'success', 'check'); renderProfile(); renderHistory();
         };
-        const selectProfile = async (profileId) => {
+        const showStoredProfileOnly = (profile) => {
+            model.source = null;
+            model.target = null;
+            model.profile = profile;
+            model.trustedProfile = false;
+            model.plan = null;
+            model.state.activeProfileId = profile.id;
+            StateStore.save(model.state);
+            setPhase('idle');
+            renderPaths();
+            renderProfile();
+            renderHistory();
+            renderRows();
+        };
+        const connectStoredProfile = async (profileId, { requestPermission }) => {
             const profile = model.state.profiles[profileId];
-            if (!profile) return;
-            const record = await HandleStore.get(profileId);
-            if (record) {
+            if (!profile || model.profileConnectionPending) return false;
+            showStoredProfileOnly(profile);
+            model.profileConnectionPending = true;
+            renderRecentAndBookmarks();
+            setStatus(t('permissionChecking'), 'info', 'info');
+            try {
+                const record = HandleStore.peek(profileId) || await HandleStore.get(profileId);
+                if (!record) {
+                    setStatus(t('storedHandleMissing'), 'warning', 'alert');
+                    addLog(t('storedHandleMissing'));
+                    return false;
+                }
+                const permission = requestPermission
+                    ? await PermissionGate.request(record)
+                    : await PermissionGate.inspect(record);
+                if (permission.state !== 'granted') {
+                    const key = permission.state === 'denied'
+                        ? 'permissionDenied'
+                        : permission.state === 'prompt'
+                            ? 'permissionNeedsAction'
+                            : 'storedHandleUnavailable';
+                    setStatus(t(key), permission.state === 'unavailable' ? 'danger' : 'warning', 'alert');
+                    addLog(t(key));
+                    return false;
+                }
                 model.source = record.sourceHandle;
                 model.target = record.targetHandle;
-                model.profile = profile;
                 model.trustedProfile = profile.bindingStatus === 'verified';
-                model.state.activeProfileId = profile.id;
-                elements.pathSrc.textContent = model.source.name;
-                elements.pathSrc.title = model.source.name;
-                elements.pathTgt.textContent = model.target.name;
-                elements.pathTgt.title = model.target.name;
-                invalidatePlan();
+                renderPaths();
                 setPhase('ready');
-                setStatus(t('pairReady'), 'success', 'check');
+                setStatus(t(requestPermission ? 'permissionRestored' : 'pairReady'), 'success', 'check');
                 renderProfile();
                 renderHistory();
+                renderRows();
+                return true;
+            } finally {
+                model.profileConnectionPending = false;
+                renderRecentAndBookmarks();
+                renderControls();
             }
         };
+        const selectProfile = (profileId) => connectStoredProfile(profileId, { requestPermission: true });
         const swapFolders = async () => {
             if (!model.source || !model.target || !model.profile || !model.trustedProfile || ['comparing', 'syncing', 'aborting'].includes(model.phase)) return;
             elements.btnSwap.disabled = true;
@@ -1095,7 +1188,7 @@
                 model.state = StateStore.importText(await file.text()); model.source = model.target = model.profile = null; model.trustedProfile = false; model.plan = null; StateStore.save(model.state); setPhase('idle'); renderStaticText(); setStatus(t('importDone'), 'success', 'check'); addLog(t('importDone'));
             } catch (error) { setPhase('error'); setStatus(t('importFailed', { message: safeMessage(error) }), 'danger', 'alert'); }
         };
-        return Object.freeze({ abort, bindPair, compare, importState, invalidatePlan, pick, saveConfig, selectProfile, swapFolders, sync, toggleBookmark });
+        return Object.freeze({ abort, bindPair, compare, connectStoredProfile, importState, invalidatePlan, pick, saveConfig, selectProfile, swapFolders, sync, toggleBookmark });
     })();
 
     const downloadText = (content, name, type) => {
@@ -1167,30 +1260,22 @@
     });
 
     const initialize = async () => {
-        model.profile = model.state.activeProfileId ? model.state.profiles[model.state.activeProfileId] || null : null;
-        if (model.profile) {
-            const record = await HandleStore.get(model.profile.id);
-            if (record) {
-                try {
-                    const sourcePermission = await record.sourceHandle.queryPermission({ mode: 'readwrite' });
-                    const targetPermission = await record.targetHandle.queryPermission({ mode: 'readwrite' });
-                    if (sourcePermission === 'granted' && targetPermission === 'granted') {
-                        model.source = record.sourceHandle; model.target = record.targetHandle; model.trustedProfile = model.profile.bindingStatus === 'verified';
-                        elements.pathSrc.textContent = model.source.name; elements.pathSrc.title = model.source.name; elements.pathTgt.textContent = model.target.name; elements.pathTgt.title = model.target.name; setPhase('ready'); setStatus(t('pairReady'), 'success', 'check');
-                    }
-                } catch { model.trustedProfile = false; }
-            }
-        }
+        await HandleStore.warm();
+        const activeProfileId = model.state.activeProfileId;
+        if (activeProfileId) await Controller.connectStoredProfile(activeProfileId, { requestPermission: false });
         await RunLogStore.hydrate(model.state.globalHistory.map((item) => item.logId).filter(Boolean));
-        renderStaticText(); renderRows(); renderHistory(); renderControls(); addLog(t('waiting'));
+        renderStaticText(); renderRows(); renderHistory(); renderControls();
+        if (!activeProfileId) addLog(t('waiting'));
     };
 
     window.FileNallyTest = Object.freeze({
+        PermissionGate,
         RunLogStore,
         StateStore,
         SyncPlanner,
+        connectStoredProfile: (profileId, requestPermission) => Controller.connectStoredProfile(profileId, { requestPermission }),
         executeCurrentPlan: () => Controller.sync(),
-        getModel: () => ({ phase: model.phase, trustedProfile: model.trustedProfile, profileId: model.profile?.id || null, plan: model.plan ? cloneJson({ id: model.plan.id, actions: model.plan.actions, summary: model.plan.summary }) : null }),
+        getModel: () => ({ phase: model.phase, trustedProfile: model.trustedProfile, profileId: model.profile?.id || null, profileConnectionPending: model.profileConnectionPending, plan: model.plan ? cloneJson({ id: model.plan.id, actions: model.plan.actions, summary: model.plan.summary }) : null }),
     });
 
     initialize().catch((error) => {

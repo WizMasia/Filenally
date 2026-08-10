@@ -111,7 +111,7 @@ async function main() {
       background: getComputedStyle(document.body).backgroundColor,
       errors: window.__testUnhandledErrors || [],
     }));
-    assert.equal(result.version, 'Beta v0.11.0');
+    assert.equal(result.version, 'Beta v0.12.0');
     assert.equal(result.background, 'rgb(244, 246, 250)');
     assert.deepEqual(result.errors, []);
   });
@@ -762,6 +762,104 @@ async function main() {
     assert.equal(bookmarkCount, 1);
   });
 
+  add('permission gate requests only prompt handles and requires both grants', async ({ page }) => {
+    await configureMockPair(page, {
+      sourcePermission: 'prompt',
+      sourceRequestPermissionResult: 'granted',
+      targetPermission: 'granted',
+    });
+    const result = await page.evaluate(() => window.FileNallyTest.PermissionGate.request({
+      sourceHandle: window.__mockPair.source,
+      targetHandle: window.__mockPair.target,
+    }));
+    const requests = await page.evaluate(() => window.__getPermissionCalls().filter((call) => call.method === 'request'));
+    assert.equal(result.state, 'granted');
+    assert.deepEqual(requests.map((call) => call.name), ['source']);
+  });
+
+  add('permission gate normalizes a denied permission request', async ({ page }) => {
+    await configureMockPair(page, {
+      sourcePermission: 'prompt',
+      sourceRequestPermissionResult: 'denied',
+      targetPermission: 'granted',
+    });
+    const result = await page.evaluate(() => window.FileNallyTest.PermissionGate.request({
+      sourceHandle: window.__mockPair.source,
+      targetHandle: window.__mockPair.target,
+    }));
+    assert.equal(result.state, 'denied');
+  });
+
+  add('permission gate normalizes a permission request exception', async ({ page }) => {
+    await configureMockPair(page, {
+      sourcePermission: 'prompt',
+      sourceRequestPermissionError: 'Activation expired',
+      targetPermission: 'granted',
+    });
+    const result = await page.evaluate(() => window.FileNallyTest.PermissionGate.request({
+      sourceHandle: window.__mockPair.source,
+      targetHandle: window.__mockPair.target,
+    }));
+    assert.equal(result.state, 'unavailable');
+    assert.match(result.error, /Activation expired/);
+  });
+
+  add('saved profile click renews prompt permission before enabling compare', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'source.txt': { content: 'source' } },
+      target: {},
+    });
+    await page.evaluate(() => {
+      window.__permissionCalls.length = 0;
+      window.__setMockPermission('source', { state: 'prompt', requestResult: 'granted' });
+    });
+    await page.locator('#recentChips .chip').click();
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'ready');
+    assert.equal(await page.locator('#btnCompare').isEnabled(), true);
+    assert.equal(await page.locator('#syncStatus').getAttribute('role'), 'status');
+    assert.equal(await page.locator('#syncStatus').getAttribute('aria-live'), 'polite');
+    const requests = await page.evaluate(() => window.__getPermissionCalls().filter((call) => call.method === 'request'));
+    assert.deepEqual(requests.map((call) => call.name), ['source']);
+  });
+
+  add('denied saved profile remains history-only and explains folder reselection', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'source.txt': { content: 'source' } },
+      target: {},
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+    const profileId = await page.evaluate(() => window.FileNallyTest.getModel().profileId);
+    await page.evaluate(() => window.__setMockPermission('source', { state: 'denied' }));
+    await page.locator('#recentChips .chip').click();
+    const model = await page.evaluate(() => window.FileNallyTest.getModel());
+    assert.equal(model.phase, 'idle');
+    assert.equal(model.trustedProfile, false);
+    assert.equal(model.profileId, profileId);
+    assert.equal(await page.locator('#btnCompare').isDisabled(), true);
+    const status = page.locator('#syncStatus');
+    assert.match(await status.innerText(), /다시 선택|select.*again/i);
+    assert.equal(await status.getAttribute('role'), 'alert');
+    assert.equal(await status.getAttribute('aria-live'), 'assertive');
+    assert.match(await page.locator('#historyBody').innerText(), /성공|Success/);
+  });
+
+  add('bootstrap inspection never requests prompt permission', async ({ page }) => {
+    await mountPair(page, { source: {}, target: {} });
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'ready');
+    const profileId = await page.evaluate(() => window.FileNallyTest.getModel().profileId);
+    await page.evaluate(() => {
+      window.__permissionCalls.length = 0;
+      window.__setMockPermission('source', { state: 'prompt', requestResult: 'granted' });
+    });
+    const connected = await page.evaluate((id) => window.FileNallyTest.connectStoredProfile(id, false), profileId);
+    const requests = await page.evaluate(() => window.__getPermissionCalls().filter((call) => call.method === 'request'));
+    assert.equal(connected, false);
+    assert.deepEqual(requests, []);
+    assert.equal(await page.locator('#btnCompare').isDisabled(), true);
+    assert.match(await page.locator('#syncStatus').innerText(), /최근 폴더|북마크|recent folder|bookmark/i);
+  });
+
   add('rename detection converts deleted and added file with matching size to rename action', async ({ page }) => {
     await mountPair(page, {
       source: { 'original.txt': { content: 'hello world' } },
@@ -831,6 +929,12 @@ async function main() {
           'stable.txt': { content: 'stable', lastModified: 100 },
         },
       });
+      await page.evaluate(() => window.__setMockPermission('source', { state: 'denied' }));
+      await page.locator('#recentChips .chip').click();
+      await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-permission-denied.png`), fullPage: true });
+      await page.evaluate(() => window.__setMockPermission('source', { state: 'granted' }));
+      await page.locator('#recentChips .chip').click();
+      await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'ready');
       await compare(page);
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-planned.png`), fullPage: true });
       await page.getByLabel('변경된 파일만 보기', { exact: true }).check();
