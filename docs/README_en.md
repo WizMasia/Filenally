@@ -1,6 +1,6 @@
 # File-nally
 
-**Beta v0.10.0** · [한국어 메인 설명서](../README.md)
+**Beta v0.11.0** · [한국어 메인 설명서](../README.md)
 
 File-nally is a self-contained browser application for comparing and synchronizing two local folders. The distributable runtime—HTML, CSS, and JavaScript—lives in the generated [file-nally.html](../file-nally.html), so end users do not need a server, build process, or Node.js installation.
 
@@ -18,6 +18,9 @@ File-nally is a self-contained browser application for comparing and synchronizi
 - Recent folders history and bookmarks (up to 5) — quickly reselect frequent folders, pin favorites as bookmarks.
 - Rename detection for files and folders — detect a rename instead of copy+delete and execute an atomic RENAME when possible.
 - Reverse synchronization (Target → Source) and a glassmorphic segmented toggle UI — three direction options: `Source ⇄ Target`, `Source → Target`, `Target → Source`.
+- Responsive synchronization options disclosure — options start collapsed on mobile and an explicit user choice persists across visits.
+- Source/Target folder swap — exchange a verified folder pair with one control and swap it back again.
+- Per-run detailed history — inspect every action, path, duration, status, and error, then download the complete log as CSV or JSON.
 
 ## Requirements
 
@@ -87,7 +90,7 @@ Serializable application data is stored under the `smart_sync_state` localStorag
 - Per-profile and global synchronization history
 - Incomplete-run checkpoints
 
-Non-serializable directory handles are stored separately in IndexedDB. JSON backup files never contain the file contents or directory handles.
+Non-serializable directory handles and per-run detailed logs are stored separately in IndexedDB. JSON backup files never contain file contents, directory handles, or detailed run logs; use the run-details CSV/JSON controls to download a complete individual log.
 
 Use the application controls to:
 
