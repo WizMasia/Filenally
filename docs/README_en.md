@@ -1,6 +1,6 @@
 # File-nally
 
-**Beta v0.11.0** · [한국어 메인 설명서](../README.md)
+**Beta v0.12.0** · [한국어 메인 설명서](../README.md)
 
 File-nally is a self-contained browser application for comparing and synchronizing two local folders. The distributable runtime—HTML, CSS, and JavaScript—lives in the generated [file-nally.html](../file-nally.html), so end users do not need a server, build process, or Node.js installation.
 
@@ -15,7 +15,7 @@ File-nally is a self-contained browser application for comparing and synchronizi
 - Per-folder-pair identity checks that reject same or nested directories
 - Responsive Korean and English interface
 
-- Recent folders history and bookmarks (up to 5) — quickly reselect frequent folders, pin favorites as bookmarks.
+- Recent folders history and bookmarks (up to 5) — reuse saved directory handles. Selecting an item requests renewed permission when needed, and comparison is enabled only after both folders have read/write access.
 - Rename detection for files and folders — detect a rename instead of copy+delete and execute an atomic RENAME when possible.
 - Reverse synchronization (Target → Source) and a glassmorphic segmented toggle UI — three direction options: `Source ⇄ Target`, `Source → Target`, `Target → Source`.
 - Responsive synchronization options disclosure — options start collapsed on mobile and an explicit user choice persists across visits.
@@ -148,7 +148,7 @@ Select both folders. If the page reports an invalid pair, choose two separate, n
 
 ### Access stops working after reopening the page
 
-The browser may require folder permission again. Select the folders and approve read/write access. File-nally stores only the directory handle, not a way to bypass browser permission prompts.
+The browser may require folder permission again. Select a recent folder or bookmark and approve read/write access. If permission is denied or the saved connection is no longer valid, select the Source and Target folders again. File-nally stores only the directory handle, not a way to bypass browser permission prompts.
 
 ### A file is reported as a conflict
 
