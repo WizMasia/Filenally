@@ -111,7 +111,7 @@ async function main() {
       background: getComputedStyle(document.body).backgroundColor,
       errors: window.__testUnhandledErrors || [],
     }));
-    assert.equal(result.version, 'Beta v0.12.0');
+    assert.equal(result.version, 'Beta v0.13.0');
     assert.equal(result.background, 'rgb(244, 246, 250)');
     assert.deepEqual(result.errors, []);
   });
@@ -732,21 +732,25 @@ async function main() {
     assert.equal(await dialog.evaluate((node) => node.open), false);
     assert.equal(await trigger.evaluate((node) => node === document.activeElement), true);
 
+    await page.locator('#btnLangKo').click();
     for (const width of [375, 768, 1280]) {
       await page.setViewportSize({ width, height: 900 });
       await trigger.click();
       const layout = await page.evaluate(() => {
         const guide = document.querySelector('#quickGuideDialog').getBoundingClientRect();
+        const closeButton = document.querySelector('#btnCloseQuickGuide').getBoundingClientRect();
         return {
           documentOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
           guideLeft: guide.left,
           guideRight: guide.right,
           viewportWidth: document.documentElement.clientWidth,
+          closeButtonHeight: closeButton.height,
         };
       });
       assert.equal(layout.documentOverflow, false);
       assert.ok(layout.guideLeft >= 0);
       assert.ok(layout.guideRight <= layout.viewportWidth);
+      assert.ok(layout.closeButtonHeight <= 48, `close button wrapped at ${width}px (${layout.closeButtonHeight}px tall)`);
       await page.keyboard.press('Escape');
     }
   });

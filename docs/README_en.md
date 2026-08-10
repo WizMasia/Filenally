@@ -1,6 +1,6 @@
 # File-nally
 
-**Beta v0.12.0** · [한국어 메인 설명서](../README.md)
+**Beta v0.13.0** · [한국어 메인 설명서](../README.md)
 
 File-nally is a self-contained browser application for comparing and synchronizing two local folders. The distributable runtime—HTML, CSS, and JavaScript—lives in the generated [file-nally.html](../file-nally.html), so end users do not need a server, build process, or Node.js installation.
 
@@ -21,6 +21,7 @@ File-nally is a self-contained browser application for comparing and synchronizi
 - Responsive synchronization options disclosure — options start collapsed on mobile and an explicit user choice persists across visits.
 - Source/Target folder swap — exchange a verified folder pair with one control and swap it back again.
 - Per-run detailed history — inspect every action, path, duration, status, and error, then download the complete log as CSV or JSON.
+- An in-app quick guide in the standalone HTML — open the header guide for the Korean or English workflow, saved-folder permission renewal, backups, and manual `.trash` recovery notes.
 
 ## Requirements
 
@@ -39,6 +40,8 @@ File-nally runs locally in the browser and does not upload your files. Browser p
 5. Select **Compare changes**.
 6. Review the queued actions in both file tables.
 7. Select **Run synchronization**.
+
+Select **Quick guide** in the header whenever you need the workflow and safety notes inside the app. Close it with Escape or **Close**; focus returns to the **Quick guide** button.
 
 The application rejects a folder pair when both selections refer to the same directory or when one directory is inside the other. This prevents recursive synchronization and accidental self-copying.
 
