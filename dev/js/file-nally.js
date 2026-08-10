@@ -9,6 +9,7 @@
     const MAX_MANIFEST_ENTRIES = 100000;
     const MAX_PROFILE_HISTORY = 30;
     const MAX_GLOBAL_HISTORY = 100;
+    const RUN_LOG_PAGE_SIZE = 100;
     const CONTENT_CHUNK_BYTES = 4 * 1024 * 1024;
     const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
     const DEFAULT_EXCLUDES = ['node_modules', '.git', 'dist', 'temp', '.trash'];
@@ -30,7 +31,8 @@
             importDone: 'JSON 데이터를 복원했습니다.', importFailed: 'JSON을 복원하지 못했습니다: {message}', exportDone: 'JSON 백업을 생성했습니다.', defaultDone: '기본 JSON을 생성했습니다.', historyCleared: '동기화 이력을 초기화했습니다.', confirmClear: '현재 프로필과 전체 동기화 이력을 초기화할까요?',
             statusUnchanged: '변경 없음', statusBaseline: '기준 저장', statusCopyOut: '보내기', statusCopyIn: '받기', statusTrash: '휴지통 이동', statusConflict: '충돌 · 확인 필요', statusSkipped: '정책에 따라 건너뜀', statusProtected: '단방향 보호', statusNew: '신규', statusRename: '이름 변경',
             phaseReady: '준비', phaseComparing: '비교', phasePlanned: '계획됨', phaseSyncing: '실행', phaseSuccess: '완료', phaseError: '오류', phaseAborted: '중단', directionBothShort: '양방향', directionOneShort: '단방향', directionReverseShort: '역방향', success: '성공', failed: '실패', aborted: '중단',
-            bookmarkAdded: '북마크가 추가되었습니다.', bookmarkRemoved: '북마크가 해제되었습니다.',
+            bookmarkAdded: '북마크가 추가되었습니다.', bookmarkRemoved: '북마크가 해제되었습니다.', swapFolders: '원본과 대상 폴더 교환', foldersSwapped: '원본과 대상 폴더를 교환했습니다.', advancedOptions: '동기화 옵션', showOptions: '옵션 보기', hideOptions: '옵션 숨기기',
+            detailsHead: '상세', details: '상세 보기', runDetailTitle: '실행 상세', runDetailDescription: '실행 중 처리한 모든 작업과 결과입니다.', close: '닫기', loadingDetails: '상세 기록을 불러오는 중입니다.', detailsUnavailable: '상세 기록을 찾을 수 없습니다.', durationHead: '소요 시간', sequenceHead: '순서', actionHead: '작업', errorHead: '오류', previousPage: '이전', nextPage: '다음', downloadCsv: 'CSV 다운로드', downloadRunJson: 'JSON 다운로드', entrySuccess: '성공', entryFailed: '실패', entryNotRun: '미실행', actionCopy: '복사', actionRename: '이름 변경', actionTrash: '휴지통 이동', actionBaseline: '기준 저장', actionUnknown: '기타',
         },
         en: {
             desc: 'Compare two local folders, review the change plan, and synchronize them safely.', controlTitle: 'Synchronization controls', selectSource: 'Select source folder', selectTarget: 'Select target folder', notSelected: 'Not selected', languageLabel: 'Language', progressLabel: 'Operation progress', workspaceLabel: 'Folder comparison results', activityLabel: 'Synchronization activity',
@@ -45,7 +47,8 @@
             importDone: 'JSON data restored.', importFailed: 'Could not restore JSON: {message}', exportDone: 'JSON backup created.', defaultDone: 'Default JSON created.', historyCleared: 'Synchronization history cleared.', confirmClear: 'Clear the active profile and global synchronization history?',
             statusUnchanged: 'No change', statusBaseline: 'Save baseline', statusCopyOut: 'Send', statusCopyIn: 'Receive', statusTrash: 'Move to trash', statusConflict: 'Conflict · review', statusSkipped: 'Skipped by policy', statusProtected: 'Protected by one-way mode', statusNew: 'New', statusRename: 'Rename',
             phaseReady: 'Ready', phaseComparing: 'Comparing', phasePlanned: 'Planned', phaseSyncing: 'Running', phaseSuccess: 'Complete', phaseError: 'Error', phaseAborted: 'Stopped', directionBothShort: 'Bidirectional', directionOneShort: 'One-way', directionReverseShort: 'Reverse', success: 'Success', failed: 'Failed', aborted: 'Stopped',
-            bookmarkAdded: 'Bookmark added.', bookmarkRemoved: 'Bookmark removed.',
+            bookmarkAdded: 'Bookmark added.', bookmarkRemoved: 'Bookmark removed.', swapFolders: 'Swap source and target folders', foldersSwapped: 'Source and target folders swapped.', advancedOptions: 'Synchronization options', showOptions: 'Show options', hideOptions: 'Hide options',
+            detailsHead: 'Details', details: 'View details', runDetailTitle: 'Run details', runDetailDescription: 'Every action processed during this synchronization run.', close: 'Close', loadingDetails: 'Loading run details.', detailsUnavailable: 'Run details are unavailable.', durationHead: 'Duration', sequenceHead: 'Sequence', actionHead: 'Action', errorHead: 'Error', previousPage: 'Previous', nextPage: 'Next', downloadCsv: 'Download CSV', downloadRunJson: 'Download JSON', entrySuccess: 'Success', entryFailed: 'Failed', entryNotRun: 'Not run', actionCopy: 'Copy', actionRename: 'Rename', actionTrash: 'Move to trash', actionBaseline: 'Save baseline', actionUnknown: 'Other',
         },
     };
 
@@ -78,6 +81,7 @@
             globalHistory: [],
             bookmarks: [],
             recentFolders: [],
+            ui: { advancedExpanded: null },
         });
 
         const rejectForbidden = (value, seen = new Set()) => {
@@ -96,6 +100,7 @@
             excludeDirs: normalizeExcludes(raw.excludeDirs || DEFAULT_EXCLUDES),
             lang: raw.lang === 'en' ? 'en' : 'ko',
         });
+        const cleanUi = (raw = {}) => ({ advancedExpanded: typeof raw.advancedExpanded === 'boolean' ? raw.advancedExpanded : null });
 
         const cleanSnapshot = (value) => isObject(value) && Number.isFinite(Number(value.size)) && Number.isFinite(Number(value.lastModified))
             ? { size: Number(value.size), lastModified: Number(value.lastModified) }
@@ -122,8 +127,13 @@
             const filesCount = Number(entry?.filesCount || 0);
             return {
                 time: String(entry?.time || ''),
+                logId: typeof entry?.logId === 'string' ? entry.logId : null,
+                startedAt: String(entry?.startedAt || ''),
+                endedAt: String(entry?.endedAt || ''),
+                durationMs: Math.max(0, Number(entry?.durationMs) || 0),
                 direction: ['bidirectional', 'unidirectional', 'reverse'].includes(entry?.direction) ? entry.direction : 'bidirectional',
                 filesCount: Number.isFinite(filesCount) ? Math.max(0, filesCount) : 0,
+                totalFiles: Math.max(0, Number(entry?.totalFiles) || filesCount || 0),
                 status: ['success', 'failed', 'aborted', '성공'].includes(entry?.status) ? entry.status === '성공' ? 'success' : entry.status : 'failed',
             };
         }) : [];
@@ -162,6 +172,7 @@
             state.globalHistory = cleanHistory(raw.globalHistory, MAX_GLOBAL_HISTORY);
             state.bookmarks = cleanBookmarks(raw.bookmarks);
             state.recentFolders = cleanRecentFolders(raw.recentFolders);
+            state.ui = cleanUi(raw.ui);
             if (isObject(raw.profiles)) {
                 for (const [id, profile] of Object.entries(raw.profiles).slice(0, MAX_PROFILES)) {
                     if (!isObject(profile) || FORBIDDEN_KEYS.has(id)) continue;
@@ -221,8 +232,11 @@
             if (!('indexedDB' in window)) return Promise.reject(new Error('IndexedDB unavailable'));
             if (dbPromise) return dbPromise;
             dbPromise = new Promise((resolve, reject) => {
-                const request = indexedDB.open('file-nally-handles', 1);
-                request.onupgradeneeded = () => { if (!request.result.objectStoreNames.contains('pairs')) request.result.createObjectStore('pairs', { keyPath: 'profileId' }); };
+                const request = indexedDB.open('file-nally-handles', 2);
+                request.onupgradeneeded = () => {
+                    if (!request.result.objectStoreNames.contains('pairs')) request.result.createObjectStore('pairs', { keyPath: 'profileId' });
+                    if (!request.result.objectStoreNames.contains('runLogs')) request.result.createObjectStore('runLogs', { keyPath: 'id' });
+                };
                 request.onsuccess = () => resolve(request.result);
                 request.onerror = () => reject(request.error || new Error('IndexedDB open failed'));
             });
@@ -263,6 +277,60 @@
         };
         const get = async (profileId) => (await list()).find((record) => record.profileId === profileId) || null;
         return Object.freeze({ findMatching, get, open, put });
+    })();
+
+    const RunLogStore = (() => {
+        const memory = new Map();
+        const requestValue = (request) => new Promise((resolve, reject) => {
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject(request.error || new Error('IndexedDB request failed'));
+        });
+        const put = async (record) => {
+            const stored = cloneJson(record);
+            memory.set(stored.id, stored);
+            try {
+                const db = await HandleStore.open();
+                await requestValue(db.transaction('runLogs', 'readwrite').objectStore('runLogs').put(stored));
+            } catch {}
+        };
+        const get = async (id) => {
+            if (memory.has(id)) return cloneJson(memory.get(id));
+            try {
+                const db = await HandleStore.open();
+                const stored = await requestValue(db.transaction('runLogs', 'readonly').objectStore('runLogs').get(id));
+                if (stored) memory.set(id, stored);
+                return stored ? cloneJson(stored) : null;
+            } catch { return null; }
+        };
+        const peek = (id) => memory.has(id) ? cloneJson(memory.get(id)) : null;
+        const hydrate = async (ids) => { await Promise.all(ids.map((id) => get(id))); };
+        const count = async () => {
+            try {
+                const db = await HandleStore.open();
+                return Number(await requestValue(db.transaction('runLogs', 'readonly').objectStore('runLogs').count()));
+            } catch { return memory.size; }
+        };
+        const clear = async () => {
+            memory.clear();
+            try {
+                const db = await HandleStore.open();
+                await requestValue(db.transaction('runLogs', 'readwrite').objectStore('runLogs').clear());
+            } catch {}
+        };
+        const prune = async (allowedIds) => {
+            const allowed = new Set(allowedIds);
+            for (const id of memory.keys()) if (!allowed.has(id)) memory.delete(id);
+            try {
+                const db = await HandleStore.open();
+                const keys = await requestValue(db.transaction('runLogs', 'readonly').objectStore('runLogs').getAllKeys());
+                const stale = keys.filter((id) => !allowed.has(id));
+                if (!stale.length) return;
+                const transaction = db.transaction('runLogs', 'readwrite');
+                const store = transaction.objectStore('runLogs');
+                await Promise.all(stale.map((id) => requestValue(store.delete(id))));
+            } catch {}
+        };
+        return Object.freeze({ clear, count, get, hydrate, peek, prune, put });
     })();
 
     const validateFolderPair = async (sourceHandle, targetHandle) => {
@@ -529,17 +597,22 @@
     })();
 
     const elements = {
-        btnSrc: $('#btnSrc'), btnTgt: $('#btnTgt'), pathSrc: $('#pathSrc'), pathTgt: $('#pathTgt'), profileText: $('#profileText'), profileBadge: $('#profileBadge'),
+        btnSrc: $('#btnSrc'), btnTgt: $('#btnTgt'), btnSwap: $('#btnSwapFolders'), pathSrc: $('#pathSrc'), pathTgt: $('#pathTgt'), profileText: $('#profileText'), profileBadge: $('#profileBadge'),
         btnBookmark: $('#btnBookmark'), bookmarkChips: $('#bookmarkChips'), recentChips: $('#recentChips'),
+        advancedToggle: $('#btnAdvancedToggle'), advancedToggleLabel: $('#advancedToggleLabel'), advancedSummary: $('#advancedSummary'), advancedControls: $('#advancedControls'),
         directionToggle: $('#syncDirectionToggle'), dirBoth: $('#dirBoth'), dirOne: $('#dirOne'), dirReverse: $('#dirReverse'),
         direction: $('#syncDirection'), policy: $('#conflictPolicy'), comparison: $('#comparisonMode'), excludes: $('#excludeDirs'), btnCompare: $('#btnCompare'), btnSync: $('#btnSync'), btnAbort: $('#btnAbort'),
         status: $('#syncStatus'), statusText: $('#syncStatusText'), phaseLabel: $('#phaseLabel'), progress: $('#progressContainer'), progressText: $('#currentFileText'), progressPercent: $('#progressPercentText'), progressBar: $('#progressBar'), progressFill: $('#progressBar .progress-bar'),
         changedOnly: $('#showChangedOnly'), srcBody: $('#srcFileBody'), tgtBody: $('#tgtFileBody'), srcCount: $('#srcCount'), tgtCount: $('#tgtCount'), log: $('#logBox'), history: $('#historyBody'),
+        runDetailDialog: $('#runDetailDialog'), runDetailLoading: $('#runDetailLoading'), runDetailContent: $('#runDetailContent'), runDetailBody: $('#runDetailBody'), runDetailTime: $('#runDetailTime'), runDetailDirection: $('#runDetailDirection'), runDetailProcessed: $('#runDetailProcessed'), runDetailStatus: $('#runDetailStatus'), runDetailDuration: $('#runDetailDuration'), runDetailPageStatus: $('#runDetailPageStatus'), btnRunPreviousPage: $('#btnRunPreviousPage'), btnRunNextPage: $('#btnRunNextPage'), btnDownloadRunCsv: $('#btnDownloadRunCsv'), btnDownloadRunJson: $('#btnDownloadRunJson'), btnCloseRunDetail: $('#btnCloseRunDetail'),
     };
 
     const model = {
-        state: StateStore.load(), showChangedOnly: sessionStorage.getItem(SHOW_CHANGED_ONLY_KEY) === 'true', source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), plan: null, phase: 'idle', abortRequested: false, logs: [],
+        state: StateStore.load(), showChangedOnly: sessionStorage.getItem(SHOW_CHANGED_ONLY_KEY) === 'true', source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), plan: null, phase: 'idle', abortRequested: false, logs: [], advancedExpanded: null, selectedRun: null, runDetailPage: 0, runDetailTrigger: null,
     };
+    model.advancedExpanded = typeof model.state.ui?.advancedExpanded === 'boolean'
+        ? model.state.ui.advancedExpanded
+        : !window.matchMedia('(max-width: 760px)').matches;
 
     const language = () => model.state.config.lang === 'en' ? 'en' : 'ko';
     const t = (key, values) => format(TEXT[language()][key] || TEXT.ko[key] || key, values);
@@ -574,6 +647,7 @@
         if (elements.dirBoth) elements.dirBoth.disabled = busy;
         if (elements.dirOne) elements.dirOne.disabled = busy;
         if (elements.dirReverse) elements.dirReverse.disabled = busy;
+        elements.btnSwap.disabled = busy || !paired;
         elements.btnCompare.disabled = busy || !paired;
         elements.btnSync.disabled = model.phase !== 'planned' || !model.plan?.actions.length;
         elements.btnAbort.disabled = !['comparing', 'syncing'].includes(model.phase) || model.abortRequested;
@@ -584,6 +658,14 @@
         elements.dirBoth?.setAttribute('aria-checked', String(val === 'bidirectional'));
         elements.dirOne?.setAttribute('aria-checked', String(val === 'unidirectional'));
         elements.dirReverse?.setAttribute('aria-checked', String(val === 'reverse'));
+    };
+    const renderAdvancedControls = () => {
+        const expanded = Boolean(model.advancedExpanded);
+        elements.advancedToggle.setAttribute('aria-expanded', String(expanded));
+        elements.advancedToggleLabel.textContent = t(expanded ? 'hideOptions' : 'showOptions');
+        elements.advancedControls.hidden = !expanded;
+        const directionKey = model.state.config.direction === 'unidirectional' ? 'directionOneShort' : model.state.config.direction === 'reverse' ? 'directionReverseShort' : 'directionBothShort';
+        elements.advancedSummary.textContent = [t(directionKey), elements.policy.selectedOptions[0]?.textContent || '', elements.comparison.selectedOptions[0]?.textContent || ''].filter(Boolean).join(' · ');
     };
     const renderRecentAndBookmarks = () => {
         if (!elements.bookmarkChips || !elements.recentChips) return;
@@ -637,6 +719,7 @@
         elements.comparison.value = model.state.config.comparisonMode;
         elements.changedOnly.checked = model.showChangedOnly;
         renderDirectionToggle();
+        renderAdvancedControls();
         renderRecentAndBookmarks();
         renderPaths(); renderProfile(); renderHistory(); renderRows(); renderControls();
     };
@@ -693,16 +776,84 @@
         elements.srcCount.textContent = String(visibleRows.filter((row) => row.source).length);
         elements.tgtCount.textContent = String(visibleRows.filter((row) => row.target).length);
     };
+    const directionText = (direction) => t(direction === 'unidirectional' ? 'directionOneShort' : direction === 'reverse' ? 'directionReverseShort' : 'directionBothShort');
+    const runStatusText = (status) => t(status === 'success' ? 'success' : status === 'aborted' ? 'aborted' : 'failed');
+    const entryStatusText = (status) => t(status === 'success' ? 'entrySuccess' : status === 'failed' ? 'entryFailed' : 'entryNotRun');
+    const actionText = (action) => t({ copy: 'actionCopy', rename: 'actionRename', trash: 'actionTrash', baseline: 'actionBaseline' }[action] || 'actionUnknown');
+    const renderRunDetails = () => {
+        const run = model.selectedRun;
+        if (!run) return;
+        const totalPages = Math.max(1, Math.ceil(run.entries.length / RUN_LOG_PAGE_SIZE));
+        model.runDetailPage = Math.min(model.runDetailPage, totalPages - 1);
+        const start = model.runDetailPage * RUN_LOG_PAGE_SIZE;
+        elements.runDetailBody.replaceChildren();
+        for (const entry of run.entries.slice(start, start + RUN_LOG_PAGE_SIZE)) {
+            const row = elements.runDetailBody.insertRow();
+            const values = [
+                [t('sequenceHead'), String(entry.sequence)],
+                [t('actionHead'), actionText(entry.action)],
+                [t('pathHead'), entry.path],
+                [t('durationHead'), `${Math.max(0, Number(entry.durationMs) || 0)} ms`],
+                [t('stateHead'), entryStatusText(entry.status)],
+                [t('errorHead'), entry.error || '—'],
+            ];
+            for (const [label, value] of values) {
+                const cell = row.insertCell();
+                cell.dataset.label = label;
+                cell.textContent = value;
+            }
+        }
+        elements.runDetailTime.textContent = new Date(run.startedAt).toLocaleString(language());
+        elements.runDetailDirection.textContent = directionText(run.direction);
+        elements.runDetailProcessed.textContent = `${run.completed}/${run.total}`;
+        elements.runDetailStatus.textContent = runStatusText(run.status);
+        elements.runDetailDuration.textContent = `${Math.max(0, Number(run.durationMs) || 0)} ms`;
+        elements.runDetailPageStatus.textContent = `${model.runDetailPage + 1} / ${totalPages}`;
+        elements.btnRunPreviousPage.disabled = model.runDetailPage === 0;
+        elements.btnRunNextPage.disabled = model.runDetailPage >= totalPages - 1;
+    };
+    const showRunDetails = (run) => {
+        if (!run) {
+            elements.runDetailLoading.textContent = t('detailsUnavailable');
+            return;
+        }
+        model.selectedRun = run;
+        elements.runDetailLoading.hidden = true;
+        elements.runDetailContent.hidden = false;
+        renderRunDetails();
+    };
+    const openRunDetails = (item, trigger) => {
+        model.selectedRun = null;
+        model.runDetailPage = 0;
+        model.runDetailTrigger = trigger;
+        elements.runDetailLoading.textContent = t('loadingDetails');
+        elements.runDetailLoading.hidden = false;
+        elements.runDetailContent.hidden = true;
+        if (!elements.runDetailDialog.open) elements.runDetailDialog.showModal();
+        const cached = RunLogStore.peek(item.logId);
+        if (cached) showRunDetails(cached);
+        else RunLogStore.get(item.logId).then(showRunDetails);
+    };
     const renderHistory = () => {
         elements.history.replaceChildren();
         const history = model.profile?.history || model.state.globalHistory || [];
-        if (!history.length) { const row = elements.history.insertRow(); const cell = row.insertCell(); cell.colSpan = 4; cell.className = 'empty-cell'; cell.textContent = t('emptyHistory'); return; }
+        if (!history.length) { const row = elements.history.insertRow(); const cell = row.insertCell(); cell.colSpan = 5; cell.className = 'empty-cell'; cell.textContent = t('emptyHistory'); return; }
         for (const item of history.slice(0, MAX_PROFILE_HISTORY)) {
             const row = elements.history.insertRow();
             row.insertCell().textContent = item.time;
-            row.insertCell().textContent = t(item.direction === 'unidirectional' ? 'directionOneShort' : item.direction === 'reverse' ? 'directionReverseShort' : 'directionBothShort');
-            row.insertCell().textContent = String(item.filesCount);
-            const status = row.insertCell(); status.textContent = t(item.status === 'success' ? 'success' : item.status === 'aborted' ? 'aborted' : 'failed');
+            row.insertCell().textContent = directionText(item.direction);
+            row.insertCell().textContent = item.totalFiles ? `${item.filesCount}/${item.totalFiles}` : String(item.filesCount);
+            row.insertCell().textContent = runStatusText(item.status);
+            const detailCell = row.insertCell();
+            if (item.logId) {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.className = 'button-ghost history-detail-button';
+                button.textContent = t('details');
+                button.setAttribute('aria-label', `${t('details')}: ${item.time}`);
+                button.addEventListener('click', () => openRunDetails(item, button));
+                detailCell.append(button);
+            }
         }
     };
     const formatBytes = (value) => value < 1024 ? `${value} B` : value < 1024 * 1024 ? `${(value / 1024).toFixed(1)} KB` : `${(value / (1024 * 1024)).toFixed(1)} MB`;
@@ -722,23 +873,55 @@
 
     const SyncExecutor = (() => {
         const run = async (plan, context) => {
+            const startedAt = nowIso();
+            const startedMs = Date.now();
             let completed = 0;
-            for (const action of plan.actions) {
-                if (model.abortRequested) return { status: 'aborted', completed, total: plan.actions.length, errors: [] };
+            const entries = plan.actions.map((action, index) => ({
+                sequence: index + 1,
+                action: action.type,
+                path: action.path || action.sourcePath || action.destinationPath || '',
+                sourcePath: action.sourcePath || action.path || '',
+                destinationPath: action.destinationPath || action.path || '',
+                fromSide: action.fromSide || '',
+                toSide: action.toSide || '',
+                startedAt: '',
+                endedAt: '',
+                durationMs: 0,
+                status: 'not-run',
+                error: '',
+            }));
+            const finish = (status, errors) => {
+                const endedAt = nowIso();
+                const runLog = { id: plan.id, profileId: context.profile.id, startedAt, endedAt, durationMs: Date.now() - startedMs, direction: context.direction, status, completed, total: plan.actions.length, errors, entries };
+                return { status, completed, total: plan.actions.length, errors, runLog };
+            };
+            for (let index = 0; index < plan.actions.length; index += 1) {
+                const action = plan.actions[index];
+                if (model.abortRequested) return finish('aborted', []);
                 updateProgress(completed, plan.actions.length, action.path);
+                const entry = entries[index];
+                const actionStartedMs = Date.now();
+                entry.startedAt = nowIso();
                 try {
                     if (action.type === 'copy') await FileAdapter.copy(action, context.handles);
                     else if (action.type === 'rename') await FileAdapter.rename(action, context.handles);
                     else if (action.type === 'trash') await FileAdapter.moveToTrash(action, context.handles, plan.stamp);
                 } catch (error) {
-                    return { status: 'failed', completed, total: plan.actions.length, errors: [safeMessage(error)] };
+                    entry.endedAt = nowIso();
+                    entry.durationMs = Date.now() - actionStartedMs;
+                    entry.status = 'failed';
+                    entry.error = safeMessage(error);
+                    return finish('failed', [entry.error]);
                 }
+                entry.endedAt = nowIso();
+                entry.durationMs = Date.now() - actionStartedMs;
+                entry.status = 'success';
                 completed += 1;
                 context.profile.lastCheckpoint = { planId: plan.id, completed, total: plan.actions.length, updatedAt: nowIso() };
                 StateStore.save(context.state);
             }
             updateProgress(completed, plan.actions.length, '');
-            return { status: 'success', completed, total: plan.actions.length, errors: [] };
+            return finish('success', []);
         };
         return Object.freeze({ run });
     })();
@@ -791,6 +974,19 @@
                 renderProfile();
                 renderHistory();
             }
+        };
+        const swapFolders = async () => {
+            if (!model.source || !model.target || !model.profile || !model.trustedProfile || ['comparing', 'syncing', 'aborting'].includes(model.phase)) return;
+            elements.btnSwap.disabled = true;
+            [model.source, model.target] = [model.target, model.source];
+            model.profile = null;
+            model.trustedProfile = false;
+            model.plan = null;
+            renderPaths();
+            renderRows();
+            await bindPair();
+            setStatus(t('foldersSwapped'), 'success', 'check');
+            addLog(t('foldersSwapped'));
         };
         const toggleBookmark = () => {
             if (!model.profile) return;
@@ -871,13 +1067,15 @@
             if (!model.plan?.actions.length || !model.profile) return;
             const plan = model.plan; model.abortRequested = false; setPhase('syncing'); setStatus(t('syncing', { current: 0, total: plan.actions.length }), 'info', 'sync'); updateProgress(0, plan.actions.length);
             try {
-                const result = await SyncExecutor.run(plan, { handles: { source: model.source, target: model.target }, profile: model.profile, state: model.state });
+                const result = await SyncExecutor.run(plan, { handles: { source: model.source, target: model.target }, profile: model.profile, state: model.state, direction: elements.direction.value });
+                await RunLogStore.put(result.runLog);
                 const excludes = normalizeExcludes(elements.excludes.value);
                 [model.sourceFiles, model.targetFiles] = await Promise.all([FileAdapter.scan(model.source, excludes), FileAdapter.scan(model.target, excludes)]);
                 model.profile.manifest = buildManifest(model.sourceFiles, model.targetFiles);
                 if (result.status !== 'failed') delete model.profile.lastCheckpoint;
-                const history = { time: new Date().toLocaleString(language()), direction: elements.direction.value, filesCount: result.completed, status: result.status };
+                const history = { time: new Date(result.runLog.startedAt).toLocaleString(language()), logId: result.runLog.id, startedAt: result.runLog.startedAt, endedAt: result.runLog.endedAt, durationMs: result.runLog.durationMs, direction: result.runLog.direction, filesCount: result.completed, totalFiles: result.total, status: result.status };
                 model.profile.history.unshift(history); model.profile.history = model.profile.history.slice(0, MAX_PROFILE_HISTORY); model.state.globalHistory.unshift(history); model.state.globalHistory = model.state.globalHistory.slice(0, MAX_GLOBAL_HISTORY); StateStore.save(model.state);
+                await RunLogStore.prune(model.state.globalHistory.map((item) => item.logId).filter(Boolean));
                 model.plan = null; renderHistory(); renderRows();
                 if (result.status === 'aborted') { setPhase('aborted'); setStatus(t('syncAborted', { count: result.completed }), 'warning', 'stop'); }
                 else if (result.status === 'failed') { setPhase('error'); setStatus(t('syncFailed', { message: result.errors[0] || 'Unknown error' }), 'danger', 'alert'); }
@@ -897,22 +1095,55 @@
                 model.state = StateStore.importText(await file.text()); model.source = model.target = model.profile = null; model.trustedProfile = false; model.plan = null; StateStore.save(model.state); setPhase('idle'); renderStaticText(); setStatus(t('importDone'), 'success', 'check'); addLog(t('importDone'));
             } catch (error) { setPhase('error'); setStatus(t('importFailed', { message: safeMessage(error) }), 'danger', 'alert'); }
         };
-        return Object.freeze({ abort, bindPair, compare, importState, invalidatePlan, pick, saveConfig, selectProfile, sync, toggleBookmark });
+        return Object.freeze({ abort, bindPair, compare, importState, invalidatePlan, pick, saveConfig, selectProfile, swapFolders, sync, toggleBookmark });
     })();
 
-    const downloadJson = (data, name) => {
-        const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    const downloadText = (content, name, type) => {
+        const url = URL.createObjectURL(new Blob([content], { type }));
         const link = document.createElement('a'); link.href = url; link.download = name; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 0);
+    };
+    const downloadJson = (data, name) => downloadText(JSON.stringify(data, null, 2), name, 'application/json');
+    const csvCell = (value) => {
+        let cell = String(value ?? '');
+        if (/^[=+\-@\t\r]/.test(cell)) cell = `'${cell}`;
+        return /[",\r\n]/.test(cell) ? `"${cell.replaceAll('"', '""')}"` : cell;
+    };
+    const runLogCsv = (run) => {
+        const columns = ['sequence', 'action', 'path', 'sourcePath', 'destinationPath', 'fromSide', 'toSide', 'durationMs', 'status', 'error'];
+        const rows = run.entries.map((entry) => columns.map((column) => csvCell(entry[column])).join(','));
+        return `\uFEFF${[columns.join(','), ...rows].join('\r\n')}`;
+    };
+    const closeRunDetails = () => {
+        if (elements.runDetailDialog.open) elements.runDetailDialog.close();
     };
 
     elements.btnSrc.addEventListener('click', () => Controller.pick('source'));
     elements.btnTgt.addEventListener('click', () => Controller.pick('target'));
+    elements.btnSwap.addEventListener('click', Controller.swapFolders);
     elements.btnBookmark?.addEventListener('click', Controller.toggleBookmark);
+    elements.advancedToggle.addEventListener('click', () => {
+        model.advancedExpanded = !model.advancedExpanded;
+        model.state.ui = { advancedExpanded: model.advancedExpanded };
+        StateStore.save(model.state);
+        renderAdvancedControls();
+    });
     elements.btnCompare.addEventListener('click', Controller.compare);
     elements.btnSync.addEventListener('click', Controller.sync);
     elements.btnAbort.addEventListener('click', Controller.abort);
+    elements.btnCloseRunDetail.addEventListener('click', closeRunDetails);
+    elements.btnRunPreviousPage.addEventListener('click', () => { model.runDetailPage -= 1; renderRunDetails(); });
+    elements.btnRunNextPage.addEventListener('click', () => { model.runDetailPage += 1; renderRunDetails(); });
+    elements.btnDownloadRunJson.addEventListener('click', () => { if (model.selectedRun) downloadJson(model.selectedRun, `file-nally-run-${model.selectedRun.id}.json`); });
+    elements.btnDownloadRunCsv.addEventListener('click', () => { if (model.selectedRun) downloadText(runLogCsv(model.selectedRun), `file-nally-run-${model.selectedRun.id}.csv`, 'text/csv;charset=utf-8'); });
+    elements.runDetailDialog.addEventListener('close', () => {
+        const trigger = model.runDetailTrigger;
+        model.selectedRun = null;
+        model.runDetailPage = 0;
+        model.runDetailTrigger = null;
+        if (trigger?.isConnected) trigger.focus();
+    });
     elements.changedOnly.addEventListener('change', () => { model.showChangedOnly = elements.changedOnly.checked; sessionStorage.setItem(SHOW_CHANGED_ONLY_KEY, String(model.showChangedOnly)); renderRows(); });
-    [elements.direction, elements.policy, elements.comparison, elements.excludes].forEach((control) => control.addEventListener('change', () => { Controller.saveConfig(); Controller.invalidatePlan(); }));
+    [elements.direction, elements.policy, elements.comparison, elements.excludes].forEach((control) => control.addEventListener('change', () => { Controller.saveConfig(); Controller.invalidatePlan(); renderAdvancedControls(); }));
     [elements.dirBoth, elements.dirOne, elements.dirReverse].forEach((btn) => {
         btn?.addEventListener('click', () => {
             model.state.config.direction = btn.dataset.value;
@@ -920,6 +1151,7 @@
             renderDirectionToggle();
             Controller.saveConfig();
             Controller.invalidatePlan();
+            renderAdvancedControls();
         });
     });
     elements.excludes.addEventListener('input', () => { model.state.config.excludeDirs = normalizeExcludes(elements.excludes.value); StateStore.save(model.state); Controller.invalidatePlan(); });
@@ -929,9 +1161,9 @@
     $('#btnExport').addEventListener('click', () => { downloadJson(StateStore.export(model.state), `file-nally-backup-${new Date().toISOString().slice(0, 10)}.json`); setStatus(t('exportDone'), 'success', 'check'); });
     $('#btnImport').addEventListener('click', () => $('#fileImporter').click());
     $('#fileImporter').addEventListener('change', async (event) => { const file = event.target.files?.[0]; if (file) await Controller.importState(file); event.target.value = ''; });
-    $('#btnClearHistory').addEventListener('click', () => {
+    $('#btnClearHistory').addEventListener('click', async () => {
         if (!confirm(t('confirmClear'))) return;
-        model.state.globalHistory = []; if (model.profile) model.profile.history = []; StateStore.save(model.state); renderHistory(); setStatus(t('historyCleared'), 'success', 'check');
+        model.state.globalHistory = []; if (model.profile) model.profile.history = []; StateStore.save(model.state); await RunLogStore.clear(); renderHistory(); setStatus(t('historyCleared'), 'success', 'check');
     });
 
     const initialize = async () => {
@@ -949,10 +1181,12 @@
                 } catch { model.trustedProfile = false; }
             }
         }
+        await RunLogStore.hydrate(model.state.globalHistory.map((item) => item.logId).filter(Boolean));
         renderStaticText(); renderRows(); renderHistory(); renderControls(); addLog(t('waiting'));
     };
 
     window.FileNallyTest = Object.freeze({
+        RunLogStore,
         StateStore,
         SyncPlanner,
         executeCurrentPlan: () => Controller.sync(),

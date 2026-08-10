@@ -90,6 +90,11 @@ async function executeCurrentPlan(page) {
   });
 }
 
+async function downloadText(download) {
+  const filePath = await download.path();
+  return fs.readFile(filePath, 'utf8');
+}
+
 async function main() {
   const { server, url, devUrl } = await startServer();
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -106,7 +111,7 @@ async function main() {
       background: getComputedStyle(document.body).backgroundColor,
       errors: window.__testUnhandledErrors || [],
     }));
-    assert.equal(result.version, 'Beta v0.10.0');
+    assert.equal(result.version, 'Beta v0.11.0');
     assert.equal(result.background, 'rgb(244, 246, 250)');
     assert.deepEqual(result.errors, []);
   });
@@ -438,6 +443,84 @@ async function main() {
     assert.equal(await page.locator('#btnCompare').isEnabled(), false);
   });
 
+  add('advanced controls use a responsive default and persist an explicit choice', async ({ page }) => {
+    await page.setViewportSize({ width: 375, height: 900 });
+    await page.reload();
+
+    const toggle = page.locator('#btnAdvancedToggle');
+    const controls = page.locator('#advancedControls');
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    assert.equal(await controls.isHidden(), true);
+    assert.match(await page.locator('#advancedSummary').innerText(), /양방향.*최신 파일 유지.*빠른 비교/);
+
+    await toggle.click();
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+    assert.equal(await controls.isVisible(), true);
+    await page.reload();
+    assert.equal(await page.locator('#btnAdvancedToggle').getAttribute('aria-expanded'), 'true');
+    assert.equal(await page.locator('#advancedControls').isVisible(), true);
+
+    await page.evaluate(() => localStorage.clear());
+    await page.setViewportSize({ width: 1280, height: 900 });
+    await page.reload();
+    assert.equal(await page.locator('#btnAdvancedToggle').getAttribute('aria-expanded'), 'true');
+  });
+
+  add('folder swap exchanges handles, preserves direction, and restores the ordered profile', async ({ page }) => {
+    await mountPair(page, {
+      sourceName: 'source-a',
+      targetName: 'target-b',
+      source: { 'left.txt': { content: 'left', lastModified: 200 } },
+      target: { 'right.txt': { content: 'right', lastModified: 300 } },
+    });
+    await page.locator('#dirReverse').click();
+    await compare(page);
+    const originalProfileId = await page.evaluate(() => window.FileNallyTest.getModel().profileId);
+
+    const swap = page.locator('#btnSwapFolders');
+    assert.equal(await swap.isEnabled(), true);
+    await swap.click();
+    await page.waitForFunction(() => Boolean(window.FileNallyTest.getModel().profileId));
+
+    assert.equal(await page.locator('#pathSrc').innerText(), 'target-b');
+    assert.equal(await page.locator('#pathTgt').innerText(), 'source-a');
+    assert.equal(await page.locator('#syncDirection').inputValue(), 'reverse');
+    const swapped = await page.evaluate(() => window.FileNallyTest.getModel());
+    assert.equal(swapped.plan, null);
+    assert.notEqual(swapped.profileId, originalProfileId);
+
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.deepEqual(actions.map(({ type, path, fromSide, toSide }) => ({ type, path, fromSide, toSide })), [
+      { type: 'copy', path: 'left.txt', fromSide: 'target', toSide: 'source' },
+    ]);
+
+    await swap.click();
+    await page.waitForFunction((profileId) => window.FileNallyTest.getModel().profileId === profileId, originalProfileId);
+    assert.equal(await page.locator('#pathSrc').innerText(), 'source-a');
+    assert.equal(await page.locator('#pathTgt').innerText(), 'target-b');
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().profileId), originalProfileId);
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+  });
+
+  add('folder swap is disabled until a verified pair is idle', async ({ page }) => {
+    const swap = page.locator('#btnSwapFolders');
+    assert.equal(await swap.isDisabled(), true);
+    await mountPair(page, {
+      source: { 'large.bin': { contentSize: (4 * 1024 * 1024) + 1, lastModified: 100, readDelay: 100 } },
+      target: { 'large.bin': { contentSize: (4 * 1024 * 1024) + 1, lastModified: 100, readDelay: 100 } },
+    });
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'ready');
+    assert.equal(await swap.isEnabled(), true);
+    await selectExactComparison(page);
+    await page.locator('#btnCompare').click();
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'comparing');
+    assert.equal(await swap.isDisabled(), true);
+    await page.locator('#btnAbort').click();
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'ready');
+    assert.equal(await swap.isEnabled(), true);
+  });
+
   add('nested source and target folders are rejected', async ({ page }) => {
     await configureMockPair(page, {
       targetInsideSource: true,
@@ -522,6 +605,92 @@ async function main() {
     assert.equal(snapshot.target['a.txt'].content, 'old a');
     assert.equal(snapshot.target['b.txt'].content, 'old b');
     assert.match(await page.locator('#historyBody').innerText(), /실패|Failed/);
+  });
+
+  add('run details persist across reload and export complete JSON and safe CSV', async ({ page }) => {
+    await mountPair(page, {
+      source: {
+        'safe.txt': { content: 'safe', lastModified: 200 },
+        '=formula.txt': { content: 'formula', lastModified: 200 },
+      },
+      target: {},
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'success');
+
+    await page.locator('.history-detail-button').first().click();
+    const dialog = page.locator('#runDetailDialog');
+    assert.equal(await dialog.isVisible(), true);
+    assert.equal(await page.evaluate(() => document.activeElement?.id), 'btnCloseRunDetail');
+    assert.equal(await page.locator('#runDetailBody tr').count(), 2);
+    assert.match(await page.locator('#runDetailBody').innerText(), /safe\.txt/);
+    assert.match(await page.locator('#runDetailBody').innerText(), /=formula\.txt/);
+
+    await page.keyboard.press('Escape');
+    assert.equal(await dialog.isVisible(), false);
+    assert.equal(await page.evaluate(() => document.activeElement?.classList.contains('history-detail-button')), true);
+    await page.locator('.history-detail-button').first().click();
+
+    const jsonDownloadPromise = page.waitForEvent('download');
+    await page.locator('#btnDownloadRunJson').click();
+    const jsonDownload = await jsonDownloadPromise;
+    const json = JSON.parse(await downloadText(jsonDownload));
+    assert.equal(json.entries.length, 2);
+    assert.ok(json.entries.some((entry) => entry.path === '=formula.txt'));
+
+    const csvDownloadPromise = page.waitForEvent('download');
+    await page.locator('#btnDownloadRunCsv').click();
+    const csvDownload = await csvDownloadPromise;
+    const csv = await downloadText(csvDownload);
+    assert.match(csv, /^\uFEFFsequence,action,path,/);
+    assert.match(csv, /'=formula\.txt/);
+
+    await page.locator('#btnCloseRunDetail').click();
+    await page.reload();
+    await page.locator('.history-detail-button').first().click();
+    assert.equal(await page.locator('#runDetailBody tr').count(), 2);
+
+    await page.locator('#btnCloseRunDetail').click();
+    page.once('dialog', (confirmation) => confirmation.accept());
+    await page.locator('#btnClearHistory').click();
+    await page.waitForFunction(async () => (await window.FileNallyTest.RunLogStore.count()) === 0);
+    assert.match(await page.locator('#historyBody').innerText(), /기록된 동기화 이력이 없습니다|No synchronization history/);
+  });
+
+  add('run detail paging shows one hundred actions per page without truncating export', async ({ page }) => {
+    const source = Object.fromEntries(Array.from({ length: 101 }, (_, index) => [`file-${String(index).padStart(3, '0')}.txt`, { content: String(index), lastModified: 200 }]));
+    await mountPair(page, { source, target: {} });
+    await compare(page);
+    await executeCurrentPlan(page);
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'success');
+    await page.locator('.history-detail-button').first().click();
+
+    assert.equal(await page.locator('#runDetailBody tr').count(), 100);
+    assert.equal(await page.locator('#btnRunNextPage').isEnabled(), true);
+    await page.locator('#btnRunNextPage').click();
+    assert.equal(await page.locator('#runDetailBody tr').count(), 1);
+    assert.match(await page.locator('#runDetailPageStatus').innerText(), /2\s*\/\s*2/);
+
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('#btnDownloadRunJson').click();
+    const exported = JSON.parse(await downloadText(await downloadPromise));
+    assert.equal(exported.entries.length, 101);
+  });
+
+  add('failed action appears in detailed history with its error', async ({ page }) => {
+    await page.locator('#conflictPolicy').selectOption('source-overwrite');
+    await mountPair(page, {
+      source: { 'broken.txt': { content: 'new', lastModified: 300 } },
+      target: { 'broken.txt': { content: 'old', lastModified: 100, failWrite: true } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'error');
+    await page.locator('.history-detail-button').first().click();
+    assert.match(await page.locator('#runDetailBody').innerText(), /broken\.txt/);
+    assert.match(await page.locator('#runDetailBody').innerText(), /실패|Failed/);
+    assert.match(await page.locator('#runDetailBody').innerText(), /Injected write failure/);
   });
 
   add('language changes keep selected folder names visible', async ({ page }) => {
@@ -647,6 +816,7 @@ async function main() {
       await installMockFileSystem(page);
       await page.goto(url);
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}.png`), fullPage: true });
+      if (!(await page.getByLabel('비교 모드').isVisible())) await page.locator('#btnAdvancedToggle').click();
       await page.getByLabel('비교 모드').selectOption('exact');
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-exact.png`), fullPage: true });
       await mountPair(page, {
@@ -665,6 +835,10 @@ async function main() {
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-planned.png`), fullPage: true });
       await page.getByLabel('변경된 파일만 보기', { exact: true }).check();
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-changed-only.png`), fullPage: true });
+      await executeCurrentPlan(page);
+      await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'success');
+      await page.locator('.history-detail-button').first().click();
+      await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-run-detail.png`), fullPage: true });
       await context.close();
     }
   }

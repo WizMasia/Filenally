@@ -83,6 +83,12 @@ Base unit: 4px.
 - Button plus selected folder name and profile verification badge.
 - Empty, selected, permission-needed, and invalid-pair states.
 - Folder name uses text truncation; full name remains available by title.
+- A compact swap button sits between the ordered source and target selectors. It is enabled only for a verified pair outside busy phases, exchanges the real folder roles, and keeps the current synchronization direction unchanged.
+
+### Advanced controls disclosure
+- The disclosure summary always exposes the active direction, conflict policy, and comparison mode even when the option fields are hidden.
+- States: expanded, collapsed, disabled-while-busy, and narrow-screen default. The explicit user choice persists locally; the 760px responsive default applies only before a choice exists.
+- The trigger uses `aria-expanded` and `aria-controls`. Opening and closing is immediate so the file workspace never waits on layout animation.
 
 ### Field
 - Label, select/text input, optional hint.
@@ -106,6 +112,12 @@ Base unit: 4px.
 ### Progress
 - Native semantic values through `role="progressbar"` and ARIA values.
 - Bar width communicates the same numeric percentage shown in text.
+
+### Run detail dialog
+- A native modal dialog presents one synchronization run summary and its per-file actions without navigating away from the single-page tool.
+- States: loading, ready, summary-only legacy entry, empty, and storage error. Desktop uses a centered panel; mobile uses the available viewport.
+- The action table pages at 100 rows. JSON and CSV downloads always contain the complete run, never only the visible page.
+- Escape and an explicit close button dismiss the dialog, and focus returns to the history-row trigger.
 
 ## 6. Motion & Interaction
 
