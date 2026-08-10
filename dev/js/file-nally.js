@@ -33,6 +33,7 @@
             phaseReady: '준비', phaseComparing: '비교', phasePlanned: '계획됨', phaseSyncing: '실행', phaseSuccess: '완료', phaseError: '오류', phaseAborted: '중단', directionBothShort: '양방향', directionOneShort: '단방향', directionReverseShort: '역방향', success: '성공', failed: '실패', aborted: '중단',
             bookmarkAdded: '북마크가 추가되었습니다.', bookmarkRemoved: '북마크가 해제되었습니다.', swapFolders: '원본과 대상 폴더 교환', foldersSwapped: '원본과 대상 폴더를 교환했습니다.', advancedOptions: '동기화 옵션', showOptions: '옵션 보기', hideOptions: '옵션 숨기기',
             permissionChecking: '저장된 폴더 권한을 확인하는 중입니다.', permissionRestored: '폴더 권한이 확인되었습니다. 변경사항을 비교할 수 있습니다.', permissionDenied: '폴더 권한이 승인되지 않았습니다. 원본과 대상 폴더를 다시 선택해 주세요.', permissionNeedsAction: '저장된 폴더를 사용하려면 최근 폴더 또는 북마크를 눌러 권한을 승인해 주세요.', storedHandleMissing: '저장된 폴더 연결을 찾을 수 없습니다. 원본과 대상 폴더를 다시 선택해 주세요.', storedHandleUnavailable: '저장된 폴더에 접근할 수 없습니다. 원본과 대상 폴더를 다시 선택해 주세요.',
+            quickGuideButton: '사용 안내', quickGuideTitle: '사용 안내', quickGuideDescription: '비교부터 동기화까지, 안전한 기본 흐름을 확인하세요.', quickGuideStepFolders: '원본 폴더와 대상 폴더를 선택합니다.', quickGuideStepOptions: '동기화 방향, 충돌 정책, 비교 모드를 확인합니다.', quickGuideStepCompare: '변경사항 비교를 실행합니다.', quickGuideStepPlan: '생성된 작업 계획과 충돌 항목을 검토합니다.', quickGuideStepSync: '계획을 확인한 뒤 동기화를 실행합니다.', quickGuidePermission: '저장된 폴더는 권한 재승인이 필요할 수 있습니다. 승인할 수 없으면 원본과 대상 폴더를 다시 선택하세요.', quickGuideSafety: '중요한 데이터는 먼저 백업하세요. `.trash` 복구는 수동이며 자동 롤백이 아닙니다.',
             detailsHead: '상세', details: '상세 보기', runDetailTitle: '실행 상세', runDetailDescription: '실행 중 처리한 모든 작업과 결과입니다.', close: '닫기', loadingDetails: '상세 기록을 불러오는 중입니다.', detailsUnavailable: '상세 기록을 찾을 수 없습니다.', durationHead: '소요 시간', sequenceHead: '순서', actionHead: '작업', errorHead: '오류', previousPage: '이전', nextPage: '다음', downloadCsv: 'CSV 다운로드', downloadRunJson: 'JSON 다운로드', entrySuccess: '성공', entryFailed: '실패', entryNotRun: '미실행', actionCopy: '복사', actionRename: '이름 변경', actionTrash: '휴지통 이동', actionBaseline: '기준 저장', actionUnknown: '기타',
         },
         en: {
@@ -50,6 +51,7 @@
             phaseReady: 'Ready', phaseComparing: 'Comparing', phasePlanned: 'Planned', phaseSyncing: 'Running', phaseSuccess: 'Complete', phaseError: 'Error', phaseAborted: 'Stopped', directionBothShort: 'Bidirectional', directionOneShort: 'One-way', directionReverseShort: 'Reverse', success: 'Success', failed: 'Failed', aborted: 'Stopped',
             bookmarkAdded: 'Bookmark added.', bookmarkRemoved: 'Bookmark removed.', swapFolders: 'Swap source and target folders', foldersSwapped: 'Source and target folders swapped.', advancedOptions: 'Synchronization options', showOptions: 'Show options', hideOptions: 'Hide options',
             permissionChecking: 'Checking access to the saved folders.', permissionRestored: 'Folder access verified. You can compare changes now.', permissionDenied: 'Folder access was not granted. Select the source and target folders again.', permissionNeedsAction: 'Select the recent folder or bookmark to approve access before reconnecting.', storedHandleMissing: 'The saved folder connection is unavailable. Select the source and target folders again.', storedHandleUnavailable: 'The saved folders cannot be accessed. Select the source and target folders again.',
+            quickGuideButton: 'Quick guide', quickGuideTitle: 'Quick guide', quickGuideDescription: 'Follow the safe path from comparison to synchronization.', quickGuideStepFolders: 'Select the source and target folders.', quickGuideStepOptions: 'Check the synchronization direction, conflict policy, and comparison mode.', quickGuideStepCompare: 'Compare the changes.', quickGuideStepPlan: 'Review the generated work plan and any conflicts.', quickGuideStepSync: 'Run synchronization only after reviewing the plan.', quickGuidePermission: 'Saved folders may require you to renew permission. If access cannot be renewed, select the source and target folders again.', quickGuideSafety: 'Create a backup of important data first. `.trash` recovery is manual and is not an automatic rollback.',
             detailsHead: 'Details', details: 'View details', runDetailTitle: 'Run details', runDetailDescription: 'Every action processed during this synchronization run.', close: 'Close', loadingDetails: 'Loading run details.', detailsUnavailable: 'Run details are unavailable.', durationHead: 'Duration', sequenceHead: 'Sequence', actionHead: 'Action', errorHead: 'Error', previousPage: 'Previous', nextPage: 'Next', downloadCsv: 'Download CSV', downloadRunJson: 'Download JSON', entrySuccess: 'Success', entryFailed: 'Failed', entryNotRun: 'Not run', actionCopy: 'Copy', actionRename: 'Rename', actionTrash: 'Move to trash', actionBaseline: 'Save baseline', actionUnknown: 'Other',
         },
     };
@@ -655,6 +657,7 @@
         direction: $('#syncDirection'), policy: $('#conflictPolicy'), comparison: $('#comparisonMode'), excludes: $('#excludeDirs'), btnCompare: $('#btnCompare'), btnSync: $('#btnSync'), btnAbort: $('#btnAbort'),
         status: $('#syncStatus'), statusText: $('#syncStatusText'), phaseLabel: $('#phaseLabel'), progress: $('#progressContainer'), progressText: $('#currentFileText'), progressPercent: $('#progressPercentText'), progressBar: $('#progressBar'), progressFill: $('#progressBar .progress-bar'),
         changedOnly: $('#showChangedOnly'), srcBody: $('#srcFileBody'), tgtBody: $('#tgtFileBody'), srcCount: $('#srcCount'), tgtCount: $('#tgtCount'), log: $('#logBox'), history: $('#historyBody'),
+        btnQuickGuide: $('#btnQuickGuide'), quickGuideDialog: $('#quickGuideDialog'), btnCloseQuickGuide: $('#btnCloseQuickGuide'),
         runDetailDialog: $('#runDetailDialog'), runDetailLoading: $('#runDetailLoading'), runDetailContent: $('#runDetailContent'), runDetailBody: $('#runDetailBody'), runDetailTime: $('#runDetailTime'), runDetailDirection: $('#runDetailDirection'), runDetailProcessed: $('#runDetailProcessed'), runDetailStatus: $('#runDetailStatus'), runDetailDuration: $('#runDetailDuration'), runDetailPageStatus: $('#runDetailPageStatus'), btnRunPreviousPage: $('#btnRunPreviousPage'), btnRunNextPage: $('#btnRunNextPage'), btnDownloadRunCsv: $('#btnDownloadRunCsv'), btnDownloadRunJson: $('#btnDownloadRunJson'), btnCloseRunDetail: $('#btnCloseRunDetail'),
     };
 
@@ -1209,7 +1212,17 @@
     const closeRunDetails = () => {
         if (elements.runDetailDialog.open) elements.runDetailDialog.close();
     };
+    const openQuickGuide = () => {
+        if (!elements.quickGuideDialog.open) elements.quickGuideDialog.showModal();
+        elements.btnCloseQuickGuide.focus();
+    };
+    const closeQuickGuide = () => {
+        if (elements.quickGuideDialog.open) elements.quickGuideDialog.close();
+    };
 
+    elements.btnQuickGuide.addEventListener('click', openQuickGuide);
+    elements.btnCloseQuickGuide.addEventListener('click', closeQuickGuide);
+    elements.quickGuideDialog.addEventListener('close', () => elements.btnQuickGuide.focus());
     elements.btnSrc.addEventListener('click', () => Controller.pick('source'));
     elements.btnTgt.addEventListener('click', () => Controller.pick('target'));
     elements.btnSwap.addEventListener('click', Controller.swapFolders);

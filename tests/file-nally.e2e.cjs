@@ -700,6 +700,57 @@ async function main() {
     assert.equal(await page.locator('#pathTgt').innerText(), 'my-target');
   });
 
+  add('quick guide explains the safe workflow in both languages and restores focus', async ({ page }) => {
+    const trigger = page.locator('#btnQuickGuide');
+    const dialog = page.locator('#quickGuideDialog');
+
+    assert.equal(await trigger.count(), 1);
+    await trigger.click();
+    assert.equal(await dialog.evaluate((node) => node.open), true);
+    assert.equal(await page.locator('#btnCloseQuickGuide').evaluate((node) => node === document.activeElement), true);
+    const korean = await dialog.innerText();
+    assert.match(korean, /원본 폴더와 대상 폴더/);
+    assert.match(korean, /작업 계획/);
+    assert.match(korean, /권한.*재승인|재승인.*권한/);
+    assert.match(korean, /백업/);
+    assert.match(korean, /\.trash/);
+
+    await page.keyboard.press('Escape');
+    assert.equal(await dialog.evaluate((node) => node.open), false);
+    assert.equal(await trigger.evaluate((node) => node === document.activeElement), true);
+
+    await page.locator('#btnLangEn').click();
+    await trigger.click();
+    const english = await dialog.innerText();
+    assert.match(english, /source and target folders/i);
+    assert.match(english, /work plan/i);
+    assert.match(english, /renew.*permission|permission.*renew/i);
+    assert.match(english, /backup/i);
+    assert.match(english, /\.trash/);
+
+    await page.locator('#btnCloseQuickGuide').click();
+    assert.equal(await dialog.evaluate((node) => node.open), false);
+    assert.equal(await trigger.evaluate((node) => node === document.activeElement), true);
+
+    for (const width of [375, 768, 1280]) {
+      await page.setViewportSize({ width, height: 900 });
+      await trigger.click();
+      const layout = await page.evaluate(() => {
+        const guide = document.querySelector('#quickGuideDialog').getBoundingClientRect();
+        return {
+          documentOverflow: document.documentElement.scrollWidth > document.documentElement.clientWidth,
+          guideLeft: guide.left,
+          guideRight: guide.right,
+          viewportWidth: document.documentElement.clientWidth,
+        };
+      });
+      assert.equal(layout.documentOverflow, false);
+      assert.ok(layout.guideLeft >= 0);
+      assert.ok(layout.guideRight <= layout.viewportWidth);
+      await page.keyboard.press('Escape');
+    }
+  });
+
   add('rename policy preserves both conflicting versions', async ({ page }) => {
     await page.locator('#conflictPolicy').selectOption('rename');
     await mountPair(page, {
@@ -914,6 +965,9 @@ async function main() {
       await installMockFileSystem(page);
       await page.goto(url);
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}.png`), fullPage: true });
+      await page.locator('#btnQuickGuide').click();
+      await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-quick-guide.png`), fullPage: true });
+      await page.keyboard.press('Escape');
       if (!(await page.getByLabel('비교 모드').isVisible())) await page.locator('#btnAdvancedToggle').click();
       await page.getByLabel('비교 모드').selectOption('exact');
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-exact.png`), fullPage: true });
