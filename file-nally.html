@@ -708,6 +708,20 @@
             return result;
         };
 
+        const cleanDirectoryManifest = (raw) => {
+            const result = {};
+            if (!isObject(raw)) return result;
+            for (const [path, entry] of Object.entries(raw).slice(0, MAX_MANIFEST_ENTRIES)) {
+                if (FORBIDDEN_KEYS.has(path)) continue;
+                try { safeSegments(path); } catch { continue; }
+                if (!isObject(entry)) continue;
+                const source = entry.source === true;
+                const target = entry.target === true;
+                if (source || target) result[path] = { source, target };
+            }
+            return result;
+        };
+
         const cleanHistory = (raw, limit) => Array.isArray(raw) ? raw.slice(0, limit).map((entry) => {
             const filesCount = Number(entry?.filesCount || 0);
             return {
@@ -770,6 +784,7 @@
                         createdAt: String(profile.createdAt || nowIso()),
                         lastUsedAt: String(profile.lastUsedAt || nowIso()),
                         manifest: cleanManifest(profile.manifest),
+                        directoryManifest: cleanDirectoryManifest(profile.directoryManifest),
                         history: cleanHistory(profile.history, MAX_PROFILE_HISTORY),
                     };
                     if (checkpoint) state.profiles[id].lastCheckpoint = checkpoint;
@@ -788,7 +803,7 @@
             const manifest = cleanManifest(raw?.manifest);
             if (history.length || Object.keys(manifest).length) {
                 const id = `legacy-${uid()}`;
-                state.profiles[id] = { id, sourceName: '', targetName: '', bindingStatus: 'unverified', createdAt: nowIso(), lastUsedAt: nowIso(), manifest, history };
+                state.profiles[id] = { id, sourceName: '', targetName: '', bindingStatus: 'unverified', createdAt: nowIso(), lastUsedAt: nowIso(), manifest, directoryManifest: {}, history };
                 state.globalHistory = history.slice(0, MAX_GLOBAL_HISTORY);
             }
             return state;
@@ -976,8 +991,11 @@
 
     const SyncPlanner = (() => {
         const asMap = (value) => value instanceof Map ? value : new Map(Object.entries(value || {}));
+        const asSet = (value) => value instanceof Set ? value : new Set(value || []);
         const snapshot = (file) => file ? { size: Number(file.size), lastModified: Number(file.lastModified) } : null;
         const sameSnapshot = (file, previous) => Boolean(file && previous && Number(file.size) === Number(previous.size) && Number(file.lastModified) === Number(previous.lastModified));
+        const directoryEntry = (path) => ({ kind: 'directory', name: safeSegments(path).at(-1), path });
+        const depth = (path) => safeSegments(path).length;
         const conflictName = (path, side, stamp) => {
             const parts = safeSegments(path);
             const file = parts.pop();
@@ -987,7 +1005,11 @@
             return [...parts, `${stem}.conflict-${side}-${stamp}${ext}`].join('/');
         };
 
-        const plan = ({ source, target, manifest = {}, trustedManifest = false, direction = 'bidirectional', conflictPolicy = 'latest', contentEquality, stamp = runStamp() }) => {
+        const plan = ({
+            source, target, manifest = {}, sourceDirectories = [], targetDirectories = [],
+            directoryManifest = {}, trustedManifest = false, direction = 'bidirectional',
+            conflictPolicy = 'latest', contentEquality, stamp = runStamp(),
+        }) => {
             const src = asMap(source);
             const tgt = asMap(target);
             const exact = asMap(contentEquality);
@@ -1063,7 +1085,7 @@
                     else targetStatus = 'protected';
                 } else if (previous) actions.push({ type: 'forget', path });
 
-                if (sourceFile || targetFile) rows.push({ path, source: sourceFile, target: targetFile, sourceStatus, targetStatus });
+                if (sourceFile || targetFile) rows.push({ kind: 'file', path, source: sourceFile, target: targetFile, sourceStatus, targetStatus });
             }
 
             // Detect renames (Issue #4): match deleted items (trash) with newly added items (copy) of matching size
@@ -1107,6 +1129,58 @@
                     if (trashesToRemove.has(actions[i])) actions.splice(i, 1);
                 }
             }
+
+            const sourceDirs = asSet(sourceDirectories);
+            const targetDirs = asSet(targetDirectories);
+            const directoryActions = [];
+            for (const path of new Set([...sourceDirs, ...targetDirs, ...Object.keys(directoryManifest || {})])) {
+                const hasSource = sourceDirs.has(path);
+                const hasTarget = targetDirs.has(path);
+                const previous = trustedManifest ? directoryManifest[path] : null;
+                const previousBoth = previous?.source && previous?.target;
+                let sourceStatus = hasSource ? 'unchanged' : 'missing';
+                let targetStatus = hasTarget ? 'unchanged' : 'missing';
+                if (hasSource && hasTarget) {
+                    if (!previous) {
+                        directoryActions.push({ type: 'baseline-directory', path });
+                        sourceStatus = targetStatus = 'baseline-directory';
+                    }
+                } else if (hasSource) {
+                    if (direction === 'unidirectional') {
+                        directoryActions.push({ type: 'create-directory', path, side: 'target' });
+                        sourceStatus = 'copy-out'; targetStatus = 'create-directory';
+                    } else if (previousBoth) {
+                        directoryActions.push({ type: 'trash-directory', path, side: 'source' });
+                        sourceStatus = 'trash-directory';
+                    } else if (direction === 'reverse') sourceStatus = 'protected';
+                    else {
+                        directoryActions.push({ type: 'create-directory', path, side: 'target' });
+                        sourceStatus = 'copy-out'; targetStatus = 'create-directory';
+                    }
+                } else if (hasTarget) {
+                    if (direction === 'reverse') {
+                        directoryActions.push({ type: 'create-directory', path, side: 'source' });
+                        targetStatus = 'copy-out'; sourceStatus = 'create-directory';
+                    } else if (previousBoth) {
+                        directoryActions.push({ type: 'trash-directory', path, side: 'target' });
+                        targetStatus = 'trash-directory';
+                    } else if (direction === 'bidirectional') {
+                        directoryActions.push({ type: 'create-directory', path, side: 'source' });
+                        targetStatus = 'copy-out'; sourceStatus = 'create-directory';
+                    } else targetStatus = 'protected';
+                }
+                if (hasSource || hasTarget) rows.push({
+                    kind: 'directory', path,
+                    source: hasSource ? directoryEntry(path) : null,
+                    target: hasTarget ? directoryEntry(path) : null,
+                    sourceStatus, targetStatus,
+                });
+            }
+            const creates = directoryActions.filter((a) => a.type === 'create-directory').sort((a, b) => depth(a.path) - depth(b.path));
+            const baselines = directoryActions.filter((a) => a.type === 'baseline-directory');
+            const directoryTrashes = directoryActions.filter((a) => a.type === 'trash-directory').sort((a, b) => depth(b.path) - depth(a.path));
+            actions.unshift(...creates, ...baselines);
+            actions.push(...directoryTrashes);
             return { id: uid(), stamp, actions, rows, summary: { actions: actions.length, conflicts } };
         };
         return Object.freeze({ plan, snapshot });
@@ -1587,7 +1661,7 @@
             let profile = matching ? model.state.profiles[matching.profileId] : null;
             if (!profile) {
                 const id = uid();
-                profile = { id, sourceName: model.source.name, targetName: model.target.name, bindingStatus: 'verified', createdAt: nowIso(), lastUsedAt: nowIso(), manifest: {}, history: [] };
+                profile = { id, sourceName: model.source.name, targetName: model.target.name, bindingStatus: 'verified', createdAt: nowIso(), lastUsedAt: nowIso(), manifest: {}, directoryManifest: {}, history: [] };
                 model.state.profiles[id] = profile;
             }
             profile.sourceName = model.source.name; profile.targetName = model.target.name; profile.bindingStatus = 'verified'; profile.lastUsedAt = nowIso();

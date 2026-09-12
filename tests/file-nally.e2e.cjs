@@ -295,6 +295,23 @@ async function main() {
     assert.equal(profiles[0].bindingStatus, 'unverified');
   });
 
+  add('state normalizes safe directory history and rejects malformed entries', async ({ page }) => {
+    const profile = (await page.evaluate(() => window.FileNallyTest.StateStore.sanitize({
+      schemaVersion: 2, config: {}, activeProfileId: 'pair',
+      profiles: { pair: {
+        id: 'pair', bindingStatus: 'verified', manifest: {}, history: [],
+        directoryManifest: {
+          'reports/archive': { source: true, target: false },
+          '../escape': { source: true, target: true },
+          invalid: { source: 'yes', target: 1 },
+        },
+      } },
+    }))).profiles.pair;
+    assert.deepEqual(profile.directoryManifest, {
+      'reports/archive': { source: true, target: false },
+    });
+  });
+
   add('state import rejects forbidden keys and oversized JSON', async ({ page }) => {
     const result = await page.evaluate(() => {
       const messages = [];
@@ -380,6 +397,37 @@ async function main() {
       ['source', 'target', 'shared.conflict-source-RUN.txt'],
       ['target', 'source', 'shared.conflict-target-RUN.txt'],
     ]);
+  });
+
+  add('directory planner follows authority and safe structural ordering', async ({ page }) => {
+    const result = await page.evaluate(() => window.FileNallyTest.SyncPlanner.plan({
+      source: {}, target: {},
+      sourceDirectories: ['new/child', 'new'],
+      targetDirectories: ['removed', 'protected'],
+      directoryManifest: { removed: { source: true, target: true } },
+      trustedManifest: true, direction: 'unidirectional',
+    }));
+    assert.deepEqual(result.actions.map(({ type, path, side }) => ({ type, path, side })), [
+      { type: 'create-directory', path: 'new', side: 'target' },
+      { type: 'create-directory', path: 'new/child', side: 'target' },
+      { type: 'trash-directory', path: 'removed', side: 'target' },
+    ]);
+    assert.equal(result.rows.find((row) => row.path === 'protected').targetStatus, 'protected');
+  });
+
+  add('directory planner baselines unknown pairs and propagates verified bidirectional deletion', async ({ page }) => {
+    const result = await page.evaluate(() => ({
+      baseline: window.FileNallyTest.SyncPlanner.plan({
+        source: {}, target: {}, sourceDirectories: ['empty'], targetDirectories: ['empty'],
+      }).actions,
+      deletion: window.FileNallyTest.SyncPlanner.plan({
+        source: {}, target: {}, sourceDirectories: [], targetDirectories: ['empty'],
+        directoryManifest: { empty: { source: true, target: true } },
+        trustedManifest: true, direction: 'bidirectional',
+      }).actions,
+    }));
+    assert.deepEqual(result.baseline, [{ type: 'baseline-directory', path: 'empty' }]);
+    assert.deepEqual(result.deletion, [{ type: 'trash-directory', path: 'empty', side: 'target' }]);
   });
 
   add('one-way source recreates a target file deleted on the non-authoritative side', async ({ page }) => {
