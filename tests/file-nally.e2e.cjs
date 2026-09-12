@@ -509,17 +509,24 @@ async function main() {
     await executeCurrentPlan(page);
     const snapshot = await snapshotMockPair(page);
     assert.equal(snapshot.target.empty['late.txt'].content, 'late');
+    assert.equal(snapshot.target['.trash'], undefined);
     assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().phase), 'error');
   });
 
   add('excluded directory trees never enter the plan or result tables', async ({ page }) => {
     await mountPair(page, {
-      source: { '.git': { type: 'directory', entries: { empty: { type: 'directory', entries: {} } } } },
+      source: {
+        '.git': { type: 'directory', entries: { empty: { type: 'directory', entries: {} } } },
+        'included-empty': { type: 'directory', entries: {} },
+      },
       target: {},
     });
     await compare(page);
     const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
-    assert.deepEqual(actions, []);
+    assert.deepEqual(actions.map(({ type, path, side }) => ({ type, path, side })), [
+      { type: 'create-directory', path: 'included-empty', side: 'target' },
+    ]);
+    assert.match(await page.locator('#srcFileBody').innerText(), /included-empty\//);
     assert.doesNotMatch(await page.locator('#srcFileBody').innerText(), /\.git/);
     assert.doesNotMatch(await page.locator('#tgtFileBody').innerText(), /\.git/);
   });
