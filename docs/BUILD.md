@@ -33,7 +33,9 @@ npm install
 
 ```bash
 npm run build
+npm run build:test
 npm run build:check
+git diff --check
 npm test
 npm run test:visual
 ```
@@ -49,7 +51,9 @@ npm run test:visual
 ### 릴리즈 체크리스트
 
 - `npm run build` 실행
+- `npm run build:test` 실행
 - `npm run build:check` 통과
+- `git diff --check` 통과
 - `npm test` 통과
 - `npm run test:visual` 결과 검토
 - 배포에는 루트 `file-nally.html`만 포함하고 `dev/` 폴더는 포함하지 않음
@@ -85,7 +89,9 @@ npm install
 
 ```bash
 npm run build
+npm run build:test
 npm run build:check
+git diff --check
 npm test
 npm run test:visual
 ```
@@ -101,7 +107,9 @@ npm run test:visual
 ### Release checklist
 
 - Run `npm run build`.
+- Run `npm run build:test`.
 - Pass `npm run build:check`.
+- Pass `git diff --check`.
 - Pass `npm test`.
 - Review the output from `npm run test:visual`.
 - Distribute only the root `file-nally.html`, not the `dev/` directory.

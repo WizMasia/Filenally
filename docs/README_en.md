@@ -52,6 +52,8 @@ The application rejects a folder pair when both selections refer to the same dir
 
 New and changed files can move from Source to Target or from Target to Source. When a trusted previous manifest shows that a file was deleted on one side and remained unchanged on the other, the remaining copy is moved into that side's versioned `.trash` directory.
 
+Empty folders follow the same creation and trusted-deletion rules. A folder present on only one side can be created on the other, while a deletion confirmed by a trusted previous manifest moves the remaining empty folder tree into that side's versioned `.trash` directory.
+
 ### One-way: Source → Target
 
 Source is authoritative for copy operations. Target-only files without a previous synchronized record are protected. A deletion recorded after an earlier successful synchronization can still be propagated by moving the corresponding Target file into `.trash`.
