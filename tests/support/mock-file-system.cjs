@@ -16,6 +16,7 @@ async function installMockFileSystem(page) {
         this.kind = 'file';
         this.name = name;
         this.content = Number.isInteger(options.contentSize) ? 'x'.repeat(options.contentSize) : String(options.content ?? '');
+        this.contentAfterRead = options.contentAfterRead == null ? null : String(options.contentAfterRead);
         this.lastModified = Number(options.lastModified ?? ++clock);
         this.failWrite = Boolean(options.failWrite);
         this.readDelay = Number(options.readDelay ?? 0);
@@ -24,6 +25,11 @@ async function installMockFileSystem(page) {
 
       async getFile() {
         const file = new File([this.content], this.name, { lastModified: this.lastModified });
+        if (this.contentAfterRead != null) {
+          this.content = this.contentAfterRead;
+          this.contentAfterRead = null;
+          this.lastModified = ++clock;
+        }
         if (this.readDelay) {
           const originalSlice = file.slice.bind(file);
           Object.defineProperty(file, 'slice', {

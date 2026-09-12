@@ -1268,6 +1268,28 @@ async function main() {
     assert.ok(renameAction, 'expected a rename action');
   });
 
+  add('rename detection accepts one unambiguous empty file', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'original.txt': { content: '' } },
+      target: { 'original.txt': { content: '' } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+
+    await page.evaluate(() => {
+      const source = window.__mockPair.source;
+      const originalFile = source.entries.get('original.txt');
+      source.entries.delete('original.txt');
+      originalFile.name = 'renamed.txt';
+      source.entries.set('renamed.txt', originalFile);
+    });
+
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.equal(actions.filter((action) => action.type === 'rename').length, 1);
+    assert.equal(actions.some((action) => action.type === 'trash'), false);
+  });
+
   add('rename detection preserves equal-size files with different content', async ({ page }) => {
     await mountPair(page, {
       source: { 'original.txt': { content: 'AAAA' } },
@@ -1292,6 +1314,25 @@ async function main() {
     assert.equal(Object.values(snapshot.target['.trash'])[0]['original.txt'].content, 'AAAA');
   });
 
+  add('rename detection rejects a candidate that grows after scanning', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'original.txt': { content: 'AAAA' } },
+      target: { 'original.txt': { content: 'AAAA' } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+
+    await page.evaluate(() => {
+      window.__deleteMockEntry('source', 'original.txt');
+      window.__setMockFile('source', 'renamed.txt', { content: 'AAAA', contentAfterRead: 'AAAAB' });
+    });
+
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.equal(actions.some((action) => action.type === 'rename'), false);
+    assert.deepEqual(actions.map((action) => action.type).sort(), ['copy', 'trash']);
+  });
+
   add('rename detection rejects ambiguous identical-content candidates', async ({ page }) => {
     await mountPair(page, {
       source: { 'original.txt': { content: 'same' } },
@@ -1310,6 +1351,32 @@ async function main() {
     const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
     assert.equal(actions.some((action) => action.type === 'rename'), false);
     assert.deepEqual(actions.map((action) => action.type).sort(), ['copy', 'copy', 'trash']);
+  });
+
+  add('rename detection rejects a many-to-one identical-content match', async ({ page }) => {
+    await mountPair(page, {
+      source: {
+        'original-a.txt': { content: 'same' },
+        'original-b.txt': { content: 'same' },
+      },
+      target: {
+        'original-a.txt': { content: 'same' },
+        'original-b.txt': { content: 'same' },
+      },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+
+    await page.evaluate(() => {
+      window.__deleteMockEntry('source', 'original-a.txt');
+      window.__deleteMockEntry('source', 'original-b.txt');
+      window.__setMockFile('source', 'renamed.txt', { content: 'same' });
+    });
+
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.equal(actions.some((action) => action.type === 'rename'), false);
+    assert.deepEqual(actions.map((action) => action.type).sort(), ['copy', 'trash', 'trash']);
   });
 
   add('rename verification follows the authoritative sync direction', async ({ page }) => {
@@ -1336,8 +1403,36 @@ async function main() {
         { fromSide: rename?.fromSide, toSide: rename?.toSide, side: rename?.side },
         { fromSide: scenario.fromSide, toSide: scenario.toSide, side: scenario.toSide },
       );
+      await executeCurrentPlan(page);
+      const snapshot = await snapshotMockPair(page);
+      assert.equal(snapshot[scenario.toSide]['renamed.txt'].content, 'same');
+      assert.equal(snapshot[scenario.toSide]['original.txt'], undefined);
       await page.reload();
     }
+  });
+
+  add('safe stop cancels rename candidate verification', async ({ page }) => {
+    const options = { contentSize: (4 * 1024 * 1024) + 1, readDelay: 100 };
+    await mountPair(page, {
+      source: { 'original.bin': options },
+      target: { 'original.bin': options },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+    await page.evaluate(() => {
+      const source = window.__mockPair.source;
+      const originalFile = source.entries.get('original.bin');
+      source.entries.delete('original.bin');
+      originalFile.name = 'renamed.bin';
+      source.entries.set('renamed.bin', originalFile);
+    });
+
+    await page.locator('#btnCompare').click();
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'comparing');
+    await page.locator('#btnAbort').click();
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'ready');
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+    assert.match(await page.locator('#syncStatus').innerText(), /비교가 중지|comparison stopped/i);
   });
 
   const results = [];

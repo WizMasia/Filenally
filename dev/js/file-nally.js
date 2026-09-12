@@ -521,7 +521,7 @@
             for (let i = 0; i < trashes.length; i += 1) {
                 const trash = trashes[i];
                 const trashFile = trash.side === 'source' ? src.get(trash.path) || (trustedManifest && manifest[trash.path]?.source) : tgt.get(trash.path) || (trustedManifest && manifest[trash.path]?.target);
-                if (!trashFile || !trashFile.size) continue;
+                if (!trashFile) continue;
 
                 for (let j = 0; j < copies.length; j += 1) {
                     if (matchedCopyIndices.has(j)) continue;
@@ -632,6 +632,9 @@
         const compareContent = async (source, target, onProgress, isCancelled) => {
             if (source.size !== target.size) return false;
             const [sourceFile, targetFile] = await Promise.all([source.handle.getFile(), target.handle.getFile()]);
+            if (sourceFile.size !== source.size || targetFile.size !== target.size
+                || sourceFile.lastModified !== source.lastModified || targetFile.lastModified !== target.lastModified
+                || sourceFile.size !== targetFile.size) return false;
             const totalBytes = sourceFile.size * 2;
             if (!totalBytes) { onProgress(0, 0); return true; }
             for (let offset = 0; offset < sourceFile.size; offset += CONTENT_CHUNK_BYTES) {
