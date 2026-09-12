@@ -669,13 +669,16 @@
             ui: { advancedExpanded: null },
         });
 
-        const rejectForbidden = (value, seen = new Set()) => {
+        const rejectForbidden = (value, seen = new Set(), location = []) => {
             if (!value || typeof value !== 'object' || seen.has(value)) return;
             seen.add(value);
+            // Only directory-manifest keys are filesystem paths; their values remain checked.
+            const directoryPaths = location.length === 3 && location[0] === 'profiles' && location[2] === 'directoryManifest';
             for (const key of Object.keys(value)) {
-                if (FORBIDDEN_KEYS.has(key)) throw new Error(`Forbidden JSON key: ${key}`);
-                rejectForbidden(value[key], seen);
+                if (!directoryPaths && FORBIDDEN_KEYS.has(key)) throw new Error(`Forbidden JSON key: ${key}`);
+                rejectForbidden(value[key], seen, [...location, key]);
             }
+            seen.delete(value);
         };
 
         const cleanConfig = (raw = {}) => ({
@@ -709,10 +712,9 @@
         };
 
         const cleanDirectoryManifest = (raw) => {
-            const result = {};
+            const result = Object.create(null);
             if (!isObject(raw)) return result;
             for (const [path, entry] of Object.entries(raw).slice(0, MAX_MANIFEST_ENTRIES)) {
-                if (FORBIDDEN_KEYS.has(path)) continue;
                 try { safeSegments(path); } catch { continue; }
                 if (!isObject(entry)) continue;
                 const source = entry.source === true;
@@ -1137,7 +1139,7 @@
             for (const path of new Set([...sourceDirs, ...targetDirs, ...Object.keys(directoryManifest || {})])) {
                 const hasSource = sourceDirs.has(path);
                 const hasTarget = targetDirs.has(path);
-                const previous = trustedManifest ? directoryManifest[path] : null;
+                const previous = trustedManifest && directoryManifest && Object.hasOwn(directoryManifest, path) ? directoryManifest[path] : null;
                 const previousBoth = previous?.source && previous?.target;
                 let sourceStatus = hasSource ? 'unchanged' : 'missing';
                 let targetStatus = hasTarget ? 'unchanged' : 'missing';
@@ -1506,7 +1508,7 @@
             sourceStatus: 'unchanged',
             targetStatus: 'unchanged',
         }));
-        const visibleRows = model.showChangedOnly ? rows.filter((row) => !['unchanged', 'baseline'].includes(row.sourceStatus) || !['unchanged', 'baseline'].includes(row.targetStatus)) : rows;
+        const visibleRows = model.showChangedOnly ? rows.filter((row) => !['unchanged', 'baseline', 'baseline-directory'].includes(row.sourceStatus) || !['unchanged', 'baseline', 'baseline-directory'].includes(row.targetStatus)) : rows;
         for (const row of visibleRows) {
             if (row.source) appendEntryRow(elements.srcBody, row.source, row.path, row.sourceStatus);
             else if (row.sourceStatus === 'create-directory') appendEntryRow(elements.srcBody, directoryEntry(row.path), row.path, row.sourceStatus);
@@ -1614,7 +1616,7 @@
         return manifest;
     };
     const buildDirectoryManifest = (sourceDirectories, targetDirectories) => {
-        const manifest = {};
+        const manifest = Object.create(null);
         for (const path of new Set([...sourceDirectories, ...targetDirectories])) {
             manifest[path] = { source: sourceDirectories.has(path), target: targetDirectories.has(path) };
         }

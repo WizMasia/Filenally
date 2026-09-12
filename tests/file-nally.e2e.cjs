@@ -220,6 +220,29 @@ async function main() {
     assert.equal(await page.getByLabel('변경된 항목만 보기', { exact: true }).isChecked(), true);
   });
 
+  add('changed-only filter hides mixed file and folder baselines', async ({ page }) => {
+    const baseline = {
+      'stable.txt': { content: 'stable', lastModified: 100 },
+      'stable-folder': { type: 'directory', entries: {} },
+    };
+    await mountPair(page, { source: baseline, target: baseline });
+    await compare(page);
+    assert.deepEqual((await page.evaluate(() => window.FileNallyTest.getModel().plan.actions))
+      .map(({ type, path }) => ({ type, path })), [
+      { type: 'baseline-directory', path: 'stable-folder' },
+      { type: 'baseline', path: 'stable.txt' },
+    ]);
+    for (const side of ['src', 'tgt']) {
+      assert.match(await page.locator(`#${side}FileBody`).innerText(), /stable\.txt/);
+      assert.match(await page.locator(`#${side}FileBody`).innerText(), /stable-folder\//);
+    }
+    await page.getByLabel('변경된 항목만 보기', { exact: true }).check();
+    for (const side of ['src', 'tgt']) {
+      assert.doesNotMatch(await page.locator(`#${side}FileBody`).innerText(), /stable/);
+      assert.equal(await page.locator(`#${side}Count`).innerText(), '0');
+    }
+  });
+
   add('skip policy never overwrites an existing destination', async ({ page }) => {
     await page.locator('#conflictPolicy').selectOption('skip');
     await mountPair(page, {
@@ -332,6 +355,25 @@ async function main() {
     assert.match(result[1], /exceeds 5MB/);
   });
 
+  add('directory path exceptions do not bypass configuration or entry key protection', async ({ page }) => {
+    const messages = await page.evaluate(() => {
+      const results = [];
+      for (const key of ['constructor', 'prototype', '__proto__']) {
+        for (const raw of [
+          { schemaVersion: 2, config: { [key]: { polluted: true } } },
+          { schemaVersion: 2, profiles: { pair: { directoryManifest: { safe: { source: true, [key]: { polluted: true } } } } } },
+          { schemaVersion: 2, config: { directoryManifest: { [key]: { source: true } } } },
+        ]) {
+          try { window.FileNallyTest.StateStore.importText(JSON.stringify(raw)); results.push('accepted'); }
+          catch (error) { results.push(error.message); }
+        }
+      }
+      return results;
+    });
+    assert.equal(messages.length, 9);
+    for (const message of messages) assert.match(message, /Forbidden JSON key/);
+  });
+
   add('restored v2 profiles require folder-pair verification', async ({ page }) => {
     const imported = await page.evaluate(() => window.FileNallyTest.StateStore.importText(JSON.stringify({
       schemaVersion: 2,
@@ -429,6 +471,76 @@ async function main() {
     assert.deepEqual(result.baseline, [{ type: 'baseline-directory', path: 'empty' }]);
     assert.deepEqual(result.deletion, [{ type: 'trash-directory', path: 'empty', side: 'target' }]);
   });
+
+  add('directory planner baselines special names without inherited history', async ({ page }) => {
+    const actions = await page.evaluate(() => window.FileNallyTest.SyncPlanner.plan({
+      source: {}, target: {}, trustedManifest: true,
+      sourceDirectories: ['constructor', 'prototype', '__proto__'],
+      targetDirectories: ['constructor', 'prototype', '__proto__'],
+      directoryManifest: {},
+    }).actions);
+    assert.deepEqual(actions, [
+      { type: 'baseline-directory', path: 'constructor' },
+      { type: 'baseline-directory', path: 'prototype' },
+      { type: 'baseline-directory', path: '__proto__' },
+    ]);
+  });
+
+  for (const name of ['constructor', 'prototype', '__proto__']) {
+    add(`special folder name ${name} survives creation persistence and deletion`, async ({ page }) => {
+      await mountPair(page, { source: {}, target: {} });
+      await page.evaluate((path) => window.__mockPair.source.getDirectoryHandle(path, { create: true }).then(() => {}), name);
+      await compare(page);
+      assert.deepEqual(await page.evaluate(() => window.FileNallyTest.getModel().plan.actions), [
+        { type: 'create-directory', path: name, side: 'target' },
+      ]);
+      await executeCurrentPlan(page);
+      assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().phase), 'success');
+      assert.deepEqual(JSON.parse(await page.evaluate(async () => JSON.stringify(await window.__snapshotMockPair()))).target[name], {});
+      const profileId = await page.evaluate(() => window.FileNallyTest.getModel().profileId);
+      const saved = await page.evaluate(({ profileId, name }) => {
+        const store = window.FileNallyTest.StateStore;
+        const state = store.load();
+        const manifest = state.profiles[profileId].directoryManifest;
+        const exported = store.export(state);
+        const imported = store.importText(JSON.stringify(exported));
+        return {
+          own: Object.hasOwn(manifest, name), entry: manifest[name],
+          exported: exported.profiles[profileId].directoryManifest[name],
+          imported: imported.profiles[profileId].directoryManifest[name],
+          importedBinding: imported.profiles[profileId].bindingStatus,
+        };
+      }, { profileId, name });
+      assert.deepEqual(saved, {
+        own: true, entry: { source: true, target: true },
+        exported: { source: true, target: true }, imported: { source: true, target: true },
+        importedBinding: 'unverified',
+      });
+      const reloadedPage = await page.context().newPage();
+      await installMockFileSystem(reloadedPage);
+      await reloadedPage.goto(page.url());
+      assert.deepEqual(await reloadedPage.evaluate(({ profileId, name }) => {
+        const state = window.FileNallyTest.StateStore.load();
+        return window.FileNallyTest.SyncPlanner.plan({
+          source: {}, target: {}, sourceDirectories: [], targetDirectories: [name],
+          directoryManifest: state.profiles[profileId].directoryManifest, trustedManifest: true,
+        }).actions;
+      }, { profileId, name }), [{ type: 'trash-directory', path: name, side: 'target' }]);
+      await reloadedPage.close();
+      await page.evaluate((path) => window.__deleteMockEntry('source', path), name);
+      await compare(page);
+      assert.deepEqual(await page.evaluate(() => window.FileNallyTest.getModel().plan.actions), [
+        { type: 'trash-directory', path: name, side: 'target' },
+      ]);
+      await executeCurrentPlan(page);
+      assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().phase), 'success');
+      const snapshot = JSON.parse(await page.evaluate(async () => JSON.stringify(await window.__snapshotMockPair())));
+      assert.equal(Object.hasOwn(snapshot.target, name), false);
+      assert.deepEqual(Object.values(snapshot.target['.trash'])[0][name], {});
+      await page.reload();
+      assert.deepEqual(await page.evaluate((id) => window.FileNallyTest.StateStore.load().profiles[id].directoryManifest, profileId), {});
+    });
+  }
 
   add('one-way sync creates a source empty folder and protects an untracked target folder', async ({ page }) => {
     await page.locator('#dirOne').click();
@@ -880,21 +992,44 @@ async function main() {
     assert.equal(await page.getByLabel('Show changed items only', { exact: true }).count(), 1);
   });
 
-  add('directory actions render bilingually and remain intact in JSON export', async ({ page }) => {
-    await mountPair(page, { source: { empty: { type: 'directory', entries: {} } }, target: {} });
-    await compare(page);
-    assert.match(await page.locator('#tgtFileBody').innerText(), /폴더 생성/);
-    await executeCurrentPlan(page);
-    await page.locator('.history-detail-button').first().click();
-    assert.match(await page.locator('#runDetailBody').innerText(), /폴더 생성/);
-    const downloadPromise = page.waitForEvent('download');
-    await page.locator('#btnDownloadRunJson').click();
-    const json = JSON.parse(await downloadText(await downloadPromise));
-    assert.equal(json.entries[0].action, 'create-directory');
-    const csvPromise = page.waitForEvent('download');
-    await page.locator('#btnDownloadRunCsv').click();
-    assert.match(await downloadText(await csvPromise), /create-directory,empty/);
-  });
+  for (const { action, ko, en } of [
+    { action: 'create-directory', ko: '폴더 생성', en: 'Create folder' },
+    { action: 'baseline-directory', ko: '폴더 기준 저장', en: 'Save folder baseline' },
+    { action: 'trash-directory', ko: '폴더 휴지통 이동', en: 'Move folder to trash' },
+  ]) {
+    add(`directory actions render bilingually and preserve exports: ${action}`, async ({ page }) => {
+      const tree = { '빈 폴더': { type: 'directory', entries: {} } };
+      await mountPair(page, { source: tree, target: action === 'create-directory' ? {} : tree });
+      if (action === 'trash-directory') {
+        await compare(page);
+        await executeCurrentPlan(page);
+        await page.evaluate(() => window.__deleteMockEntry('source', '빈 폴더'));
+      }
+      await compare(page);
+      assert.ok((await page.locator('#tgtFileBody').innerText()).includes(ko));
+      await page.locator('#btnLangEn').click();
+      assert.ok((await page.locator('#tgtFileBody').innerText()).includes(en));
+      await executeCurrentPlan(page);
+      for (const [lang, label] of [['En', en], ['Ko', ko]]) {
+        await page.locator(`#btnLang${lang}`).click();
+        await page.locator('.history-detail-button').first().click();
+        assert.ok((await page.locator('#runDetailBody').innerText()).includes(label));
+        const downloadPromise = page.waitForEvent('download');
+        await page.locator('#btnDownloadRunJson').click();
+        const json = JSON.parse(await downloadText(await downloadPromise));
+        assert.deepEqual(json.entries.map(({ action, path }) => ({ action, path })), [
+          { action, path: '빈 폴더' },
+        ]);
+        const csvPromise = page.waitForEvent('download');
+        await page.locator('#btnDownloadRunCsv').click();
+        const csv = await downloadText(await csvPromise);
+        assert.deepEqual(csv.trim().split(/\r?\n/).slice(1).map((row) => row.split(',').slice(1, 3)), [
+          [action, '빈 폴더'],
+        ]);
+        await page.locator('#btnCloseRunDetail').click();
+      }
+    });
+  }
 
   add('quick guide explains the safe workflow in both languages and restores focus', async ({ page }) => {
     const trigger = page.locator('#btnQuickGuide');
