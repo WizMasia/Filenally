@@ -430,6 +430,100 @@ async function main() {
     assert.deepEqual(result.deletion, [{ type: 'trash-directory', path: 'empty', side: 'target' }]);
   });
 
+  add('one-way sync creates a source empty folder and protects an untracked target folder', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    await mountPair(page, {
+      source: { 'source-empty': { type: 'directory', entries: {} } },
+      target: { 'target-only': { type: 'directory', entries: {} } },
+    });
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.deepEqual(actions.map(({ type, path, side }) => ({ type, path, side })), [
+      { type: 'create-directory', path: 'source-empty', side: 'target' },
+    ]);
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    assert.deepEqual(snapshot.target['source-empty'], {});
+    assert.deepEqual(snapshot.target['target-only'], {});
+  });
+
+  add('one-way sync recreates an authoritative empty folder deleted from target', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    await mountPair(page, {
+      source: { empty: { type: 'directory', entries: {} } },
+      target: { empty: { type: 'directory', entries: {} } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+    await page.evaluate(() => window.__deleteMockEntry('target', 'empty'));
+    await compare(page);
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    assert.deepEqual(snapshot.source.empty, {});
+    assert.deepEqual(snapshot.target.empty, {});
+  });
+
+  add('reverse sync recreates an authoritative empty folder deleted from source', async ({ page }) => {
+    await page.locator('#dirReverse').click();
+    const pair = { empty: { type: 'directory', entries: {} } };
+    await mountPair(page, { source: pair, target: pair });
+    await compare(page);
+    await executeCurrentPlan(page);
+    await page.evaluate(() => window.__deleteMockEntry('source', 'empty'));
+    await compare(page);
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    assert.deepEqual(snapshot.source.empty, {});
+    assert.deepEqual(snapshot.target.empty, {});
+  });
+
+  add('one-way deletion preserves a synchronized empty tree in target trash', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    const tree = { a: { type: 'directory', entries: { b: { type: 'directory', entries: { c: { type: 'directory', entries: {} } } } } } };
+    await mountPair(page, { source: tree, target: tree });
+    await compare(page);
+    await executeCurrentPlan(page);
+    await page.evaluate(() => window.__deleteMockEntry('source', 'a'));
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.deepEqual(actions.map(({ type, path }) => ({ type, path })), [
+      { type: 'trash-directory', path: 'a/b/c' },
+      { type: 'trash-directory', path: 'a/b' },
+      { type: 'trash-directory', path: 'a' },
+    ]);
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    assert.equal(snapshot.target.a, undefined);
+    assert.deepEqual(Object.values(snapshot.target['.trash'])[0].a.b.c, {});
+  });
+
+  add('directory trash refuses a folder that becomes non-empty after comparison', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    const pair = { empty: { type: 'directory', entries: {} } };
+    await mountPair(page, { source: pair, target: pair });
+    await compare(page);
+    await executeCurrentPlan(page);
+    await page.evaluate(() => window.__deleteMockEntry('source', 'empty'));
+    await compare(page);
+    await page.evaluate(() => window.__setMockFile('target', 'empty/late.txt', { content: 'late' }));
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    assert.equal(snapshot.target.empty['late.txt'].content, 'late');
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().phase), 'error');
+  });
+
+  add('excluded directory trees never enter the plan or result tables', async ({ page }) => {
+    await mountPair(page, {
+      source: { '.git': { type: 'directory', entries: { empty: { type: 'directory', entries: {} } } } },
+      target: {},
+    });
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.deepEqual(actions, []);
+    assert.doesNotMatch(await page.locator('#srcFileBody').innerText(), /\.git/);
+    assert.doesNotMatch(await page.locator('#tgtFileBody').innerText(), /\.git/);
+  });
+
   add('one-way source recreates a target file deleted on the non-authoritative side', async ({ page }) => {
     const actions = await page.evaluate(() => {
       const file = { name: 'kept.txt', path: 'kept.txt', size: 4, lastModified: 100 };

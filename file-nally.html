@@ -989,12 +989,13 @@
         return null;
     };
 
+    const directoryEntry = (path) => ({ kind: 'directory', name: safeSegments(path).at(-1), path });
+
     const SyncPlanner = (() => {
         const asMap = (value) => value instanceof Map ? value : new Map(Object.entries(value || {}));
         const asSet = (value) => value instanceof Set ? value : new Set(value || []);
         const snapshot = (file) => file ? { size: Number(file.size), lastModified: Number(file.lastModified) } : null;
         const sameSnapshot = (file, previous) => Boolean(file && previous && Number(file.size) === Number(previous.size) && Number(file.lastModified) === Number(previous.lastModified));
-        const directoryEntry = (path) => ({ kind: 'directory', name: safeSegments(path).at(-1), path });
         const depth = (path) => safeSegments(path).length;
         const conflictName = (path, side, stamp) => {
             const parts = safeSegments(path);
@@ -1189,18 +1190,21 @@
     const FileAdapter = (() => {
         const scan = async (directory, excludes, currentPath = '') => {
             const files = new Map();
+            const directories = new Set();
             for await (const entry of directory.values()) {
                 const path = currentPath ? `${currentPath}/${entry.name}` : entry.name;
                 safeSegments(path);
                 if (entry.kind === 'file') {
                     const file = await entry.getFile();
-                    files.set(path, { name: entry.name, path, size: file.size, lastModified: file.lastModified, handle: entry });
+                    files.set(path, { kind: 'file', name: entry.name, path, size: file.size, lastModified: file.lastModified, handle: entry });
                 } else if (!excludes.includes(entry.name)) {
+                    directories.add(path);
                     const nested = await scan(entry, excludes, path);
-                    for (const [key, value] of nested) files.set(key, value);
+                    for (const [key, value] of nested.files) files.set(key, value);
+                    for (const nestedPath of nested.directories) directories.add(nestedPath);
                 }
             }
-            return files;
+            return { files, directories };
         };
         const compareContent = async (source, target, onProgress, isCancelled) => {
             if (source.size !== target.size) return false;
@@ -1274,6 +1278,21 @@
             const originalDirectory = await directoryFor(root, originalParts, false);
             await originalDirectory.removeEntry(name);
         };
+        const createDirectory = async (action, handles) => {
+            await directoryFor(handles[action.side], safeSegments(action.path), true);
+        };
+        const moveDirectoryToTrash = async (action, handles, stamp) => {
+            const root = handles[action.side];
+            const parts = safeSegments(action.path);
+            const name = parts.pop();
+            const parent = await directoryFor(root, parts, false);
+            const directory = await parent.getDirectoryHandle(name);
+            for await (const entry of directory.values()) {
+                throw new DOMException(`Directory is not empty: ${entry.name}`, 'InvalidModificationError');
+            }
+            await directoryFor(root, ['.trash', stamp, ...parts, name], true);
+            await parent.removeEntry(name);
+        };
         const rename = async (action, handles) => {
             const root = handles[action.side || action.toSide || 'target'];
             const oldPath = action.oldPath || action.sourcePath;
@@ -1305,7 +1324,7 @@
             await writable.close();
             await oldDirectory.removeEntry(oldName);
         };
-        return Object.freeze({ compareContent, copy, moveToTrash, rename, scan });
+        return Object.freeze({ compareContent, copy, createDirectory, moveDirectoryToTrash, moveToTrash, rename, scan });
     })();
 
     const elements = {
@@ -1321,7 +1340,7 @@
     };
 
     const model = {
-        state: StateStore.load(), showChangedOnly: sessionStorage.getItem(SHOW_CHANGED_ONLY_KEY) === 'true', source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), plan: null, phase: 'idle', abortRequested: false, profileConnectionPending: false, logs: [], advancedExpanded: null, selectedRun: null, runDetailPage: 0, runDetailTrigger: null,
+        state: StateStore.load(), showChangedOnly: sessionStorage.getItem(SHOW_CHANGED_ONLY_KEY) === 'true', source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), sourceDirectories: new Set(), targetDirectories: new Set(), plan: null, phase: 'idle', abortRequested: false, profileConnectionPending: false, logs: [], advancedExpanded: null, selectedRun: null, runDetailPage: 0, runDetailTrigger: null,
     };
     model.advancedExpanded = typeof model.state.ui?.advancedExpanded === 'boolean'
         ? model.state.ui.advancedExpanded
@@ -1464,29 +1483,33 @@
         unchanged: ['statusUnchanged', 'neutral'], baseline: ['statusBaseline', 'info'], 'copy-out': ['statusCopyOut', 'success'], 'copy-in': ['statusCopyIn', 'info'], trash: ['statusTrash', 'danger'], conflict: ['statusConflict', 'warning'], skipped: ['statusSkipped', 'warning'], protected: ['statusProtected', 'neutral'], missing: ['statusNew', 'neutral'], rename: ['statusRename', 'info'],
     }[code] || ['statusUnchanged', 'neutral']);
     const appendEmptyRow = (body, text) => { body.replaceChildren(); const row = body.insertRow(); const cell = row.insertCell(); cell.colSpan = 4; cell.className = 'empty-cell'; cell.textContent = text; };
-    const appendFileRow = (body, file, path, status) => {
+    const appendEntryRow = (body, entry, path, status) => {
         const row = body.insertRow();
         const nameCell = row.insertCell();
-        const name = document.createElement('div'); name.className = 'file-name'; name.textContent = file.name;
-        const pathText = document.createElement('div'); pathText.className = 'file-path'; pathText.textContent = path;
+        const isDirectory = entry.kind === 'directory';
+        const name = document.createElement('div'); name.className = 'file-name'; name.textContent = isDirectory ? `${entry.name}/` : entry.name;
+        const pathText = document.createElement('div'); pathText.className = 'file-path'; pathText.textContent = isDirectory ? `${path}/` : path;
         nameCell.append(name, pathText);
-        row.insertCell().textContent = file.size < 1024 ? `${file.size} B` : `${(file.size / 1024).toFixed(1)} KB`;
-        row.insertCell().textContent = new Date(file.lastModified).toLocaleString(language());
-        const statusCell = row.insertCell(); const [key, tone] = statusPresentation(status); const badge = document.createElement('span'); badge.className = `badge badge-${tone}`; badge.textContent = t(key); statusCell.append(badge);
+        row.insertCell().textContent = isDirectory ? '—' : entry.size < 1024 ? `${entry.size} B` : `${(entry.size / 1024).toFixed(1)} KB`;
+        row.insertCell().textContent = isDirectory ? '—' : new Date(entry.lastModified).toLocaleString(language());
+        const statusCell = row.insertCell();
+        const [key, tone] = statusPresentation(status);
+        const badge = document.createElement('span'); badge.className = `badge badge-${tone}`; badge.textContent = t(key);
+        statusCell.append(badge);
     };
     const renderRows = () => {
         elements.srcBody.replaceChildren(); elements.tgtBody.replaceChildren();
-        const rows = model.plan?.rows || [...new Set([...model.sourceFiles.keys(), ...model.targetFiles.keys()])].map((path) => ({
+        const rows = model.plan?.rows || [...new Set([...model.sourceFiles.keys(), ...model.targetFiles.keys(), ...model.sourceDirectories, ...model.targetDirectories])].map((path) => ({
             path,
-            source: model.sourceFiles.get(path) || null,
-            target: model.targetFiles.get(path) || null,
+            source: model.sourceFiles.get(path) || (model.sourceDirectories.has(path) ? directoryEntry(path) : null),
+            target: model.targetFiles.get(path) || (model.targetDirectories.has(path) ? directoryEntry(path) : null),
             sourceStatus: 'unchanged',
             targetStatus: 'unchanged',
         }));
         const visibleRows = model.showChangedOnly ? rows.filter((row) => !['unchanged', 'baseline'].includes(row.sourceStatus) || !['unchanged', 'baseline'].includes(row.targetStatus)) : rows;
         for (const row of visibleRows) {
-            if (row.source) appendFileRow(elements.srcBody, row.source, row.path, row.sourceStatus);
-            if (row.target) appendFileRow(elements.tgtBody, row.target, row.path, row.targetStatus);
+            if (row.source) appendEntryRow(elements.srcBody, row.source, row.path, row.sourceStatus);
+            if (row.target) appendEntryRow(elements.tgtBody, row.target, row.path, row.targetStatus);
         }
         const emptyKey = model.showChangedOnly ? 'emptyChangedFiles' : 'emptyFiles';
         if (!elements.srcBody.children.length) appendEmptyRow(elements.srcBody, t(emptyKey));
@@ -1588,6 +1611,19 @@
         for (const path of allPaths) manifest[path] = { source: SyncPlanner.snapshot(sourceFiles.get(path)), target: SyncPlanner.snapshot(targetFiles.get(path)) };
         return manifest;
     };
+    const buildDirectoryManifest = (sourceDirectories, targetDirectories) => {
+        const manifest = {};
+        for (const path of new Set([...sourceDirectories, ...targetDirectories])) {
+            manifest[path] = { source: sourceDirectories.has(path), target: targetDirectories.has(path) };
+        }
+        return manifest;
+    };
+    const applyScans = (sourceScan, targetScan) => {
+        model.sourceFiles = sourceScan.files;
+        model.targetFiles = targetScan.files;
+        model.sourceDirectories = sourceScan.directories;
+        model.targetDirectories = targetScan.directories;
+    };
 
     const SyncExecutor = (() => {
         const run = async (plan, context) => {
@@ -1624,6 +1660,8 @@
                     if (action.type === 'copy') await FileAdapter.copy(action, context.handles);
                     else if (action.type === 'rename') await FileAdapter.rename(action, context.handles);
                     else if (action.type === 'trash') await FileAdapter.moveToTrash(action, context.handles, plan.stamp);
+                    else if (action.type === 'create-directory') await FileAdapter.createDirectory(action, context.handles);
+                    else if (action.type === 'trash-directory') await FileAdapter.moveDirectoryToTrash(action, context.handles, plan.stamp);
                 } catch (error) {
                     entry.endedAt = nowIso();
                     entry.durationMs = Date.now() - actionStartedMs;
@@ -1781,7 +1819,11 @@
             setPhase('comparing'); setStatus(t('comparing'), 'info', 'compare'); elements.progress.dataset.visible = 'false';
             try {
                 const excludes = normalizeExcludes(elements.excludes.value);
-                [model.sourceFiles, model.targetFiles] = await Promise.all([FileAdapter.scan(model.source, excludes), FileAdapter.scan(model.target, excludes)]);
+                const [sourceScan, targetScan] = await Promise.all([
+                    FileAdapter.scan(model.source, excludes),
+                    FileAdapter.scan(model.target, excludes),
+                ]);
+                applyScans(sourceScan, targetScan);
                 if (model.abortRequested) throw new DOMException('Comparison stopped', 'AbortError');
                 const contentEquality = new Map();
                 if (elements.comparison.value === 'exact') {
@@ -1804,7 +1846,7 @@
                         }
                     }
                 }
-                model.plan = SyncPlanner.plan({ source: model.sourceFiles, target: model.targetFiles, manifest: model.profile.manifest, trustedManifest: model.trustedProfile, direction: elements.direction.value, conflictPolicy: elements.policy.value, contentEquality });
+                model.plan = SyncPlanner.plan({ source: model.sourceFiles, target: model.targetFiles, manifest: model.profile.manifest, sourceDirectories: model.sourceDirectories, targetDirectories: model.targetDirectories, directoryManifest: model.profile.directoryManifest, trustedManifest: model.trustedProfile, direction: elements.direction.value, conflictPolicy: elements.policy.value, contentEquality });
                 renderRows();
                 setPhase(model.plan.actions.length ? 'planned' : 'ready');
                 setStatus(t(model.plan.actions.length ? 'compareDone' : 'compareNone', { count: model.plan.actions.length }), model.plan.summary.conflicts ? 'warning' : 'success', model.plan.summary.conflicts ? 'alert' : 'check');
@@ -1825,8 +1867,13 @@
                 const result = await SyncExecutor.run(plan, { handles: { source: model.source, target: model.target }, profile: model.profile, state: model.state, direction: elements.direction.value });
                 await RunLogStore.put(result.runLog);
                 const excludes = normalizeExcludes(elements.excludes.value);
-                [model.sourceFiles, model.targetFiles] = await Promise.all([FileAdapter.scan(model.source, excludes), FileAdapter.scan(model.target, excludes)]);
+                const [sourceScan, targetScan] = await Promise.all([
+                    FileAdapter.scan(model.source, excludes),
+                    FileAdapter.scan(model.target, excludes),
+                ]);
+                applyScans(sourceScan, targetScan);
                 model.profile.manifest = buildManifest(model.sourceFiles, model.targetFiles);
+                model.profile.directoryManifest = buildDirectoryManifest(model.sourceDirectories, model.targetDirectories);
                 if (result.status !== 'failed') delete model.profile.lastCheckpoint;
                 const history = { time: new Date(result.runLog.startedAt).toLocaleString(language()), logId: result.runLog.id, startedAt: result.runLog.startedAt, endedAt: result.runLog.endedAt, durationMs: result.runLog.durationMs, direction: result.runLog.direction, filesCount: result.completed, totalFiles: result.total, status: result.status };
                 model.profile.history.unshift(history); model.profile.history = model.profile.history.slice(0, MAX_PROFILE_HISTORY); model.state.globalHistory.unshift(history); model.state.globalHistory = model.state.globalHistory.slice(0, MAX_GLOBAL_HISTORY); StateStore.save(model.state);
