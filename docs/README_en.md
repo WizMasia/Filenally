@@ -17,7 +17,7 @@ File-nally is a self-contained browser application for comparing and synchronizi
 - Responsive Korean and English interface
 
 - Recent folders history and bookmarks (up to 5) — reuse saved directory handles. Selecting an item requests renewed permission when needed, and comparison is enabled only after both folders have read/write access.
-- Rename detection for files and folders — detect a rename instead of copy+delete and execute an atomic RENAME when possible.
+- File rename detection — use an atomic RENAME only when deleted and added files have identical content and form one unambiguous candidate. Different or ambiguous candidates keep the copy plus `.trash` preservation path.
 - Reverse synchronization (Target → Source) and a glassmorphic segmented toggle UI — three direction options: `Source ⇄ Target`, `Source → Target`, `Target → Source`.
 - Responsive synchronization options disclosure — options start collapsed on mobile and an explicit user choice persists across visits.
 - Source/Target folder swap — exchange a verified folder pair with one control and swap it back again.
@@ -81,6 +81,8 @@ Reverse synchronization makes Target authoritative and applies the same rules in
 | **Exact comparison** | Reads same-size files in 4 MiB chunks and compares every byte. It stops at the first difference and avoids copying identical content merely because modification times differ. |
 
 Exact comparison is slower because it reads file contents, but it keeps only two chunks in memory at once. **Stop safely** can cancel it between chunk reads. File-nally does not expose hash algorithms, partial-chunk fingerprints, or a persistent content-hash cache.
+
+Rename candidates are still compared byte-for-byte in quick mode to prevent false matches.
 
 ## Deletion safety and `.trash`
 

@@ -1246,7 +1246,7 @@ async function main() {
     assert.match(await page.locator('#syncStatus').innerText(), /최근 폴더|북마크|recent folder|bookmark/i);
   });
 
-  add('rename detection converts deleted and added file with matching size to rename action', async ({ page }) => {
+  add('rename detection verifies identical content in quick mode', async ({ page }) => {
     await mountPair(page, {
       source: { 'original.txt': { content: 'hello world' } },
       target: { 'original.txt': { content: 'hello world' } },
@@ -1266,6 +1266,78 @@ async function main() {
     const plan = await page.evaluate(() => window.FileNallyTest.getModel().plan);
     const renameAction = plan.actions.find((a) => a.type === 'rename');
     assert.ok(renameAction, 'expected a rename action');
+  });
+
+  add('rename detection preserves equal-size files with different content', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'original.txt': { content: 'AAAA' } },
+      target: { 'original.txt': { content: 'AAAA' } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+
+    await page.evaluate(() => {
+      window.__deleteMockEntry('source', 'original.txt');
+      window.__setMockFile('source', 'renamed.txt', { content: 'BBBB' });
+    });
+
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.equal(actions.some((action) => action.type === 'rename'), false);
+    assert.deepEqual(actions.map((action) => action.type).sort(), ['copy', 'trash']);
+
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    assert.equal(snapshot.target['renamed.txt'].content, 'BBBB');
+    assert.equal(Object.values(snapshot.target['.trash'])[0]['original.txt'].content, 'AAAA');
+  });
+
+  add('rename detection rejects ambiguous identical-content candidates', async ({ page }) => {
+    await mountPair(page, {
+      source: { 'original.txt': { content: 'same' } },
+      target: { 'original.txt': { content: 'same' } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+
+    await page.evaluate(() => {
+      window.__deleteMockEntry('source', 'original.txt');
+      window.__setMockFile('source', 'renamed-a.txt', { content: 'same' });
+      window.__setMockFile('source', 'renamed-b.txt', { content: 'same' });
+    });
+
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.equal(actions.some((action) => action.type === 'rename'), false);
+    assert.deepEqual(actions.map((action) => action.type).sort(), ['copy', 'copy', 'trash']);
+  });
+
+  add('rename verification follows the authoritative sync direction', async ({ page }) => {
+    for (const scenario of [
+      { control: '#dirOne', changedSide: 'source', fromSide: 'source', toSide: 'target' },
+      { control: '#dirReverse', changedSide: 'target', fromSide: 'target', toSide: 'source' },
+    ]) {
+      await page.locator(scenario.control).click();
+      await mountPair(page, {
+        source: { 'original.txt': { content: 'same' } },
+        target: { 'original.txt': { content: 'same' } },
+      });
+      await compare(page);
+      await executeCurrentPlan(page);
+      await page.evaluate((changedSide) => {
+        window.__deleteMockEntry(changedSide, 'original.txt');
+        window.__setMockFile(changedSide, 'renamed.txt', { content: 'same' });
+      }, scenario.changedSide);
+
+      await compare(page);
+      const rename = (await page.evaluate(() => window.FileNallyTest.getModel().plan.actions))
+        .find((action) => action.type === 'rename');
+      assert.deepEqual(
+        { fromSide: rename?.fromSide, toSide: rename?.toSide, side: rename?.side },
+        { fromSide: scenario.fromSide, toSide: scenario.toSide, side: scenario.toSide },
+      );
+      await page.reload();
+    }
   });
 
   const results = [];

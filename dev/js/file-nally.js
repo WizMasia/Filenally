@@ -411,6 +411,7 @@
     };
 
     const directoryEntry = (path) => ({ kind: 'directory', name: safeSegments(path).at(-1), path });
+    const renameMatchKey = (trash, copy) => JSON.stringify([trash.side, trash.path, copy.fromSide, copy.sourcePath, copy.toSide]);
 
     const SyncPlanner = (() => {
         const asMap = (value) => value instanceof Map ? value : new Map(Object.entries(value || {}));
@@ -430,11 +431,12 @@
         const plan = ({
             source, target, manifest = {}, sourceDirectories = [], targetDirectories = [],
             directoryManifest = {}, trustedManifest = false, direction = 'bidirectional',
-            conflictPolicy = 'latest', contentEquality, stamp = runStamp(),
+            conflictPolicy = 'latest', contentEquality, renameMatches = [], stamp = runStamp(),
         }) => {
             const src = asMap(source);
             const tgt = asMap(target);
             const exact = asMap(contentEquality);
+            const confirmedRenames = asSet(renameMatches);
             const actions = [];
             const rows = [];
             let conflicts = 0;
@@ -510,7 +512,7 @@
                 if (sourceFile || targetFile) rows.push({ kind: 'file', path, source: sourceFile, target: targetFile, sourceStatus, targetStatus });
             }
 
-            // Detect renames (Issue #4): match deleted items (trash) with newly added items (copy) of matching size
+            // Convert only byte-verified, unambiguous delete/add pairs into renames.
             const trashes = actions.filter((a) => a.type === 'trash');
             const copies = actions.filter((a) => a.type === 'copy' && a.sourcePath === a.destinationPath);
             const matchedTrashIndices = new Set();
@@ -527,7 +529,7 @@
                     const copyFile = copy.fromSide === 'source' ? src.get(copy.sourcePath) : tgt.get(copy.sourcePath);
                     if (!copyFile) continue;
 
-                    if (Number(trashFile.size) === Number(copyFile.size) && trash.side === copy.toSide) {
+                    if (Number(trashFile.size) === Number(copyFile.size) && trash.side === copy.toSide && confirmedRenames.has(renameMatchKey(trash, copy))) {
                         matchedTrashIndices.add(i);
                         matchedCopyIndices.add(j);
                         copy.type = 'rename';
@@ -648,6 +650,34 @@
             }
             return true;
         };
+        const verifyRenameMatches = async (actions, files, isCancelled) => {
+            const trashes = actions.filter((action) => action.type === 'trash');
+            const copies = actions.filter((action) => action.type === 'copy' && action.sourcePath === action.destinationPath);
+            const matches = [];
+            for (let trashIndex = 0; trashIndex < trashes.length; trashIndex += 1) {
+                const trash = trashes[trashIndex];
+                const trashFile = files[trash.side].get(trash.path);
+                if (!trashFile) continue;
+                for (let copyIndex = 0; copyIndex < copies.length; copyIndex += 1) {
+                    const copy = copies[copyIndex];
+                    if (trash.side !== copy.toSide) continue;
+                    const copyFile = files[copy.fromSide].get(copy.sourcePath);
+                    if (!copyFile || Number(trashFile.size) !== Number(copyFile.size)) continue;
+                    if (await compareContent(trashFile, copyFile, () => {}, isCancelled)) {
+                        matches.push({ trashIndex, copyIndex, key: renameMatchKey(trash, copy) });
+                    }
+                }
+            }
+            const trashCounts = new Map();
+            const copyCounts = new Map();
+            for (const match of matches) {
+                trashCounts.set(match.trashIndex, (trashCounts.get(match.trashIndex) || 0) + 1);
+                copyCounts.set(match.copyIndex, (copyCounts.get(match.copyIndex) || 0) + 1);
+            }
+            return new Set(matches
+                .filter((match) => trashCounts.get(match.trashIndex) === 1 && copyCounts.get(match.copyIndex) === 1)
+                .map((match) => match.key));
+        };
         const directoryFor = async (root, parts, create) => {
             let directory = root;
             for (const part of parts) directory = await directory.getDirectoryHandle(part, { create });
@@ -745,7 +775,7 @@
             await writable.close();
             await oldDirectory.removeEntry(oldName);
         };
-        return Object.freeze({ compareContent, copy, createDirectory, moveDirectoryToTrash, moveToTrash, rename, scan });
+        return Object.freeze({ compareContent, copy, createDirectory, moveDirectoryToTrash, moveToTrash, rename, scan, verifyRenameMatches });
     })();
 
     const elements = {
@@ -1269,7 +1299,10 @@
                         }
                     }
                 }
-                model.plan = SyncPlanner.plan({ source: model.sourceFiles, target: model.targetFiles, manifest: model.profile.manifest, sourceDirectories: model.sourceDirectories, targetDirectories: model.targetDirectories, directoryManifest: model.profile.directoryManifest, trustedManifest: model.trustedProfile, direction: elements.direction.value, conflictPolicy: elements.policy.value, contentEquality });
+                const planOptions = { source: model.sourceFiles, target: model.targetFiles, manifest: model.profile.manifest, sourceDirectories: model.sourceDirectories, targetDirectories: model.targetDirectories, directoryManifest: model.profile.directoryManifest, trustedManifest: model.trustedProfile, direction: elements.direction.value, conflictPolicy: elements.policy.value, contentEquality, stamp: runStamp() };
+                const initialPlan = SyncPlanner.plan(planOptions);
+                const renameMatches = await FileAdapter.verifyRenameMatches(initialPlan.actions, { source: model.sourceFiles, target: model.targetFiles }, () => model.abortRequested);
+                model.plan = renameMatches.size ? SyncPlanner.plan({ ...planOptions, renameMatches }) : initialPlan;
                 renderRows();
                 setPhase(model.plan.actions.length ? 'planned' : 'ready');
                 setStatus(t(model.plan.actions.length ? 'compareDone' : 'compareNone', { count: model.plan.actions.length }), model.plan.summary.conflicts ? 'warning' : 'success', model.plan.summary.conflicts ? 'alert' : 'check');
