@@ -152,16 +152,16 @@
             <div class="workspace-toolbar">
                 <label class="filter-toggle" for="showChangedOnly">
                     <input id="showChangedOnly" type="checkbox" aria-controls="srcFileBody tgtFileBody">
-                    <span data-i18n="showChangedOnly">변경된 파일만 보기</span>
+                    <span data-i18n="showChangedOnly">변경된 항목만 보기</span>
                 </label>
             </div>
             <article class="panel">
                 <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="sourceTitle">원본 폴더</span></h2><span id="srcCount" class="count">0</span></div>
-                <div class="table-wrapper"><table><thead><tr><th data-i18n="pathHead">파일명과 경로</th><th data-i18n="sizeHead">크기</th><th data-i18n="dateHead">수정일</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="srcFileBody"></tbody></table></div>
+                <div class="table-wrapper"><table><thead><tr><th data-i18n="pathHead">항목명과 경로</th><th data-i18n="sizeHead">크기</th><th data-i18n="dateHead">수정일</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="srcFileBody"></tbody></table></div>
             </article>
             <article class="panel">
                 <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-folder"></use></svg><span data-i18n="targetTitle">대상 폴더</span></h2><span id="tgtCount" class="count">0</span></div>
-                <div class="table-wrapper"><table><thead><tr><th data-i18n="pathHead">파일명과 경로</th><th data-i18n="sizeHead">크기</th><th data-i18n="dateHead">수정일</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="tgtFileBody"></tbody></table></div>
+                <div class="table-wrapper"><table><thead><tr><th data-i18n="pathHead">항목명과 경로</th><th data-i18n="sizeHead">크기</th><th data-i18n="dateHead">수정일</th><th data-i18n="stateHead">상태</th></tr></thead><tbody id="tgtFileBody"></tbody></table></div>
             </article>
         </section>
 
@@ -226,7 +226,7 @@
                     <div><dt data-i18n="stateHead">상태</dt><dd id="runDetailStatus"></dd></div>
                     <div><dt data-i18n="durationHead">소요 시간</dt><dd id="runDetailDuration"></dd></div>
                 </dl>
-                <div class="table-wrapper run-detail-table"><table><thead><tr><th data-i18n="sequenceHead">순서</th><th data-i18n="actionHead">작업</th><th data-i18n="pathHead">파일명과 경로</th><th data-i18n="durationHead">소요 시간</th><th data-i18n="stateHead">상태</th><th data-i18n="errorHead">오류</th></tr></thead><tbody id="runDetailBody"></tbody></table></div>
+                <div class="table-wrapper run-detail-table"><table><thead><tr><th data-i18n="sequenceHead">순서</th><th data-i18n="actionHead">작업</th><th data-i18n="pathHead">항목명과 경로</th><th data-i18n="durationHead">소요 시간</th><th data-i18n="stateHead">상태</th><th data-i18n="errorHead">오류</th></tr></thead><tbody id="runDetailBody"></tbody></table></div>
                 <div class="run-detail-pagination">
                     <button id="btnRunPreviousPage" class="button-ghost" type="button" data-i18n="previousPage">이전</button>
                     <span id="runDetailPageStatus" aria-live="polite"></span>

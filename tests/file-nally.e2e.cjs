@@ -201,7 +201,7 @@ async function main() {
     await page.evaluate(() => window.__setMockFile('source', 'changed.txt', { content: 'after', lastModified: 300 }));
     await compare(page);
 
-    const filter = page.getByLabel('변경된 파일만 보기', { exact: true });
+    const filter = page.getByLabel('변경된 항목만 보기', { exact: true });
     assert.equal(await filter.count(), 1);
     assert.match(await page.locator('#srcFileBody').innerText(), /changed\.txt[\s\S]*stable\.txt/);
     assert.match(await page.locator('#tgtFileBody').innerText(), /changed\.txt[\s\S]*stable\.txt/);
@@ -217,7 +217,7 @@ async function main() {
     assert.equal(await page.locator('#tgtCount').innerText(), '1');
 
     await page.reload();
-    assert.equal(await page.getByLabel('변경된 파일만 보기', { exact: true }).isChecked(), true);
+    assert.equal(await page.getByLabel('변경된 항목만 보기', { exact: true }).isChecked(), true);
   });
 
   add('skip policy never overwrites an existing destination', async ({ page }) => {
@@ -877,6 +877,23 @@ async function main() {
     await page.locator('#btnLangEn').click();
     assert.equal(await page.locator('#pathSrc').innerText(), 'my-source');
     assert.equal(await page.locator('#pathTgt').innerText(), 'my-target');
+    assert.equal(await page.getByLabel('Show changed items only', { exact: true }).count(), 1);
+  });
+
+  add('directory actions render bilingually and remain intact in JSON export', async ({ page }) => {
+    await mountPair(page, { source: { empty: { type: 'directory', entries: {} } }, target: {} });
+    await compare(page);
+    assert.match(await page.locator('#tgtFileBody').innerText(), /폴더 생성/);
+    await executeCurrentPlan(page);
+    await page.locator('.history-detail-button').first().click();
+    assert.match(await page.locator('#runDetailBody').innerText(), /폴더 생성/);
+    const downloadPromise = page.waitForEvent('download');
+    await page.locator('#btnDownloadRunJson').click();
+    const json = JSON.parse(await downloadText(await downloadPromise));
+    assert.equal(json.entries[0].action, 'create-directory');
+    const csvPromise = page.waitForEvent('download');
+    await page.locator('#btnDownloadRunCsv').click();
+    assert.match(await downloadText(await csvPromise), /create-directory,empty/);
   });
 
   add('quick guide explains the safe workflow in both languages and restores focus', async ({ page }) => {
@@ -1174,7 +1191,7 @@ async function main() {
       await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'ready');
       await compare(page);
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-planned.png`), fullPage: true });
-      await page.getByLabel('변경된 파일만 보기', { exact: true }).check();
+      await page.getByLabel('변경된 항목만 보기', { exact: true }).check();
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-changed-only.png`), fullPage: true });
       await executeCurrentPlan(page);
       await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'success');
