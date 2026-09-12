@@ -7,6 +7,7 @@ File-nally is a self-contained browser application for comparing and synchronizi
 ## Features
 
 - Bidirectional synchronization or one-way Source → Target synchronization
+- Safe synchronization of folder structure, including empty folders
 - A reviewable file-by-file plan before anything is written
 - Four explicit conflict policies: latest, source wins, skip, and preserve both
 - Versioned `.trash/<run timestamp>/...` isolation instead of permanent deletion
@@ -55,6 +56,12 @@ New and changed files can move from Source to Target or from Target to Source. W
 
 Source is authoritative for copy operations. Target-only files without a previous synchronized record are protected. A deletion recorded after an earlier successful synchronization can still be propagated by moving the corresponding Target file into `.trash`.
 
+In one-way and reverse synchronization, files and empty folders on the authoritative side are created or recreated on the other side. Deleting an item on the non-authoritative side never deletes the authoritative copy. Only a deletion on the authoritative side confirmed by a trusted manifest moves the other copy into the run-specific `.trash` directory.
+
+### Reverse: Target → Source
+
+Reverse synchronization makes Target authoritative and applies the same rules in the opposite direction: Target files and empty folders are created or recreated on Source, while deletions on authoritative Target are propagated only when confirmed by a trusted manifest.
+
 ## Conflict policies
 
 | Policy | Behavior |
@@ -82,6 +89,8 @@ File-nally does not permanently delete a synchronized file. Confirmed deletion p
 ```
 
 Repeated names in the same trash run receive a numeric suffix instead of being overwritten. The `.trash` directory is always excluded from synchronization, even if it is removed from the visible exclusion list. Recovery is manual: inspect `.trash` and move the required file back to its original location.
+
+File-nally never recursively deletes a non-empty directory. If a directory becomes non-empty after comparison, the directory move stops and the run reports an error.
 
 ## JSON settings and folder profiles
 
