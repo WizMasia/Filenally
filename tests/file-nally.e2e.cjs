@@ -382,6 +382,36 @@ async function main() {
     ]);
   });
 
+  add('one-way source recreates a target file deleted on the non-authoritative side', async ({ page }) => {
+    const actions = await page.evaluate(() => {
+      const file = { name: 'kept.txt', path: 'kept.txt', size: 4, lastModified: 100 };
+      const previous = { source: { size: 4, lastModified: 100 }, target: { size: 4, lastModified: 100 } };
+      return window.FileNallyTest.SyncPlanner.plan({
+        source: { 'kept.txt': file }, target: {}, manifest: { 'kept.txt': previous },
+        trustedManifest: true, direction: 'unidirectional',
+      }).actions;
+    });
+    assert.deepEqual(actions, [{
+      type: 'copy', path: 'kept.txt', sourcePath: 'kept.txt', destinationPath: 'kept.txt',
+      fromSide: 'source', toSide: 'target',
+    }]);
+  });
+
+  add('reverse sync recreates a source file deleted on the non-authoritative side', async ({ page }) => {
+    const actions = await page.evaluate(() => {
+      const file = { name: 'kept.txt', path: 'kept.txt', size: 4, lastModified: 100 };
+      const previous = { source: { size: 4, lastModified: 100 }, target: { size: 4, lastModified: 100 } };
+      return window.FileNallyTest.SyncPlanner.plan({
+        source: {}, target: { 'kept.txt': file }, manifest: { 'kept.txt': previous },
+        trustedManifest: true, direction: 'reverse',
+      }).actions;
+    });
+    assert.deepEqual(actions, [{
+      type: 'copy', path: 'kept.txt', sourcePath: 'kept.txt', destinationPath: 'kept.txt',
+      fromSide: 'target', toSide: 'source',
+    }]);
+  });
+
   add('planner treats unequal exact content with equal metadata as a conflict', async ({ page }) => {
     const result = await page.evaluate(() => {
       const file = { name: 'same.txt', path: 'same.txt', size: 4, lastModified: 100 };

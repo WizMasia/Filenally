@@ -465,16 +465,20 @@
                         else ({ sourceStatus, targetStatus } = resolveConflict(path, sourceFile, targetFile));
                     }
                 } else if (sourceFile) {
-                    if (previous?.source && previous?.target) {
+                    if (direction === 'unidirectional') {
+                        pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in';
+                    } else if (previous?.source && previous?.target) {
                         if (sameSnapshot(sourceFile, previous.source)) { actions.push({ type: 'trash', path, side: 'source' }); sourceStatus = 'trash'; }
                         else { sourceStatus = 'conflict'; conflicts += 1; }
                     } else if (direction === 'reverse') { sourceStatus = 'protected'; }
                     else { pushCopy(path, 'source', 'target'); sourceStatus = 'copy-out'; targetStatus = 'copy-in'; }
                 } else if (targetFile) {
-                    if (previous?.source && previous?.target) {
+                    if (direction === 'reverse') {
+                        pushCopy(path, 'target', 'source'); targetStatus = 'copy-out'; sourceStatus = 'copy-in';
+                    } else if (previous?.source && previous?.target) {
                         if (sameSnapshot(targetFile, previous.target)) { actions.push({ type: 'trash', path, side: 'target' }); targetStatus = 'trash'; }
                         else { targetStatus = 'conflict'; conflicts += 1; }
-                    } else if (direction === 'bidirectional' || direction === 'reverse') { pushCopy(path, 'target', 'source'); targetStatus = 'copy-out'; sourceStatus = 'copy-in'; }
+                    } else if (direction === 'bidirectional') { pushCopy(path, 'target', 'source'); targetStatus = 'copy-out'; sourceStatus = 'copy-in'; }
                     else targetStatus = 'protected';
                 } else if (previous) actions.push({ type: 'forget', path });
 
