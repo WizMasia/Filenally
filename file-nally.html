@@ -1052,6 +1052,12 @@
         };
         const freezeCleanup = (cleanup) => cleanup && Object.freeze({ ...cleanup,
             remainingIds: Object.freeze([...cleanup.remainingIds]) });
+        const usageReadError = (error, path) => {
+            const wrapped = new Error(safeMessage(error));
+            wrapped.code = error?.code;
+            wrapped.usagePath = path;
+            return wrapped;
+        };
         const readRawIndexSnapshot = async (root, check = () => {}) => {
             check();
             let versionRoot;
@@ -1060,15 +1066,23 @@
                 check();
                 if (error?.name === 'NotFoundError') return { root, versionRoot: null,
                     indexHandle: null, indexFile: null, text: null };
-                throw error;
+                throw usageReadError(error, '.filenally');
             }
             check();
-            const indexHandle = await getExistingFile(versionRoot, 'index.json', check);
+            let indexHandle;
+            try { indexHandle = await getExistingFile(versionRoot, 'index.json', check); }
+            catch (error) { throw usageReadError(error, 'index.json'); }
             check();
             if (!indexHandle) return { root, versionRoot, indexHandle: null, indexFile: null, text: null };
-            const indexFile = await indexHandle.getFile();
+            let indexFile;
+            try { indexFile = await indexHandle.getFile(); }
+            catch (error) { throw usageReadError(error, 'index.json'); }
             check();
-            const text = await indexFile.text();
+            if (indexFile.size > MAX_IMPORT_BYTES) return { root, versionRoot, indexHandle,
+                indexFile, text: null, unverifiable: true };
+            let text;
+            try { text = await indexFile.text(); }
+            catch (error) { throw usageReadError(error, 'index.json'); }
             check();
             return { root, versionRoot, indexHandle, indexFile, text };
         };
@@ -1176,19 +1190,22 @@
                 report.indexError = safeMessage(error);
                 try {
                     rawSnapshot = await readRawIndexSnapshot(root, check);
-                    try {
-                        parseIndexText(rawSnapshot.text);
-                        initialReadIncomplete = true;
-                        recordError('index.json', error);
+                    if (rawSnapshot.unverifiable) initialReadIncomplete = true;
+                    else {
+                        try {
+                            parseIndexText(rawSnapshot.text);
+                            initialReadIncomplete = true;
+                            recordError('index.json', error);
+                        }
+                        catch { /* A stable malformed index can still have a complete physical scan. */ }
                     }
-                    catch { /* A stable malformed index can still have a complete physical scan. */ }
                 } catch (rawError) {
                     if (['VERSION_USAGE_CANCELLED', 'VERSION_USAGE_CALLBACK'].includes(rawError?.code)) {
                         applyStop(rawError);
                         return finish();
                     }
                     initialReadIncomplete = true;
-                    recordError('.filenally', error);
+                    recordError(rawError.usagePath || '.filenally', rawError);
                     try {
                         const versionRoot = await root.getDirectoryHandle('.filenally');
                         check();

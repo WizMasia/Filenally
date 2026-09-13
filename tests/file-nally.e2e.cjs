@@ -2303,6 +2303,7 @@ async function main() {
     assert.equal(inaccessible.registered, null);
     assert.equal(inaccessible.inspection, 'partial');
     assert.ok(inaccessible.errorCount >= 1);
+    assert.equal(inaccessible.errors[0].path, '.filenally');
     assert.equal(available.indexStatus, 'valid');
     assert.equal(available.registered.bytes, '3');
     assert.equal(available.inspection, 'complete');
@@ -2356,6 +2357,79 @@ async function main() {
     assert.equal(result.inspection, 'partial');
     assert.equal(result.observed.unknownCount, 1);
     assert.equal(result.observed.otherBytes, '2');
+    assert.deepEqual(result.observed.missingIds, []);
+  });
+
+  for (const scan of [false, true]) {
+    add(`version usage ${scan ? 'physical scan' : 'quick summary'} never reads oversized index text`, async ({ page }) => {
+      await mountPair(page, { source: {}, target: {} });
+      const result = await page.evaluate(async ({ scan, size }) => {
+        window.__setMockFile('target', '.filenally/index.json', { contentSize: size });
+        window.__setMockFile('target', '.filenally/versions/loose/a.txt', { content: 'abc' });
+        const index = window.__mockPair.target.entries.get('.filenally').entries.get('index.json');
+        const getFile = index.getFile.bind(index);
+        let textReads = 0;
+        index.getFile = async () => {
+          const file = await getFile();
+          const text = file.text.bind(file);
+          Object.defineProperty(file, 'text', { value: async () => {
+            textReads += 1;
+            return text();
+          } });
+          return file;
+        };
+        const report = await window.FileNallyTest.VersionStore.inspectUsage(
+          window.__mockPair.target, { scan },
+        );
+        return { report, textReads };
+      }, { scan, size: (5 * 1024 * 1024) + 1 });
+      assert.equal(result.textReads, 0);
+      assert.equal(result.report.indexStatus, 'error');
+      assert.equal(result.report.registered, null);
+      assert.match(result.report.indexError, /exceeds 5MB/);
+      if (!scan) {
+        assert.equal(result.report.inspection, 'not-run');
+        assert.equal(result.report.observed, null);
+      } else {
+        assert.equal(result.report.inspection, 'partial');
+        assert.equal(result.report.observed.indexBytes, '5242881');
+        assert.equal(result.report.observed.unknownCount, 1);
+        assert.deepEqual(result.report.observed.missingIds, []);
+      }
+    });
+  }
+
+  add('version usage attributes distinct fallback failures to the failing index stage', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')]);
+    const result = await page.evaluate(async () => {
+      const root = window.__mockPair.target;
+      const getDirectoryHandle = root.getDirectoryHandle.bind(root);
+      let rootReads = 0;
+      root.getDirectoryHandle = async (name, options) => {
+        if (name === '.filenally' && rootReads++ === 0) {
+          throw new DOMException('initial root failure', 'NotReadableError');
+        }
+        return getDirectoryHandle(name, options);
+      };
+      const index = root.entries.get('.filenally').entries.get('index.json');
+      const getFile = index.getFile.bind(index);
+      let indexReads = 0;
+      index.getFile = async () => {
+        const file = await getFile();
+        if (indexReads++ === 0) Object.defineProperty(file, 'text', { value: async () => {
+          throw new DOMException('fallback index text failure', 'NotReadableError');
+        } });
+        return file;
+      };
+      return window.FileNallyTest.VersionStore.inspectUsage(root);
+    });
+    assert.equal(result.indexStatus, 'error');
+    assert.match(result.indexError, /initial root failure/);
+    assert.equal(result.inspection, 'partial');
+    assert.equal(result.errorCount, 1);
+    assert.equal(result.errors[0].path, 'index.json');
+    assert.match(result.errors[0].message, /fallback index text failure/);
+    assert.equal(result.observed.unknownCount, 1);
     assert.deepEqual(result.observed.missingIds, []);
   });
 
