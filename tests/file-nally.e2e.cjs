@@ -587,15 +587,15 @@ async function main() {
 
   for (const fixture of ['missing store', 'missing index', 'unsupported schema', 'invalid JSON', 'duplicate IDs']) {
     add(`version comparison store rejects ${fixture}`, async ({ page }) => {
-      if (fixture === 'missing store') await mountPair(page, { source: {}, target: { 'report.txt': { content: 'current' } } });
-      else await mountVersion(page);
+      if (fixture === 'missing store') {
+        await mountPair(page, { source: {}, target: { 'report.txt': { content: 'current' } } });
+        await page.evaluate((record) => { window.__versionRecord = record; }, versionFixture().record);
+      } else await mountVersion(page);
       await page.evaluate((fixture) => {
-        const root = window.__mockPair.target;
         if (fixture === 'missing index') window.__deleteMockEntry('target', '.filenally/index.json');
         if (fixture === 'unsupported schema') window.__setMockFile('target', '.filenally/index.json', { content: '{"schemaVersion":2,"versions":[]}' });
         if (fixture === 'invalid JSON') window.__setMockFile('target', '.filenally/index.json', { content: '{' });
         if (fixture === 'duplicate IDs') window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [window.__versionRecord, window.__versionRecord] }) });
-        if (fixture === 'missing store') void root;
       }, fixture);
       const before = await snapshotMockPair(page);
       const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
@@ -603,7 +603,7 @@ async function main() {
         try { await window.FileNallyTest.VersionStore.comparisonChoices(window.__mockPair.target, window.__versionRecord); return ''; }
         catch (error) { return error.message; }
       });
-      if (fixture === 'missing store') assert.equal(result, 'Invalid selected version');
+      if (fixture === 'missing store') assert.equal(result, 'Selected version record changed');
       if (fixture === 'missing index') assert.equal(result, 'Selected version record changed');
       if (fixture === 'unsupported schema') assert.equal(result, 'Unsupported version index');
       if (fixture === 'duplicate IDs') assert.equal(result, 'Duplicate version IDs');
