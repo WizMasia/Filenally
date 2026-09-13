@@ -96,6 +96,10 @@ VersionStore.cleanup(prepared, {
 } = {})
 // Resolves CleanupResult for complete/stopped; failures throw an Error with
 // .cleanupResult when an operation has been accepted.
+// onProgress receives a separate frozen { operationId, completedIds,
+// completedBytes, remainingIds } after each committed unit (arrays frozen).
+// It has no terminal status or recovery/error fields; a running operation
+// must not be labelled stopped. Returned/thrown CleanupResult is unchanged.
 // { operationId, status:'complete'|'stopped'|'failed', completedIds:string[],
 //   completedBytes:string, remainingIds:string[], failedId:string|null,
 //   recoveryRequired:boolean, error:string|null }
