@@ -73,7 +73,9 @@ async function installMockFileSystem(page) {
             if (shouldFail('close', this.name)) throw new DOMException('Injected close failure', 'NotAllowedError');
             this.content = nextContent;
             this.lastModified = ++clock;
+            await window.__mockAfterClose?.(this);
           },
+          abort: async () => {},
         };
       }
 
@@ -100,7 +102,8 @@ async function installMockFileSystem(page) {
       async getDirectoryHandle(name, options = {}) {
         const current = this.entries.get(name);
         if (current?.kind === 'directory') return current;
-        if (current || !options.create) throw new DOMException('Directory not found', 'NotFoundError');
+        if (current) throw new DOMException('Entry is not a directory', 'TypeMismatchError');
+        if (!options.create) throw new DOMException('Directory not found', 'NotFoundError');
         const directory = new MockDirectoryHandle(name, { permission: this.permission });
         this.entries.set(name, directory);
         return directory;
@@ -109,7 +112,8 @@ async function installMockFileSystem(page) {
       async getFileHandle(name, options = {}) {
         const current = this.entries.get(name);
         if (current?.kind === 'file') return current;
-        if (current || !options.create) throw new DOMException('File not found', 'NotFoundError');
+        if (current) throw new DOMException('Entry is not a file', 'TypeMismatchError');
+        if (!options.create) throw new DOMException('File not found', 'NotFoundError');
         const file = new MockFileHandle(name);
         this.entries.set(name, file);
         return file;

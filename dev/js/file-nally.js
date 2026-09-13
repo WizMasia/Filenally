@@ -101,9 +101,42 @@
         const directory = await directoryFor(root, parts, false);
         return directory.getFileHandle(name);
     };
+    const equalFileBytes = async (sourceFile, targetFile, onProgress = () => {}, isCancelled = () => false) => {
+        if (sourceFile.size !== targetFile.size) return false;
+        const totalBytes = sourceFile.size * 2;
+        if (!totalBytes) {
+            await Promise.all([sourceFile.slice(0, 0).arrayBuffer(), targetFile.slice(0, 0).arrayBuffer()]);
+            onProgress(0, 0);
+            return true;
+        }
+        for (let offset = 0; offset < sourceFile.size; offset += CONTENT_CHUNK_BYTES) {
+            if (isCancelled()) throw new DOMException('Comparison stopped', 'AbortError');
+            const end = Math.min(offset + CONTENT_CHUNK_BYTES, sourceFile.size);
+            const [sourceBuffer, targetBuffer] = await Promise.all([
+                sourceFile.slice(offset, end).arrayBuffer(),
+                targetFile.slice(offset, end).arrayBuffer(),
+            ]);
+            if (isCancelled()) throw new DOMException('Comparison stopped', 'AbortError');
+            const sourceBytes = new Uint8Array(sourceBuffer);
+            const targetBytes = new Uint8Array(targetBuffer);
+            if (sourceBytes.length !== targetBytes.length) return false;
+            for (let index = 0; index < sourceBytes.length; index += 1) if (sourceBytes[index] !== targetBytes[index]) return false;
+            onProgress(end * 2, totalBytes);
+        }
+        return true;
+    };
 
     const VersionStore = (() => {
+        const preparedRestores = new WeakMap();
+        let restoring = false;
         const emptyIndex = () => ({ schemaVersion: VERSION_INDEX_SCHEMA, versions: [] });
+        const originalSegments = (path) => {
+            const parts = safeSegments(path);
+            if (parts.some((part) => RESERVED_EXCLUDES.includes(part.toLowerCase()) || /[\\\0]/.test(part))) {
+                throw new Error(`Unsafe version original path: ${path}`);
+            }
+            return parts;
+        };
         const cleanRecord = (value) => {
             if (!isObject(value)
                 || typeof value.id !== 'string' || !value.id
@@ -112,14 +145,13 @@
                 || typeof value.storedPath !== 'string'
                 || !Number.isFinite(Number(value.size))
                 || !Number.isFinite(Number(value.lastModified))
-                || value.reason !== 'before-overwrite'
+                || !['before-overwrite', 'before-restore'].includes(value.reason)
                 || !['bidirectional', 'unidirectional', 'reverse'].includes(value.direction)
                 || !['source', 'target'].includes(value.fromSide)
                 || !['source', 'target'].includes(value.toSide)
-                || value.fromSide === value.toSide) return null;
-            if (safeSegments(value.id).length !== 1) return null;
-            safeSegments(value.originalPath);
-            const expectedStoredPath = ['versions', value.id, ...safeSegments(value.originalPath)].join('/');
+                || (value.reason === 'before-overwrite' ? value.fromSide === value.toSide : value.fromSide !== value.toSide)) return null;
+            if (safeSegments(value.id).length !== 1 || /[\\\0]/.test(value.id)) return null;
+            const expectedStoredPath = ['versions', value.id, ...originalSegments(value.originalPath)].join('/');
             if (value.storedPath !== expectedStoredPath) return null;
             return {
                 id: value.id,
@@ -129,7 +161,7 @@
                 size: Number(value.size),
                 type: typeof value.type === 'string' ? value.type : '',
                 lastModified: Number(value.lastModified),
-                reason: 'before-overwrite',
+                reason: value.reason,
                 runId: typeof value.runId === 'string' ? value.runId : '',
                 direction: value.direction,
                 fromSide: value.fromSide,
@@ -156,37 +188,38 @@
                 throw error;
             }
         };
-        const writeFile = async (root, path, value) => {
-            const parts = safeSegments(path);
-            const name = parts.pop();
-            const directory = await directoryFor(root, parts, true);
-            const handle = await directory.getFileHandle(name, { create: true });
+        const writeFile = async (root, path, value, handle = null) => {
+            if (!handle) {
+                const parts = safeSegments(path);
+                const name = parts.pop();
+                const directory = await directoryFor(root, parts, true);
+                handle = await directory.getFileHandle(name, { create: true });
+            }
             const writable = await handle.createWritable();
-            await writable.write(value);
-            await writable.close();
-        };
-        const loadIndex = async (versionRoot) => {
             try {
-                const handle = await versionRoot.getFileHandle('index.json');
-                const file = await handle.getFile();
-                if (file.size > MAX_IMPORT_BYTES) throw new Error('Version index exceeds 5MB');
-                return parseIndexText(await file.text());
+                await writable.write(value);
+                await writable.close();
             } catch (error) {
-                if (error?.name === 'NotFoundError') return emptyIndex();
+                try { await writable.abort?.(); } catch { /* Preserve the write failure. */ }
                 throw error;
             }
         };
-        const capture = async ({ action, handles, runId, direction }) => {
+        const loadIndex = async (versionRoot) => {
+            const handle = await getExistingFile(versionRoot, 'index.json');
+            if (!handle) return emptyIndex();
+            const file = await handle.getFile();
+            if (file.size > MAX_IMPORT_BYTES) throw new Error('Version index exceeds 5MB');
+            return parseIndexText(await file.text());
+        };
+        const capture = async ({ action, handles, runId, direction, reason = 'before-overwrite' }) => {
             const root = handles[action.toSide];
             const destinationPath = action.destinationPath || action.path;
+            const parts = originalSegments(destinationPath);
             const destination = await getExistingFile(root, destinationPath);
             if (!destination) return null;
             const snapshot = await destination.getFile();
             const id = uid();
-            const storedPath = ['versions', id, ...safeSegments(destinationPath)].join('/');
-            const filenally = await directoryFor(root, ['.filenally'], true);
-            await writeFile(filenally, storedPath, snapshot);
-            const index = await loadIndex(filenally);
+            const storedPath = ['versions', id, ...parts].join('/');
             const record = cleanRecord({
                 id,
                 capturedAt: nowIso(),
@@ -195,20 +228,96 @@
                 size: snapshot.size,
                 type: snapshot.type,
                 lastModified: snapshot.lastModified,
-                reason: 'before-overwrite',
+                reason,
                 runId,
                 direction,
                 fromSide: action.fromSide,
                 toSide: action.toSide,
             });
             if (!record) throw new Error('Could not create version record');
+            const filenally = await directoryFor(root, ['.filenally'], true);
+            await writeFile(filenally, storedPath, snapshot);
+            const index = await loadIndex(filenally);
             index.versions.push(record);
             const indexText = JSON.stringify(index, null, 2);
             parseIndexText(indexText);
             await writeFile(filenally, 'index.json', indexText);
             return Object.freeze(record);
         };
-        return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText });
+        const list = async (root) => {
+            let versionRoot;
+            try { versionRoot = await root.getDirectoryHandle('.filenally'); }
+            catch (error) {
+                if (error?.name === 'NotFoundError') return [];
+                throw error;
+            }
+            const { versions } = await loadIndex(versionRoot);
+            if (new Set(versions.map((record) => record.id)).size !== versions.length) throw new Error('Duplicate version IDs');
+            return versions.map(Object.freeze);
+        };
+        const readVersion = async (root, selected) => {
+            const expected = cleanRecord(selected);
+            if (!expected) throw new Error('Invalid selected version');
+            const record = (await list(root)).find((record) => record.id === expected.id);
+            if (!record || JSON.stringify(record) !== JSON.stringify(expected)) throw new Error('Selected version record changed');
+            const path = ['.filenally', 'versions', record.id, ...originalSegments(record.originalPath)].join('/');
+            const handle = await fileHandleFor(root, path);
+            const file = await handle.getFile();
+            if (file.size !== record.size) throw new Error('Stored version size changed');
+            return { record, handle, file };
+        };
+        const read = async (root, record) => (await readVersion(root, record)).file;
+        const prepareRestore = async (root, record) => {
+            const version = await readVersion(root, record);
+            const currentHandle = await getExistingFile(root, version.record.originalPath);
+            const currentFile = currentHandle ? await currentHandle.getFile() : null;
+            const prepared = Object.freeze({ root, record: version.record, versionFile: version.file, currentFile, currentHandle });
+            preparedRestores.set(prepared, version.handle);
+            return prepared;
+        };
+        const requireSameFile = async (expectedHandle, expectedFile, handle, file) => {
+            if (Boolean(expectedHandle) !== Boolean(handle)) throw new Error('Restore file appeared or disappeared');
+            if (!handle) return;
+            if ((expectedHandle.isSameEntry && !await expectedHandle.isSameEntry(handle))
+                || expectedFile.size !== file.size || expectedFile.lastModified !== file.lastModified
+                || expectedFile.type !== file.type || !await equalFileBytes(expectedFile, file)) {
+                throw new Error('Restore file changed; confirm again');
+            }
+        };
+        const checkPrepared = async (prepared, versionHandle) => {
+            const { root, record, versionFile, currentHandle, currentFile } = prepared;
+            const version = await readVersion(root, record);
+            await requireSameFile(versionHandle, versionFile, version.handle, version.file);
+            const current = await getExistingFile(root, record.originalPath);
+            await requireSameFile(currentHandle, currentFile, current, current ? await current.getFile() : null);
+            return current;
+        };
+        const restore = async (prepared, { side, direction, runId }) => {
+            if (restoring || !preparedRestores.has(prepared)) throw new Error('Restore confirmation expired or restore already running');
+            if (!['source', 'target'].includes(side) || !['bidirectional', 'unidirectional', 'reverse'].includes(direction)
+                || typeof runId !== 'string' || !runId) throw new Error('Invalid restore operation');
+            const versionHandle = preparedRestores.get(prepared);
+            preparedRestores.delete(prepared);
+            restoring = true;
+            let backup = null;
+            try {
+                const { root, record, currentFile, versionFile } = prepared;
+                if (await root.queryPermission({ mode: 'readwrite' }) !== 'granted') throw new Error('Restore write permission is not granted');
+                await checkPrepared(prepared, versionHandle);
+                if (currentFile) {
+                    backup = await capture({ action: { path: record.originalPath, fromSide: side, toSide: side },
+                        handles: { [side]: root }, direction, runId, reason: 'before-restore' });
+                    if (!backup) throw new Error('Restore destination disappeared before backup');
+                }
+                const current = await checkPrepared(prepared, versionHandle);
+                await writeFile(root, record.originalPath, versionFile, current);
+                return { record, backup };
+            } catch (error) {
+                if (backup) error.backup = backup;
+                throw error;
+            } finally { restoring = false; }
+        };
+        return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText, list, read, prepareRestore, restore });
     })();
 
     const StateStore = (() => {
@@ -769,23 +878,7 @@
             if (sourceFile.size !== source.size || targetFile.size !== target.size
                 || sourceFile.lastModified !== source.lastModified || targetFile.lastModified !== target.lastModified
                 || sourceFile.size !== targetFile.size) return false;
-            const totalBytes = sourceFile.size * 2;
-            if (!totalBytes) { onProgress(0, 0); return true; }
-            for (let offset = 0; offset < sourceFile.size; offset += CONTENT_CHUNK_BYTES) {
-                if (isCancelled()) throw new DOMException('Comparison stopped', 'AbortError');
-                const end = Math.min(offset + CONTENT_CHUNK_BYTES, sourceFile.size);
-                const [sourceBuffer, targetBuffer] = await Promise.all([
-                    sourceFile.slice(offset, end).arrayBuffer(),
-                    targetFile.slice(offset, end).arrayBuffer(),
-                ]);
-                if (isCancelled()) throw new DOMException('Comparison stopped', 'AbortError');
-                const sourceBytes = new Uint8Array(sourceBuffer);
-                const targetBytes = new Uint8Array(targetBuffer);
-                if (sourceBytes.length !== targetBytes.length) return false;
-                for (let index = 0; index < sourceBytes.length; index += 1) if (sourceBytes[index] !== targetBytes[index]) return false;
-                onProgress(end * 2, totalBytes);
-            }
-            return true;
+            return equalFileBytes(sourceFile, targetFile, onProgress, isCancelled);
         };
         const verifyRenameMatches = async (actions, files, isCancelled) => {
             const trashes = actions.filter((action) => action.type === 'trash');
