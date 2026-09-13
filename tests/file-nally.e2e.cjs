@@ -313,8 +313,12 @@ async function main() {
     assert.equal(await page.locator('#comparisonTarget option').count(), 4);
     assert.equal(await page.locator('#comparisonTarget').inputValue(), 'current');
     const historicValue = await page.locator('#comparisonTarget option').last().getAttribute('value');
+    assert.equal(historicValue, 'version:history-000');
     await page.locator('#comparisonTarget').selectOption(historicValue);
     assert.equal(await page.locator('#btnRunComparison').isEnabled(), true);
+    await runVersionComparison(page);
+    assert.match(await page.locator('#comparisonSummary').innerText(), /history-000/);
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind="add"] code').first().innerText(), 'history 0');
     await page.locator('#btnComparisonTargetPrevious').click();
     assert.equal(await page.locator('#comparisonTarget').inputValue(), '');
     assert.equal(await page.locator('#btnRunComparison').isDisabled(), true);
@@ -431,6 +435,8 @@ async function main() {
       if (fallback === 'line-format-only') { left = '\uFEFFsame\r\n'; right = 'same\n'; }
       await mountVersion(page, { content: left });
       await page.evaluate((content) => window.__setMockFile('target', 'report.txt', { content, lastModified: 200 }), right);
+      await installComparisonMutationSpies(page);
+      const files = await snapshotMockPair(page), state = await comparisonState(page);
       await openVersionComparison(page);
       await runVersionComparison(page);
       const summary = await page.locator('#comparisonSummary').innerText();
@@ -442,6 +448,10 @@ async function main() {
         assert.match(summary, /BOM: .*CRLF 1 .* LF 0/);
       }
       assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+      assert.equal(await page.locator('#restoreDialog').evaluate((dialog) => dialog.open), false);
+      await page.locator('#btnCloseComparison').click();
+      await page.locator('#btnCloseVersions').click();
+      await assertComparisonReadOnly(page, files, state);
     });
   }
 
@@ -633,18 +643,19 @@ async function main() {
     await page.evaluate(() => {
       const stored = window.__mockPair.target.entries.get('.filenally').entries.get('versions').entries.get('saved-1').entries.get('report.txt');
       const getFile = stored.getFile.bind(stored);
-      let first = true;
+      let readNumber = 0;
       stored.getFile = async () => {
         const file = await getFile();
-        if (!first) return file;
-        first = false;
+        readNumber += 1;
+        if (readNumber > 2) return file;
+        const label = readNumber === 1 ? 'Old' : 'New';
         const slice = file.slice.bind(file);
         file.slice = (...args) => {
           const chunk = slice(...args), read = chunk.arrayBuffer.bind(chunk);
           chunk.arrayBuffer = async () => {
-            window.__oldReadStarted = true;
-            await new Promise((resolve) => { window.__releaseOldRead = resolve; });
-            const bytes = await read(); window.__oldReadSettled = true; return bytes;
+            window[`__${label.toLowerCase()}ReadStarted`] = true;
+            await new Promise((resolve) => { window[`__release${label}Read`] = resolve; });
+            const bytes = await read(); window[`__${label.toLowerCase()}ReadSettled`] = true; return bytes;
           };
           return chunk;
         };
@@ -657,11 +668,19 @@ async function main() {
     assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().versionBusy), true);
     await page.locator('[data-version-action="compare"]').first().click();
     await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+    await page.locator('#btnRunComparison').click();
+    await page.waitForFunction(() => window.__newReadStarted);
+    assert.equal(await page.locator('#comparisonTarget').isDisabled(), true);
     await page.evaluate(() => window.__releaseOldRead());
     await page.waitForFunction(() => window.__oldReadSettled);
     assert.equal(await page.locator('#comparisonDialog').evaluate((dialog) => dialog.open), true);
-    assert.equal(await page.locator('#comparisonTarget').isEnabled(), true);
+    assert.equal(await page.locator('#comparisonTarget').isDisabled(), true);
+    assert.equal(await page.locator('#btnRunComparison').isDisabled(), true);
+    assert.equal(await page.locator('#btnStopComparison').isEnabled(), true);
     assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    await page.evaluate(() => window.__releaseNewRead());
+    await page.waitForFunction(() => window.__newReadSettled && !document.querySelector('#comparisonTarget').disabled);
+    assert.ok(await page.locator('#comparisonBody [data-diff-kind]').count());
     await page.locator('#btnCloseComparison').click();
     await page.locator('#btnCloseVersions').click();
     await assertComparisonReadOnly(page, files, state);
@@ -676,29 +695,35 @@ async function main() {
     await page.evaluate(() => {
       const index = window.__mockPair.target.entries.get('.filenally').entries.get('index.json');
       const getFile = index.getFile.bind(index);
-      let first = true;
+      let readNumber = 0;
       index.getFile = async () => {
         const file = await getFile();
-        if (!first) return file;
-        first = false;
+        readNumber += 1;
+        if (readNumber > 2) return file;
+        const label = readNumber === 1 ? 'OldChoice' : 'NewChoice';
         const text = file.text.bind(file);
-        file.text = async () => { window.__choiceReadStarted = true;
-          await new Promise((resolve) => { window.__releaseChoiceRead = resolve; });
-          const value = await text(); window.__choiceReadSettled = true; return value; };
+        file.text = async () => { window[`__${label[0].toLowerCase()}${label.slice(1)}ReadStarted`] = true;
+          await new Promise((resolve) => { window[`__release${label}Read`] = resolve; });
+          const value = await text(); window[`__${label[0].toLowerCase()}${label.slice(1)}ReadSettled`] = true; return value; };
         return file;
       };
     });
     await page.locator('[data-version-action="compare"]').first().click();
-    await page.waitForFunction(() => window.__choiceReadStarted);
+    await page.waitForFunction(() => window.__oldChoiceReadStarted);
     assert.equal(await page.locator('#btnStopComparison').isDisabled(), true);
     assert.equal(await page.locator('#btnCloseComparison').isEnabled(), true);
     assert.equal(await page.locator('#comparisonTarget').isDisabled(), true);
     await page.locator('#btnCloseComparison').click();
     assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().versionBusy), true);
     await page.locator('[data-version-action="compare"]').first().click();
-    await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
-    await page.evaluate(() => window.__releaseChoiceRead());
-    await page.waitForFunction(() => window.__choiceReadSettled);
+    await page.waitForFunction(() => window.__newChoiceReadStarted);
+    await page.evaluate(() => window.__releaseOldChoiceRead());
+    await page.waitForFunction(() => window.__oldChoiceReadSettled);
+    assert.equal(await page.locator('#comparisonTarget').isDisabled(), true);
+    assert.equal(await page.locator('#btnRunComparison').isDisabled(), true);
+    assert.equal(await page.locator('#btnStopComparison').isDisabled(), true);
+    await page.evaluate(() => window.__releaseNewChoiceRead());
+    await page.waitForFunction(() => window.__newChoiceReadSettled && !document.querySelector('#comparisonTarget').disabled);
     assert.equal(await page.locator('#comparisonTarget').inputValue(), 'current');
     assert.equal(await page.locator('#comparisonTarget').isEnabled(), true);
     await page.locator('#btnCloseComparison').click();
@@ -738,7 +763,7 @@ async function main() {
     assert.equal(await page.locator('#comparisonSummary').getByText('SHA-256', { exact: true }).count(), 0);
   });
 
-  add('version comparison Close and reopen discard delayed digest before any second fingerprint', async ({ page }) => {
+  add('version comparison Close and reopen discard delayed digest without unlocking replacement analysis', async ({ page }) => {
     await mountVersion(page, { content: 'same' });
     await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: 'same', lastModified: 200 }));
     await installComparisonMutationSpies(page);
@@ -749,22 +774,39 @@ async function main() {
       window.__digestCalls = 0;
       window.__restoreDigest = () => Object.defineProperty(subtle, 'digest', { configurable: true, value: original });
       Object.defineProperty(subtle, 'digest', { configurable: true, value: async (...args) => {
-        window.__digestCalls += 1; window.__digestStarted = true;
-        await new Promise((resolve) => { window.__releaseDigest = resolve; });
-        const value = await original(...args); window.__digestSettled = true; return value;
+        window.__digestCalls += 1;
+        const call = window.__digestCalls;
+        const label = call === 1 ? 'OldDigest' : 'NewDigest';
+        if (call <= 2) {
+          window[`__${label[0].toLowerCase()}${label.slice(1)}Started`] = true;
+          await new Promise((resolve) => { window[`__release${label}`] = resolve; });
+        }
+        const value = await original(...args);
+        if (call <= 2) window[`__${label[0].toLowerCase()}${label.slice(1)}Settled`] = true;
+        return value;
       } });
     });
     await page.locator('#btnRunComparison').click();
-    await page.waitForFunction(() => window.__digestStarted);
+    await page.waitForFunction(() => window.__oldDigestStarted);
     await page.locator('#btnCloseComparison').click();
     await page.locator('[data-version-action="compare"]').first().click();
     await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
-    await page.evaluate(() => window.__releaseDigest());
-    await page.waitForFunction(() => window.__digestSettled);
-    await page.evaluate(() => window.__restoreDigest());
-    assert.equal(await page.evaluate(() => window.__digestCalls), 1);
+    await page.locator('#btnRunComparison').click();
+    await page.waitForFunction(() => window.__newDigestStarted);
+    await page.evaluate(() => window.__releaseOldDigest());
+    await page.waitForFunction(() => window.__oldDigestSettled);
+    assert.equal(await page.locator('#comparisonTarget').isDisabled(), true);
+    assert.equal(await page.locator('#btnRunComparison').isDisabled(), true);
+    assert.equal(await page.locator('#btnStopComparison').isEnabled(), true);
     assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
     assert.equal(await page.locator('#comparisonSummary').getByText('SHA-256', { exact: true }).count(), 0);
+    assert.equal(await page.evaluate(() => window.__digestCalls), 2);
+    await page.evaluate(() => window.__releaseNewDigest());
+    await page.waitForFunction(() => window.__newDigestSettled && !document.querySelector('#comparisonTarget').disabled);
+    await page.evaluate(() => window.__restoreDigest());
+    assert.equal(await page.evaluate(() => window.__digestCalls), 2);
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    assert.equal(await page.locator('#comparisonSummary').getByText('SHA-256', { exact: true }).count(), 2);
     assert.equal(await page.locator('#comparisonTarget').isEnabled(), true);
     await page.locator('#btnCloseComparison').click();
     await page.locator('#btnCloseVersions').click();
