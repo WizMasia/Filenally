@@ -231,6 +231,14 @@ async function installMockFileSystem(page) {
       target: await snapshot(window.__mockPair.target),
     });
 
+    window.__getMockFile = (side, path) => {
+      const parts = path.split('/');
+      const name = parts.pop();
+      const entry = getDirectory(window.__mockPair[side], parts).entries.get(name);
+      if (!entry || entry.kind !== 'file') throw new Error(`File not found: ${path}`);
+      return { content: entry.content, lastModified: entry.lastModified };
+    };
+
     window.__deleteMockEntry = (side, path) => {
       const parts = path.split('/');
       const name = parts.pop();

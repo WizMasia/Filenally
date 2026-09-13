@@ -671,6 +671,18 @@
         seen.delete(value);
     };
 
+    const directoryFor = async (root, parts, create) => {
+        let directory = root;
+        for (const part of parts) directory = await directory.getDirectoryHandle(part, { create });
+        return directory;
+    };
+    const fileHandleFor = async (root, path) => {
+        const parts = safeSegments(path);
+        const name = parts.pop();
+        const directory = await directoryFor(root, parts, false);
+        return directory.getFileHandle(name);
+    };
+
     const VersionStore = (() => {
         const emptyIndex = () => ({ schemaVersion: VERSION_INDEX_SCHEMA, versions: [] });
         const cleanRecord = (value) => {
@@ -717,7 +729,65 @@
             if (versions.some((record) => !record)) throw new Error('Malformed version record');
             return { schemaVersion: VERSION_INDEX_SCHEMA, versions };
         };
-        return Object.freeze({ cleanRecord, emptyIndex, parseIndexText });
+        const getExistingFile = async (root, path) => {
+            try {
+                return await fileHandleFor(root, path);
+            } catch (error) {
+                if (error?.name === 'NotFoundError') return null;
+                throw error;
+            }
+        };
+        const writeFile = async (root, path, value) => {
+            const parts = safeSegments(path);
+            const name = parts.pop();
+            const directory = await directoryFor(root, parts, true);
+            const handle = await directory.getFileHandle(name, { create: true });
+            const writable = await handle.createWritable();
+            await writable.write(value);
+            await writable.close();
+        };
+        const loadIndex = async (versionRoot) => {
+            try {
+                const handle = await versionRoot.getFileHandle('index.json');
+                const file = await handle.getFile();
+                if (file.size > MAX_IMPORT_BYTES) throw new Error('Version index exceeds 5MB');
+                return parseIndexText(await file.text());
+            } catch (error) {
+                if (error?.name === 'NotFoundError') return emptyIndex();
+                throw error;
+            }
+        };
+        const capture = async ({ action, handles, runId, direction }) => {
+            const root = handles[action.toSide];
+            const destinationPath = action.destinationPath || action.path;
+            const destination = await getExistingFile(root, destinationPath);
+            if (!destination) return null;
+            const snapshot = await destination.getFile();
+            const id = uid();
+            const storedPath = ['versions', id, ...safeSegments(destinationPath)].join('/');
+            const filenally = await directoryFor(root, ['.filenally'], true);
+            await writeFile(filenally, storedPath, snapshot);
+            const index = await loadIndex(filenally);
+            const record = cleanRecord({
+                id,
+                capturedAt: nowIso(),
+                originalPath: destinationPath,
+                storedPath,
+                size: snapshot.size,
+                type: snapshot.type,
+                lastModified: snapshot.lastModified,
+                reason: 'before-overwrite',
+                runId,
+                direction,
+                fromSide: action.fromSide,
+                toSide: action.toSide,
+            });
+            if (!record) throw new Error('Could not create version record');
+            index.versions.push(record);
+            await writeFile(filenally, 'index.json', JSON.stringify(index, null, 2));
+            return Object.freeze(record);
+        };
+        return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText });
     })();
 
     const StateStore = (() => {
@@ -1313,17 +1383,6 @@
                 .filter((match) => trashCounts.get(match.trashIndex) === 1 && copyCounts.get(match.copyIndex) === 1)
                 .map((match) => match.key));
         };
-        const directoryFor = async (root, parts, create) => {
-            let directory = root;
-            for (const part of parts) directory = await directory.getDirectoryHandle(part, { create });
-            return directory;
-        };
-        const fileHandleFor = async (root, path) => {
-            const parts = safeSegments(path);
-            const name = parts.pop();
-            const directory = await directoryFor(root, parts, false);
-            return directory.getFileHandle(name);
-        };
         const copy = async (action, handles) => {
             const sourceRoot = handles[action.fromSide];
             const targetRoot = handles[action.toSide];
@@ -1745,7 +1804,19 @@
                 const actionStartedMs = Date.now();
                 entry.startedAt = nowIso();
                 try {
-                    if (action.type === 'copy') await FileAdapter.copy(action, context.handles);
+                    if (action.type === 'copy') {
+                        const version = await VersionStore.capture({
+                            action,
+                            handles: context.handles,
+                            runId: plan.id,
+                            direction: context.direction,
+                        });
+                        if (version) {
+                            entry.versionId = version.id;
+                            entry.versionPath = version.storedPath;
+                        }
+                        await FileAdapter.copy(action, context.handles);
+                    }
                     else if (action.type === 'rename') await FileAdapter.rename(action, context.handles);
                     else if (action.type === 'trash') await FileAdapter.moveToTrash(action, context.handles, plan.stamp);
                     else if (action.type === 'create-directory') await FileAdapter.createDirectory(action, context.handles);

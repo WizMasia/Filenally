@@ -975,6 +975,99 @@ async function main() {
     assert.equal(snapshot.target['new.txt'].content, 'source data');
   });
 
+  add('one-way overwrite captures the live target before writing', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    await mountPair(page, {
+      source: { 'report.txt': { content: 'new', lastModified: 200 } },
+      target: { 'report.txt': { content: 'old', lastModified: 100 } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    assert.equal(snapshot.target['report.txt'].content, 'new');
+    const index = JSON.parse(snapshot.target['.filenally']['index.json'].content);
+    assert.equal(index.versions.length, 1);
+    const version = index.versions[0];
+    assert.equal(version.originalPath, 'report.txt');
+    assert.equal(version.toSide, 'target');
+    assert.equal(snapshot.target['.filenally'].versions[version.id]['report.txt'].content, 'old');
+  });
+
+  add('new-file copy does not create the version store', async ({ page }) => {
+    await mountPair(page, { source: { 'new.txt': { content: 'new' } }, target: {} });
+    await compare(page);
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    assert.equal(snapshot.target['new.txt'].content, 'new');
+    assert.equal(snapshot.target['.filenally'], undefined);
+  });
+
+  add('version capture follows each copy destination', async ({ page }) => {
+    const scenarios = [
+      {
+        control: '#dirBoth', owner: 'target',
+        source: { content: 'incoming', lastModified: 200 },
+        target: { content: 'existing', lastModified: 100 },
+      },
+      {
+        control: '#dirOne', owner: 'target',
+        source: { content: 'incoming', lastModified: 200 },
+        target: { content: 'existing', lastModified: 100 },
+      },
+      {
+        control: '#dirReverse', owner: 'source',
+        source: { content: 'existing', lastModified: 100 },
+        target: { content: 'incoming', lastModified: 200 },
+      },
+    ];
+    for (const scenario of scenarios) {
+      await page.locator(scenario.control).click();
+      await mountPair(page, {
+        source: { 'report.txt': scenario.source },
+        target: { 'report.txt': scenario.target },
+      });
+      await compare(page);
+      await executeCurrentPlan(page);
+      const snapshot = await snapshotMockPair(page);
+      const index = JSON.parse(snapshot[scenario.owner]['.filenally']['index.json'].content);
+      assert.equal(index.versions.length, 1);
+      assert.equal(snapshot[scenario.owner]['.filenally'].versions[index.versions[0].id]['report.txt'].content, 'existing');
+      await page.reload();
+    }
+  });
+
+  add('repeated overwrites retain distinct versions', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    await mountPair(page, {
+      source: { 'report.txt': { content: 'one', lastModified: 200 } },
+      target: { 'report.txt': { content: 'zero', lastModified: 100 } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+    await page.evaluate(() => window.__setMockFile('source', 'report.txt', {
+      content: 'two', lastModified: 300,
+    }));
+    await compare(page);
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    const index = JSON.parse(snapshot.target['.filenally']['index.json'].content);
+    assert.equal(index.versions.length, 2);
+    assert.notEqual(index.versions[0].id, index.versions[1].id);
+    assert.deepEqual(index.versions.map((version) =>
+      snapshot.target['.filenally'].versions[version.id]['report.txt'].content), ['zero', 'one']);
+  });
+
+  add('a destination created after comparison is versioned before overwrite', async ({ page }) => {
+    await mountPair(page, { source: { 'late.txt': { content: 'planned' } }, target: {} });
+    await compare(page);
+    await page.evaluate(() => window.__setMockFile('target', 'late.txt', { content: 'appeared' }));
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    const index = JSON.parse(snapshot.target['.filenally']['index.json'].content);
+    assert.equal(snapshot.target['late.txt'].content, 'planned');
+    assert.equal(snapshot.target['.filenally'].versions[index.versions[0].id]['late.txt'].content, 'appeared');
+  });
+
   add('verified deletion moves the remaining file into versioned trash', async ({ page }) => {
     await mountPair(page, {
       source: { 'nested': { type: 'directory', entries: { 'gone.txt': { content: 'keepable', lastModified: 100 } } } },
