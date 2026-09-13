@@ -408,6 +408,153 @@ async function main() {
     assert.deepEqual(await snapshotMockPair(page), before);
   });
 
+  add('version comparison store pins current snapshots without writes', async ({ page }) => {
+    await mountVersion(page);
+    const before = await snapshotMockPair(page);
+    const result = await page.evaluate(async () => {
+      const calls = window.__getPermissionCalls();
+      const store = window.FileNallyTest.VersionStore;
+      const snapshot = await store.prepareComparison(window.__mockPair.target, window.__versionRecord);
+      await store.validateComparison(snapshot);
+      return { left: await snapshot.left.file.text(), right: await snapshot.right.file.text(),
+        path: snapshot.path, kinds: [snapshot.left.kind, snapshot.right.kind],
+        frozen: Object.isFrozen(snapshot) && Object.isFrozen(snapshot.left),
+        times: [snapshot.left.readAt, snapshot.right.readAt],
+        callsBefore: calls, callsAfter: window.__getPermissionCalls() };
+    });
+    assert.equal(result.left, 'old'); assert.equal(result.right, 'current');
+    assert.equal(result.path, 'report.txt'); assert.equal(result.frozen, true);
+    assert.deepEqual(result.kinds, ['version', 'current']);
+    assert.ok(result.times.every((value) => Number.isFinite(Date.parse(value))));
+    assert.deepEqual(result.callsAfter, result.callsBefore);
+    assert.deepEqual(await snapshotMockPair(page), before);
+  });
+
+  add('version comparison store rejects observed replacement without rereading bytes', async ({ page }) => {
+    await mountVersion(page);
+    const error = await page.evaluate(async () => {
+      const store = window.FileNallyTest.VersionStore;
+      const snapshot = await store.prepareComparison(window.__mockPair.target, window.__versionRecord);
+      for (const side of [snapshot.left, snapshot.right]) {
+        side.file.arrayBuffer = () => { throw new Error('Unexpected byte reread'); };
+        side.file.slice = () => { throw new Error('Unexpected byte reread'); };
+      }
+      await store.validateComparison(snapshot);
+      window.__setMockFile('target', 'report.txt', { content: 'changed', lastModified: 201 });
+      try { await store.validateComparison(snapshot); return ''; }
+      catch (error) { return error.message; }
+    });
+    assert.match(error, /changed/);
+  });
+
+  for (const missing of [false, true]) {
+    add(`version comparison store distinguishes empty and absent current: ${missing}`, async ({ page }) => {
+      await mountVersion(page, { missing });
+      if (!missing) await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: '' }));
+      const before = await snapshotMockPair(page);
+      const result = await page.evaluate(async () => {
+        const store = window.FileNallyTest.VersionStore;
+        const value = await store.prepareComparison(window.__mockPair.target, window.__versionRecord);
+        await store.validateComparison(value);
+        return value.right.file ? value.right.file.size : null;
+      });
+      assert.equal(result, missing ? null : 0);
+      assert.deepEqual(await snapshotMockPair(page), before);
+    });
+  }
+
+  add('version comparison store choices keep same-root path and deterministic order', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(() => {
+      const selected = window.__versionRecord;
+      const make = (id, capturedAt, originalPath = selected.originalPath) => ({ ...selected, id, capturedAt,
+        originalPath, storedPath: `versions/${id}/${originalPath}` });
+      const local = [make('same-z', '2026-09-12T00:00:00.000Z'), make('same-a', '2026-09-12T00:00:00.000Z'),
+        make('newer', '2026-09-14T00:00:00.000Z'), make('other-path', '2026-09-15T00:00:00.000Z', 'other.txt')];
+      window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [selected, ...local] }) });
+      window.__setMockFile('source', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [make('wrong-root', '2026-09-16T00:00:00.000Z')] }) });
+    });
+    const before = await snapshotMockPair(page);
+    const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+    const result = await page.evaluate(() => window.FileNallyTest.VersionStore.comparisonChoices(window.__mockPair.target, window.__versionRecord)
+      .then((choices) => choices.map((record) => record.id)));
+    assert.deepEqual(result, ['newer', 'same-a', 'same-z']);
+    assert.deepEqual(await snapshotMockPair(page), before);
+    assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+  });
+
+  add('version comparison store returns every historical counterpart deterministically', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(() => {
+      const selected = window.__versionRecord;
+      const records = Array.from({ length: 101 }, (_, index) => ({ ...selected, id: `older-${String(index).padStart(3, '0')}`,
+        capturedAt: new Date(Date.UTC(2026, 8, 12, 0, 0, 0) - index * 1000).toISOString(),
+        storedPath: `versions/older-${String(index).padStart(3, '0')}/${selected.originalPath}` }));
+      window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [selected, ...records] }) });
+    });
+    const before = await snapshotMockPair(page);
+    const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+    const result = await page.evaluate(() => window.FileNallyTest.VersionStore.comparisonChoices(window.__mockPair.target, window.__versionRecord)
+      .then((choices) => ({ count: choices.length, first: choices[0].id, last: choices.at(-1).id })));
+    assert.equal(result.count, 101);
+    assert.equal(result.first, 'older-000');
+    assert.equal(result.last, 'older-100');
+    assert.deepEqual(await snapshotMockPair(page), before);
+    assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+  });
+
+  for (const counterpart of ['same', 'other-path', 'wrong-root', 'changed-record']) {
+    add(`version comparison store rejects ${counterpart} counterpart`, async ({ page }) => {
+      await mountVersion(page);
+      const result = await page.evaluate(async (counterpart) => {
+        const store = window.FileNallyTest.VersionStore;
+        const selected = window.__versionRecord;
+        const other = { ...selected, id: 'other-1', storedPath: `versions/other-1/${selected.originalPath}` };
+        if (counterpart === 'other-path') { other.originalPath = 'other.txt'; other.storedPath = 'versions/other-1/other.txt'; }
+        if (counterpart === 'changed-record') { other.runId = 'changed'; }
+        if (counterpart === 'wrong-root') {
+          window.__setMockFile('source', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [other] }) });
+        } else {
+          window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [selected, other] }) });
+        }
+        const before = await window.__snapshotMockPair();
+        const callsBefore = window.__getPermissionCalls();
+        try {
+          await store.prepareComparison(window.__mockPair.target, selected, counterpart === 'same' ? selected : other);
+          return { message: 'accepted', before, after: await window.__snapshotMockPair(), callsBefore, callsAfter: window.__getPermissionCalls() };
+        } catch (error) {
+          return { message: error.message, before, after: await window.__snapshotMockPair(), callsBefore, callsAfter: window.__getPermissionCalls() };
+        }
+      }, counterpart);
+      assert.notEqual(result.message, 'accepted');
+      assert.deepEqual(result.after, result.before);
+      assert.deepEqual(result.callsAfter, result.callsBefore);
+    });
+  }
+
+  add('version comparison store cancellation aborts after a pending read', async ({ page }) => {
+    await mountVersion(page);
+    const result = await page.evaluate(async () => {
+      const root = window.__mockPair.target;
+      const original = root.getDirectoryHandle.bind(root);
+      let cancelled = false;
+      let calls = 0;
+      root.getDirectoryHandle = async (...args) => {
+        calls += 1;
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        return original(...args);
+      };
+      const pending = window.FileNallyTest.VersionStore.comparisonChoices(root, window.__versionRecord, { isCancelled: () => cancelled });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      cancelled = true;
+      try { await pending; return { name: '', calls }; }
+      catch (error) { return { name: error.name, message: error.message, calls }; }
+    });
+    assert.equal(result.name, 'AbortError');
+    assert.equal(result.message, 'Comparison stopped');
+    assert.equal(result.calls, 1);
+  });
+
   for (const mutation of ['unsupported', 'corrupt', 'duplicate', 'forbidden', 'oversized', 'missing bytes', 'size mismatch', 'changed record', 'store collision', 'index collision', 'destination directory', 'parent file']) {
     add(`version reader rejects ${mutation} without writes`, async ({ page }) => {
       await mountVersion(page);

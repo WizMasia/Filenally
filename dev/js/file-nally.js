@@ -92,16 +92,27 @@
         seen.delete(value);
     };
 
-    const directoryFor = async (root, parts, create) => {
+    const comparisonCheck = (isCancelled) => {
+        if (isCancelled()) throw new DOMException('Comparison stopped', 'AbortError');
+    };
+    const directoryFor = async (root, parts, create, check = () => {}) => {
         let directory = root;
-        for (const part of parts) directory = await directory.getDirectoryHandle(part, { create });
+        check();
+        for (const part of parts) {
+            directory = await directory.getDirectoryHandle(part, { create });
+            check();
+        }
         return directory;
     };
-    const fileHandleFor = async (root, path) => {
+    const fileHandleFor = async (root, path, check = () => {}) => {
         const parts = safeSegments(path);
         const name = parts.pop();
-        const directory = await directoryFor(root, parts, false);
-        return directory.getFileHandle(name);
+        check();
+        const directory = await directoryFor(root, parts, false, check);
+        check();
+        const handle = await directory.getFileHandle(name);
+        check();
+        return handle;
     };
     const equalFileBytes = async (sourceFile, targetFile, onProgress = () => {}, isCancelled = () => false) => {
         if (sourceFile.size !== targetFile.size) return false;
@@ -182,10 +193,14 @@
             if (versions.some((record) => !record)) throw new Error('Malformed version record');
             return { schemaVersion: VERSION_INDEX_SCHEMA, versions };
         };
-        const getExistingFile = async (root, path) => {
+        const getExistingFile = async (root, path, check = () => {}) => {
+            check();
             try {
-                return await fileHandleFor(root, path);
+                const handle = await fileHandleFor(root, path, check);
+                check();
+                return handle;
             } catch (error) {
+                check();
                 if (error?.name === 'NotFoundError') return null;
                 throw error;
             }
@@ -206,12 +221,17 @@
                 throw error;
             }
         };
-        const loadIndex = async (versionRoot) => {
-            const handle = await getExistingFile(versionRoot, 'index.json');
+        const loadIndex = async (versionRoot, check = () => {}) => {
+            check();
+            const handle = await getExistingFile(versionRoot, 'index.json', check);
+            check();
             if (!handle) return emptyIndex();
             const file = await handle.getFile();
+            check();
             if (file.size > MAX_IMPORT_BYTES) throw new Error('Version index exceeds 5MB');
-            return parseIndexText(await file.text());
+            const text = await file.text();
+            check();
+            return parseIndexText(text);
         };
         const capture = async ({ action, handles, runId, direction, reason = 'before-overwrite' }) => {
             const root = handles[action.toSide];
@@ -246,25 +266,38 @@
             await writeFile(filenally, 'index.json', indexText);
             return Object.freeze(record);
         };
-        const list = async (root) => {
+        const list = async (root, check = () => {}) => {
+            check();
             let versionRoot;
             try { versionRoot = await root.getDirectoryHandle('.filenally'); }
             catch (error) {
+                check();
                 if (error?.name === 'NotFoundError') return [];
                 throw error;
             }
-            const { versions } = await loadIndex(versionRoot);
+            check();
+            const { versions } = await loadIndex(versionRoot, check);
+            check();
             if (new Set(versions.map((record) => record.id)).size !== versions.length) throw new Error('Duplicate version IDs');
             return versions.map(Object.freeze);
         };
-        const readVersion = async (root, selected) => {
+        const selectedRecord = (records, selected) => {
             const expected = cleanRecord(selected);
             if (!expected) throw new Error('Invalid selected version');
-            const record = (await list(root)).find((record) => record.id === expected.id);
+            const record = records.find((record) => record.id === expected.id);
             if (!record || JSON.stringify(record) !== JSON.stringify(expected)) throw new Error('Selected version record changed');
+            return record;
+        };
+        const readVersion = async (root, selected, check = () => {}) => {
+            check();
+            const records = await list(root, check);
+            check();
+            const record = selectedRecord(records, selected);
             const path = ['.filenally', 'versions', record.id, ...originalSegments(record.originalPath)].join('/');
-            const handle = await fileHandleFor(root, path);
+            const handle = await fileHandleFor(root, path, check);
+            check();
             const file = await handle.getFile();
+            check();
             if (file.size !== record.size) throw new Error('Stored version size changed');
             return { record, handle, file };
         };
@@ -276,6 +309,57 @@
             const prepared = Object.freeze({ root, record: version.record, versionFile: version.file, currentFile, currentHandle });
             preparedRestores.set(prepared, version.handle);
             return prepared;
+        };
+        const comparisonChoices = async (root, selected, { isCancelled = () => false } = {}) => {
+            const check = () => comparisonCheck(isCancelled);
+            check();
+            const records = await list(root, check);
+            check();
+            const left = selectedRecord(records, selected);
+            return records.filter((record) => record.id !== left.id && record.originalPath === left.originalPath)
+                .sort((a, b) => Date.parse(b.capturedAt) - Date.parse(a.capturedAt) || a.id.localeCompare(b.id));
+        };
+        const prepareComparison = async (root, leftRecord, rightRecord = null, { isCancelled = () => false } = {}) => {
+            const check = () => comparisonCheck(isCancelled);
+            check();
+            const version = await readVersion(root, leftRecord, check);
+            check();
+            const left = Object.freeze({ kind: 'version', ...version, readAt: nowIso() });
+            let right;
+            if (rightRecord !== null) {
+                if (rightRecord.id === left.record.id || rightRecord.originalPath !== left.record.originalPath) {
+                    throw new Error('Counterpart must be a different version of the same path');
+                }
+                const other = await readVersion(root, rightRecord, check);
+                check();
+                right = { kind: 'version', ...other, readAt: nowIso() };
+            } else {
+                const handle = await getExistingFile(root, left.record.originalPath, check);
+                check();
+                const file = handle ? await handle.getFile() : null;
+                check();
+                right = { kind: 'current', record: null, handle, file, readAt: nowIso() };
+            }
+            return Object.freeze({ root, path: left.record.originalPath, left, right: Object.freeze(right) });
+        };
+        const validateComparison = async (snapshot, { isCancelled = () => false } = {}) => {
+            const check = () => comparisonCheck(isCancelled);
+            check();
+            const fresh = await prepareComparison(snapshot.root, snapshot.left.record,
+                snapshot.right.kind === 'version' ? snapshot.right.record : null, { isCancelled });
+            check();
+            for (const key of ['left', 'right']) {
+                const old = snapshot[key], next = fresh[key];
+                if (Boolean(old.handle) !== Boolean(next.handle)) throw new Error('Comparison file changed');
+                if (!old.handle) continue;
+                if (old.handle.isSameEntry) {
+                    const same = await old.handle.isSameEntry(next.handle);
+                    check();
+                    if (!same) throw new Error('Comparison file identity changed');
+                }
+                if (old.file.size !== next.file.size || old.file.type !== next.file.type
+                    || old.file.lastModified !== next.file.lastModified) throw new Error('Comparison file changed');
+            }
         };
         const requireSameFile = async (expectedHandle, expectedFile, handle, file) => {
             if (Boolean(expectedHandle) !== Boolean(handle)) throw new Error('Restore file appeared or disappeared');
@@ -319,7 +403,8 @@
                 throw error;
             } finally { restoring = false; }
         };
-        return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText, list, read, prepareRestore, restore });
+        return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText, list, read, prepareRestore, restore,
+            comparisonChoices, prepareComparison, validateComparison });
     })();
 
     const StateStore = (() => {
