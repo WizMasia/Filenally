@@ -1198,27 +1198,43 @@ async function main() {
     });
   }
 
-  add('destination write failure retains the indexed version and log reference', async ({ page }) => {
+  add('destination write failure retains version metadata and the last successful checkpoint', async ({ page }) => {
     await page.locator('#dirOne').click();
     await mountPair(page, {
-      source: { 'report.txt': { content: 'new', lastModified: 200 } },
-      target: { 'report.txt': { content: 'old', lastModified: 100 } },
+      source: {
+        'a.txt': { content: 'new a', lastModified: 200 },
+        'b.txt': { content: 'new b', lastModified: 200 },
+        'c.txt': { content: 'new c', lastModified: 200 },
+      },
+      target: {
+        'a.txt': { content: 'old a', lastModified: 100 },
+        'b.txt': { content: 'old b', lastModified: 100 },
+        'c.txt': { content: 'old c', lastModified: 100 },
+      },
     });
     await compare(page);
     await page.evaluate(() => window.__setMockFailure({
-      operation: 'write', name: 'report.txt', occurrence: 2,
+      operation: 'write', name: 'b.txt', occurrence: 2,
     }));
     await executeCurrentPlan(page);
     const snapshot = await snapshotMockPair(page);
     const index = JSON.parse(snapshot.target['.filenally']['index.json'].content);
-    assert.equal(snapshot.target['report.txt'].content, 'old');
-    assert.equal(snapshot.target['.filenally'].versions[index.versions[0].id]['report.txt'].content, 'old');
-    const run = await page.evaluate(async () => {
-      const id = JSON.parse(localStorage.getItem('smart_sync_state')).globalHistory[0].logId;
-      return window.FileNallyTest.RunLogStore.get(id);
+    assert.equal(snapshot.target['a.txt'].content, 'new a');
+    assert.equal(snapshot.target['b.txt'].content, 'old b');
+    assert.equal(snapshot.target['c.txt'].content, 'old c');
+    assert.equal(index.versions[1].originalPath, 'b.txt');
+    assert.equal(snapshot.target['.filenally'].versions[index.versions[1].id]['b.txt'].content, 'old b');
+    const result = await page.evaluate(async () => {
+      const state = JSON.parse(localStorage.getItem('smart_sync_state'));
+      const run = await window.FileNallyTest.RunLogStore.get(state.globalHistory[0].logId);
+      return { run, checkpoint: state.profiles[state.activeProfileId].lastCheckpoint };
     });
-    assert.equal(run.entries[0].status, 'failed');
-    assert.equal(run.entries[0].versionId, index.versions[0].id);
+    assert.deepEqual(result.run.entries.map((entry) => entry.status), ['success', 'failed', 'not-run']);
+    assert.equal(result.run.entries[1].versionId, index.versions[1].id);
+    assert.equal(result.run.entries[1].versionPath, index.versions[1].storedPath);
+    assert.equal(result.checkpoint.planId, result.run.id);
+    assert.equal(result.checkpoint.completed, 1);
+    assert.equal(result.checkpoint.total, 3);
   });
 
   add('verified deletion moves the remaining file into versioned trash', async ({ page }) => {
