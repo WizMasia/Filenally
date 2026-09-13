@@ -96,6 +96,18 @@ Repeated names in the same trash run receive a numeric suffix instead of being o
 
 File-nally never recursively deletes a non-empty directory. If a directory becomes non-empty after comparison, the directory move stops and the run reports an error.
 
+## Pre-overwrite version capture
+
+Before overwriting an existing destination file, File-nally captures it. Captures are stored below the affected destination root at:
+
+```text
+.filenally/versions/<capture-id>/<original relative path>
+```
+
+Capture metadata is stored in schema v1 `.filenally/index.json`. `.filenally` is always excluded from synchronization, regardless of the visible exclusion list. If capture or index writing fails, File-nally does not perform that overwrite and stops the synchronization run.
+
+Version recovery is manual in this increment. There is no version list, restore, or diff UI, and there is no automatic expiry or cleanup. Creation date, author, owner, ACL, and similar metadata are unavailable.
+
 ## JSON settings and folder profiles
 
 Serializable application data is stored under the `smart_sync_state` localStorage key:
