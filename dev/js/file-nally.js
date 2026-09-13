@@ -22,6 +22,7 @@
 
     const TEXT = {
         ko: {
+            versionsTitle: '버전 관리', versionsDescription: '현재 연결된 두 폴더의 캡처본입니다. 복원은 버전을 보관한 폴더의 원래 경로에 적용됩니다.', owningRoot: '보관 폴더', capturedAt: '캡처 시각', versionReason: '보관 이유', beforeOverwrite: '덮어쓰기 전', beforeRestore: '복원 전', versionDownload: '다운로드', versionRestore: '복원', versionRefresh: '새로고침', versionsEmpty: '보관된 버전이 없습니다.', versionsLoading: '버전을 읽는 중입니다.', versionFailed: '버전 작업 실패: {message}', restoreTitle: '버전 복원 확인', restoreDescription: '선택한 버전과 현재 파일을 확인한 뒤 복원을 실행하세요.', selectedVersion: '선택한 버전', currentFile: '현재 파일', restoreReplace: '현재 파일을 새 버전으로 먼저 보관한 뒤 선택한 버전으로 교체합니다.', restoreCreate: '현재 파일이 없습니다. 원래 경로에 새 파일을 만듭니다.', cancelRestore: '취소', confirmRestore: '이 버전 복원', restoreWriting: '복원 중입니다. 파일 쓰기가 끝날 때까지 기다려 주세요.', restoreDone: '복원이 완료되었습니다. 동기화 전에 변경사항을 다시 비교하세요.', restoreFailed: '복원 실패: {message}. 버전을 다시 선택하여 확인해 주세요.', retainedBackup: '보관된 백업: {id} · .filenally/{path}', versionDirection: '다음 동기화: {direction}. 수동 복원은 표시된 보관 폴더에만 적용됩니다.',
             desc: '두 로컬 폴더를 비교한 뒤 변경 계획을 검토하고 안전하게 동기화합니다.', controlTitle: '동기화 제어', selectSource: '원본 폴더 선택', selectTarget: '대상 폴더 선택', notSelected: '선택되지 않음', languageLabel: '언어', progressLabel: '작업 진행률', workspaceLabel: '폴더 비교 결과', activityLabel: '동기화 기록',
             profileNone: '선택된 동기화 프로필이 없습니다.', profileUnverified: '폴더 쌍 미확인', profileVerified: '폴더 쌍 확인됨', profileLabel: '{source} ⇄ {target}',
             directionLabel: '동기화 방향', directionBoth: '양방향 (원본 ⇄ 대상)', directionOne: '단방향 (원본 → 대상)', directionReverse: '역방향 (대상 → 원본)', policyLabel: '충돌 해결 정책', policyLatest: '최신 파일 유지', policySource: '원본 우선 덮어쓰기', policySkip: '기존 파일 건너뛰기', policyRename: '이름을 바꿔 두 버전 보존', comparisonLabel: '비교 모드', comparisonQuick: '빠른 비교 (크기 + 수정 시각, 기본값)', comparisonExact: '정확 비교 (바이트 단위, 느림)', excludeLabel: '제외할 하위 폴더명',
@@ -40,6 +41,7 @@
             detailsHead: '상세', details: '상세 보기', runDetailTitle: '실행 상세', runDetailDescription: '실행 중 처리한 모든 작업과 결과입니다.', close: '닫기', loadingDetails: '상세 기록을 불러오는 중입니다.', detailsUnavailable: '상세 기록을 찾을 수 없습니다.', durationHead: '소요 시간', sequenceHead: '순서', actionHead: '작업', versionIdHead: '버전 ID', versionPathHead: '버전 경로', errorHead: '오류', previousPage: '이전', nextPage: '다음', downloadCsv: 'CSV 다운로드', downloadRunJson: 'JSON 다운로드', entrySuccess: '성공', entryFailed: '실패', entryNotRun: '미실행', actionCopy: '복사', actionRename: '이름 변경', actionTrash: '휴지통 이동', actionBaseline: '기준 저장', actionCreateDirectory: '폴더 생성', actionBaselineDirectory: '폴더 기준 저장', actionTrashDirectory: '폴더 휴지통 이동', actionUnknown: '기타',
         },
         en: {
+            versionsTitle: 'Version manager', versionsDescription: 'Captured files in both connected folders. Restore applies to the original path in the folder that stores the version.', owningRoot: 'Owning folder', capturedAt: 'Captured', versionReason: 'Reason', beforeOverwrite: 'Before overwrite', beforeRestore: 'Before restore', versionDownload: 'Download', versionRestore: 'Restore', versionRefresh: 'Refresh', versionsEmpty: 'No saved versions.', versionsLoading: 'Reading versions.', versionFailed: 'Version operation failed: {message}', restoreTitle: 'Confirm version restore', restoreDescription: 'Review the selected version and current file before restoring.', selectedVersion: 'Selected version', currentFile: 'Current file', restoreReplace: 'Save the current file as a new version first, then replace it with the selected version.', restoreCreate: 'The current file is missing. Create a new file at the original path.', cancelRestore: 'Cancel', confirmRestore: 'Restore this version', restoreWriting: 'Restoring. Please wait until the file write finishes.', restoreDone: 'Restore complete. Compare changes again before synchronizing.', restoreFailed: 'Restore failed: {message}. Select the version again for a fresh confirmation.', retainedBackup: 'Retained backup: {id} · .filenally/{path}', versionDirection: 'Next synchronization: {direction}. Manual restore affects only the displayed owning folder.',
             desc: 'Compare two local folders, review the change plan, and synchronize them safely.', controlTitle: 'Synchronization controls', selectSource: 'Select source folder', selectTarget: 'Select target folder', notSelected: 'Not selected', languageLabel: 'Language', progressLabel: 'Operation progress', workspaceLabel: 'Folder comparison results', activityLabel: 'Synchronization activity',
             profileNone: 'No synchronization profile is selected.', profileUnverified: 'Folder pair unverified', profileVerified: 'Folder pair verified', profileLabel: '{source} ⇄ {target}',
             directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', directionReverse: 'Reverse (Target → Source)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', comparisonLabel: 'Comparison mode', comparisonQuick: 'Quick comparison (size + modified time, default)', comparisonExact: 'Exact comparison (byte-by-byte, slower)', excludeLabel: 'Excluded directory names',
@@ -1010,11 +1012,22 @@
     };
 
     const model = {
+        versionBusy: false, appOperation: false,
         state: StateStore.load(), showChangedOnly: sessionStorage.getItem(SHOW_CHANGED_ONLY_KEY) === 'true', source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), sourceDirectories: new Set(), targetDirectories: new Set(), plan: null, phase: 'idle', abortRequested: false, profileConnectionPending: false, logs: [], advancedExpanded: null, selectedRun: null, runDetailPage: 0, runDetailTrigger: null,
     };
     model.advancedExpanded = typeof model.state.ui?.advancedExpanded === 'boolean'
         ? model.state.ui.advancedExpanded
         : !window.matchMedia('(max-width: 760px)').matches;
+
+    const operationBlocked = () => model.versionBusy || model.appOperation || model.profileConnectionPending || ['comparing', 'syncing', 'aborting'].includes(model.phase);
+    // One owner for the connected pair, including awaits in pickers and imports.
+    const appOperation = (action) => async (...args) => {
+        if (operationBlocked()) return;
+        model.appOperation = true;
+        renderControls();
+        try { return await action(...args); }
+        finally { model.appOperation = false; renderControls(); }
+    };
 
     const language = () => model.state.config.lang === 'en' ? 'en' : 'ko';
     const t = (key, values) => format(TEXT[language()][key] || TEXT.ko[key] || key, values);
@@ -1045,7 +1058,7 @@
     const phaseKey = { idle: 'idle', ready: 'phaseReady', comparing: 'phaseComparing', planned: 'phasePlanned', syncing: 'phaseSyncing', aborting: 'phaseSyncing', success: 'phaseSuccess', error: 'phaseError', aborted: 'phaseAborted' };
     const setPhase = (phase) => { model.phase = phase; elements.phaseLabel.textContent = t(phaseKey[phase] || 'idle'); renderControls(); };
     const renderControls = () => {
-        const busy = ['comparing', 'syncing', 'aborting'].includes(model.phase);
+        const busy = operationBlocked();
         const paired = Boolean(model.source && model.target && model.profile && model.trustedProfile);
         elements.btnSrc.disabled = busy; elements.btnTgt.disabled = busy;
         elements.direction.disabled = busy; elements.policy.disabled = busy; elements.comparison.disabled = busy; elements.excludes.disabled = busy;
@@ -1054,7 +1067,11 @@
         if (elements.dirReverse) elements.dirReverse.disabled = busy;
         elements.btnSwap.disabled = busy || !paired;
         elements.btnCompare.disabled = busy || !paired;
-        elements.btnSync.disabled = model.phase !== 'planned' || !model.plan?.actions.length;
+        elements.btnSync.disabled = busy || model.phase !== 'planned' || !model.plan?.actions.length;
+        $('#btnVersions').disabled = busy || !paired;
+        ['#btnImport', '#fileImporter', '#btnLangKo', '#btnLangEn'].forEach(selector => { $(selector).disabled = busy; });
+        elements.btnBookmark.disabled = busy || !model.profile;
+        document.querySelectorAll('#recentChips button, #bookmarkChips button').forEach(button => { button.disabled = busy; });
         elements.btnAbort.disabled = !['comparing', 'syncing'].includes(model.phase) || model.abortRequested;
     };
     const renderDirectionToggle = () => {
@@ -1084,7 +1101,7 @@
         if (model.profile) {
             const isBookmarked = bookmarkedIds.has(model.profile.id);
             elements.btnBookmark.dataset.bookmarked = String(isBookmarked);
-            elements.btnBookmark.disabled = false;
+            elements.btnBookmark.disabled = operationBlocked();
         } else {
             elements.btnBookmark.dataset.bookmarked = 'false';
             elements.btnBookmark.disabled = true;
@@ -1095,7 +1112,7 @@
             chip.type = 'button';
             chip.className = 'chip chip-bookmark';
             chip.textContent = `★ ${b.sourceName || '?'} ⇄ ${b.targetName || '?'}`;
-            chip.disabled = model.profileConnectionPending;
+            chip.disabled = operationBlocked();
             chip.addEventListener('click', () => Controller.selectProfile(b.profileId));
             elements.bookmarkChips.append(chip);
         }
@@ -1106,7 +1123,7 @@
             chip.type = 'button';
             chip.className = 'chip';
             chip.textContent = `🕒 ${r.sourceName || '?'} ⇄ ${r.targetName || '?'}`;
-            chip.disabled = model.profileConnectionPending;
+            chip.disabled = operationBlocked();
             chip.addEventListener('click', () => Controller.selectProfile(r.profileId));
             elements.recentChips.append(chip);
         }
@@ -1376,6 +1393,7 @@
 
     const Controller = (() => {
         const saveConfig = () => {
+            if (operationBlocked()) return;
             model.state.config = { direction: elements.direction.value, conflictPolicy: elements.policy.value, comparisonMode: elements.comparison.value, excludeDirs: normalizeExcludes(elements.excludes.value), lang: language() };
             StateStore.save(model.state);
         };
@@ -1474,7 +1492,7 @@
             addLog(t('foldersSwapped'));
         };
         const toggleBookmark = () => {
-            if (!model.profile) return;
+            if (operationBlocked() || !model.profile) return;
             const id = model.profile.id;
             const existingIndex = model.state.bookmarks.findIndex((b) => b.profileId === id);
             if (existingIndex >= 0) {
@@ -1592,14 +1610,199 @@
                 model.state = StateStore.importText(await file.text()); model.source = model.target = model.profile = null; model.trustedProfile = false; model.plan = null; StateStore.save(model.state); setPhase('idle'); renderStaticText(); setStatus(t('importDone'), 'success', 'check'); addLog(t('importDone'));
             } catch (error) { setPhase('error'); setStatus(t('importFailed', { message: safeMessage(error) }), 'danger', 'alert'); }
         };
-        return Object.freeze({ abort, bindPair, compare, connectStoredProfile, importState, invalidatePlan, pick, saveConfig, selectProfile, swapFolders, sync, toggleBookmark });
+        return Object.freeze({ abort, bindPair: appOperation(bindPair), compare: appOperation(compare), connectStoredProfile: appOperation(connectStoredProfile), importState: appOperation(importState), invalidatePlan, pick: appOperation(pick), saveConfig, selectProfile: appOperation(selectProfile), swapFolders: appOperation(swapFolders), sync: appOperation(sync), toggleBookmark });
     })();
 
-    const downloadText = (content, name, type) => {
-        const url = URL.createObjectURL(new Blob([content], { type }));
+    const downloadBlob = (blob, name) => {
+        const url = URL.createObjectURL(blob);
         const link = document.createElement('a'); link.href = url; link.download = name; document.body.append(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 0);
     };
+    const downloadText = (content, name, type) => downloadBlob(new Blob([content], { type }), name);
     const downloadJson = (data, name) => downloadText(JSON.stringify(data, null, 2), name, 'application/json');
+    const VersionManager = (() => {
+        const dialog = $('#versionDialog');
+        const restoreDialog = $('#restoreDialog');
+        let session = null;
+        const current = (owner) => session === owner && dialog.open && owner.roots.source === model.source && owner.roots.target === model.target;
+        const rootLabel = (owner, side) => `${t(side === 'source' ? 'sourceTitle' : 'targetTitle')} · ${owner.names[side]}`;
+        const directionLabel = (owner) => t(owner.direction === 'unidirectional' ? 'directionOne' : owner.direction === 'reverse' ? 'directionReverse' : 'directionBoth');
+        const node = (tag, text, className) => {
+            const element = document.createElement(tag);
+            element.textContent = text;
+            if (className) element.className = className;
+            return element;
+        };
+        const controls = () => {
+            const owner = session;
+            if (!owner) return;
+            const busy = owner.reading || owner.writing;
+            $('#btnVersionRefresh').disabled = busy || restoreDialog.open;
+            $('#btnVersionPrevious').disabled = busy || owner.page === 0;
+            $('#btnVersionNext').disabled = busy || (owner.page + 1) * 100 >= owner.rows.length;
+            $('#btnCloseVersions').disabled = owner.writing;
+            $('#btnConfirmRestore').disabled = owner.writing || !owner.selection;
+            $('#btnCancelRestore').disabled = owner.writing;
+            dialog.querySelectorAll('[data-version-action]').forEach(button => { button.disabled = busy; });
+            renderControls();
+        };
+        const render = () => {
+            const owner = session;
+            if (!owner) return;
+            const body = $('#versionBody');
+            body.replaceChildren();
+            for (const row of owner.rows.slice(owner.page * 100, (owner.page + 1) * 100)) {
+                const tr = document.createElement('tr');
+                const values = [rootLabel(owner, row.side), row.record.originalPath, new Date(row.record.capturedAt).toLocaleString(language()), `${row.record.size} B`, t(row.record.reason === 'before-restore' ? 'beforeRestore' : 'beforeOverwrite')];
+                const labels = ['owningRoot', 'pathHead', 'capturedAt', 'sizeHead', 'versionReason'];
+                values.forEach((value, i) => {
+                    const td = node('td', ''); td.dataset.label = t(labels[i]);
+                    const content = node('span', value);
+                    if (i === 1) content.append(node('span', row.record.id, 'version-id'));
+                    td.append(content); tr.append(td);
+                });
+                const actions = node('td', ''); actions.dataset.label = t('actionHead');
+                const buttons = node('div', '', 'version-row-actions');
+                for (const action of ['download', 'restore']) {
+                    const button = node('button', t(action === 'download' ? 'versionDownload' : 'versionRestore'), 'button-ghost');
+                    button.type = 'button'; button.dataset.versionAction = action;
+                    button.setAttribute('aria-label', `${button.textContent} · ${row.record.originalPath} · ${rootLabel(owner, row.side)}`);
+                    button.addEventListener('click', () => select(row, action, button)); buttons.append(button);
+                }
+                actions.append(buttons); tr.append(actions); body.append(tr);
+            }
+            $('#versionPageStatus').textContent = `${owner.page + 1} / ${Math.max(1, Math.ceil(owner.rows.length / 100))}`;
+            $('#versionDirection').textContent = t('versionDirection', { direction: directionLabel(owner) });
+            $('#versionStatus').textContent = [owner.message, ...owner.errors, !owner.rows.length && !owner.reading ? t('versionsEmpty') : ''].filter(Boolean).join('\n');
+            controls();
+        };
+        const refresh = async (keepMessage = false) => {
+            const owner = session;
+            if (!owner || owner.reading || owner.writing || restoreDialog.open) return;
+            owner.reading = true;
+            if (!keepMessage) owner.message = t('versionsLoading');
+            render();
+            try {
+                const sides = ['source', 'target'];
+                const results = await Promise.allSettled(sides.map(side => VersionStore.list(owner.roots[side])));
+                if (!current(owner)) return;
+                owner.rows = []; owner.errors = []; owner.page = 0;
+                results.forEach((result, i) => {
+                    const side = sides[i];
+                    if (result.status === 'fulfilled') owner.rows.push(...result.value.map(record => ({ side, root: owner.roots[side], record })));
+                    else owner.errors.push(`${rootLabel(owner, side)}: ${safeMessage(result.reason)}`);
+                });
+                owner.rows.sort((a, b) => Date.parse(b.record.capturedAt) - Date.parse(a.record.capturedAt) || a.side.localeCompare(b.side) || a.record.id.localeCompare(b.record.id));
+                if (!keepMessage) owner.message = '';
+            } finally {
+                if (current(owner)) { owner.reading = false; render(); }
+            }
+        };
+        const summary = (owner, row, prepared) => {
+            const container = $('#restoreSummary'); container.replaceChildren();
+            container.append(node('p', t(prepared.currentFile ? 'restoreReplace' : 'restoreCreate')));
+            container.append(node('p', t('versionDirection', { direction: directionLabel(owner) })));
+            for (const selected of [true, false]) {
+                const section = node('section', '');
+                section.append(node('h3', t(selected ? 'selectedVersion' : 'currentFile')));
+                const file = selected ? prepared.versionFile : prepared.currentFile;
+                const fields = [['owningRoot', rootLabel(owner, row.side)], ['pathHead', row.record.originalPath]];
+                if (file) fields.push(['sizeHead', `${file.size} B`], ['dateHead', new Date(selected ? row.record.lastModified : file.lastModified).toLocaleString(language())]);
+                if (selected) fields.push(['capturedAt', new Date(row.record.capturedAt).toLocaleString(language())], ['versionIdHead', row.record.id]);
+                const dl = node('dl', '');
+                for (const [label, value] of fields) dl.append(node('dt', t(label)), node('dd', value));
+                section.append(dl); container.append(section);
+            }
+        };
+        const select = async (row, action, trigger) => {
+            const owner = session;
+            if (!owner || !current(owner) || owner.reading || owner.writing || restoreDialog.open) return;
+            owner.reading = true; owner.message = t('versionsLoading'); controls();
+            $('#versionStatus').textContent = owner.message;
+            try {
+                if (action === 'download') {
+                    const file = await VersionStore.read(row.root, row.record);
+                    if (!current(owner)) return;
+                    downloadBlob(file, row.record.originalPath.split('/').at(-1));
+                } else {
+                    const prepared = await VersionStore.prepareRestore(row.root, row.record);
+                    if (!current(owner)) return;
+                    owner.selection = { row, prepared }; owner.trigger = trigger;
+                    summary(owner, row, prepared); $('#restoreStatus').textContent = '';
+                    restoreDialog.showModal(); $('#btnCancelRestore').focus();
+                }
+                owner.message = '';
+            } catch (error) {
+                if (current(owner)) owner.message = t('versionFailed', { message: safeMessage(error) });
+            } finally {
+                if (current(owner)) {
+                    owner.reading = false;
+                    $('#versionStatus').textContent = [owner.message, ...owner.errors].filter(Boolean).join('\n');
+                    controls();
+                }
+            }
+        };
+        const confirm = async () => {
+            const owner = session;
+            if (!owner || !current(owner) || !owner.selection || owner.writing || !restoreDialog.open) return;
+            const { row, prepared } = owner.selection;
+            owner.writing = true; controls();
+            $('#restoreStatus').textContent = t('restoreWriting');
+            let message;
+            try {
+                // Start permission from this click, before any asynchronous validation.
+                const permission = await row.root.requestPermission({ mode: 'readwrite' });
+                if (permission !== 'granted') throw new Error(t('permissionDenied'));
+                if (!current(owner)) throw new Error(t('storedHandleUnavailable'));
+                const result = await VersionStore.restore(prepared, { side: row.side, direction: owner.direction, runId: uid() });
+                message = t('restoreDone');
+                if (result.backup) message += `\n${t('retainedBackup', { id: result.backup.id, path: result.backup.storedPath })}`;
+            } catch (error) {
+                message = t('restoreFailed', { message: safeMessage(error) });
+                if (error.backup) message += `\n${t('retainedBackup', { id: error.backup.id, path: error.backup.storedPath })}`;
+            } finally {
+                owner.selection = null; owner.writing = false; owner.message = message;
+                model.sourceFiles = new Map(); model.targetFiles = new Map();
+                model.sourceDirectories = new Set(); model.targetDirectories = new Set();
+                Controller.invalidatePlan(); elements.progress.dataset.visible = 'false';
+                addLog(message); setStatus(message, 'info', 'info');
+                restoreDialog.close();
+                controls();
+                await refresh(true);
+                if (current(owner)) $('#btnVersionRefresh').focus();
+            }
+        };
+        const close = () => {
+            if (!session || session.writing) return;
+            if (restoreDialog.open) restoreDialog.close();
+            dialog.close();
+        };
+        const open = () => {
+            if (operationBlocked() || !model.source || !model.target || !model.profile || !model.trustedProfile) return;
+            session = { roots: { source: model.source, target: model.target }, names: { source: model.source.name, target: model.target.name }, direction: model.state.config.direction, rows: [], errors: [], page: 0, reading: false, writing: false, selection: null, message: '' };
+            model.versionBusy = true;
+            dialog.showModal(); $('#btnCloseVersions').focus(); refresh();
+        };
+        $('#btnVersions').addEventListener('click', open);
+        $('#btnCloseVersions').addEventListener('click', close);
+        $('#btnVersionRefresh').addEventListener('click', () => refresh());
+        $('#btnVersionPrevious').addEventListener('click', () => { if (session && !session.reading && session.page > 0) { session.page--; render(); } });
+        $('#btnVersionNext').addEventListener('click', () => { if (session && !session.reading && (session.page + 1) * 100 < session.rows.length) { session.page++; render(); } });
+        $('#btnConfirmRestore').addEventListener('click', confirm);
+        $('#btnCancelRestore').addEventListener('click', () => { if (!session?.writing) restoreDialog.close(); });
+        dialog.addEventListener('cancel', event => { if (session?.writing) event.preventDefault(); });
+        restoreDialog.addEventListener('cancel', event => { if (session?.writing) event.preventDefault(); });
+        restoreDialog.addEventListener('close', () => {
+            if (!session) return;
+            if (session.writing) { restoreDialog.showModal(); return; }
+            session.selection = null; controls();
+            if (session.trigger?.isConnected && !session.reading) session.trigger.focus();
+        });
+        dialog.addEventListener('close', () => {
+            if (session?.writing) { dialog.showModal(); return; }
+            session = null; model.versionBusy = false; renderControls(); $('#btnVersions').focus();
+        });
+        return Object.freeze({ open });
+    })();
     const csvCell = (value) => {
         let cell = String(value ?? '');
         if (/^[=+\-@\t\r]/.test(cell)) cell = `'${cell}`;
@@ -1650,9 +1853,10 @@
         if (trigger?.isConnected) trigger.focus();
     });
     elements.changedOnly.addEventListener('change', () => { model.showChangedOnly = elements.changedOnly.checked; sessionStorage.setItem(SHOW_CHANGED_ONLY_KEY, String(model.showChangedOnly)); renderRows(); });
-    [elements.direction, elements.policy, elements.comparison, elements.excludes].forEach((control) => control.addEventListener('change', () => { Controller.saveConfig(); Controller.invalidatePlan(); renderAdvancedControls(); }));
+    [elements.direction, elements.policy, elements.comparison, elements.excludes].forEach((control) => control.addEventListener('change', () => { if (operationBlocked()) { renderStaticText(); return; } Controller.saveConfig(); Controller.invalidatePlan(); renderAdvancedControls(); }));
     [elements.dirBoth, elements.dirOne, elements.dirReverse].forEach((btn) => {
         btn?.addEventListener('click', () => {
+            if (operationBlocked()) return;
             model.state.config.direction = btn.dataset.value;
             elements.direction.value = btn.dataset.value;
             renderDirectionToggle();
@@ -1661,12 +1865,12 @@
             renderAdvancedControls();
         });
     });
-    elements.excludes.addEventListener('input', () => { model.state.config.excludeDirs = normalizeExcludes(elements.excludes.value); StateStore.save(model.state); Controller.invalidatePlan(); });
-    $('#btnLangKo').addEventListener('click', () => { model.state.config.lang = 'ko'; StateStore.save(model.state); renderStaticText(); });
-    $('#btnLangEn').addEventListener('click', () => { model.state.config.lang = 'en'; StateStore.save(model.state); renderStaticText(); });
+    elements.excludes.addEventListener('input', () => { if (operationBlocked()) { elements.excludes.value = model.state.config.excludeDirs.join(', '); return; } model.state.config.excludeDirs = normalizeExcludes(elements.excludes.value); StateStore.save(model.state); Controller.invalidatePlan(); });
+    $('#btnLangKo').addEventListener('click', () => { if (operationBlocked()) return; model.state.config.lang = 'ko'; StateStore.save(model.state); renderStaticText(); });
+    $('#btnLangEn').addEventListener('click', () => { if (operationBlocked()) return; model.state.config.lang = 'en'; StateStore.save(model.state); renderStaticText(); });
     $('#btnGenDefault').addEventListener('click', () => { downloadJson(StateStore.createDefault(), 'file-nally-default.json'); setStatus(t('defaultDone'), 'success', 'check'); });
     $('#btnExport').addEventListener('click', () => { downloadJson(StateStore.export(model.state), `file-nally-backup-${new Date().toISOString().slice(0, 10)}.json`); setStatus(t('exportDone'), 'success', 'check'); });
-    $('#btnImport').addEventListener('click', () => $('#fileImporter').click());
+    $('#btnImport').addEventListener('click', () => { if (!operationBlocked()) $('#fileImporter').click(); });
     $('#fileImporter').addEventListener('change', async (event) => { const file = event.target.files?.[0]; if (file) await Controller.importState(file); event.target.value = ''; });
     $('#btnClearHistory').addEventListener('click', async () => {
         if (!confirm(t('confirmClear'))) return;
@@ -1683,6 +1887,7 @@
     };
 
     window.FileNallyTest = Object.freeze({
+        Controller,
         PermissionGate,
         RunLogStore,
         StateStore,
@@ -1690,7 +1895,7 @@
         VersionStore,
         connectStoredProfile: (profileId, requestPermission) => Controller.connectStoredProfile(profileId, { requestPermission }),
         executeCurrentPlan: () => Controller.sync(),
-        getModel: () => ({ phase: model.phase, trustedProfile: model.trustedProfile, profileId: model.profile?.id || null, profileConnectionPending: model.profileConnectionPending, plan: model.plan ? cloneJson({ id: model.plan.id, actions: model.plan.actions, summary: model.plan.summary }) : null }),
+        getModel: () => ({ phase: model.phase, versionBusy: model.versionBusy, appOperation: model.appOperation, trustedProfile: model.trustedProfile, profileId: model.profile?.id || null, profileConnectionPending: model.profileConnectionPending, plan: model.plan ? cloneJson({ id: model.plan.id, actions: model.plan.actions, summary: model.plan.summary }) : null }),
     });
 
     initialize().catch((error) => {

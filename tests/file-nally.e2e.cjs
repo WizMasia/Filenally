@@ -64,6 +64,7 @@ async function mountPair(page, options) {
   await configureMockPair(page, options);
   await page.locator('#btnSrc').click();
   await page.locator('#btnTgt').click();
+  await page.waitForFunction(() => !window.FileNallyTest.getModel().appOperation);
 }
 
 async function compare(page) {
@@ -151,6 +152,204 @@ async function main() {
   const add = (name, run) => {
     if (!NAME_FILTER || NAME_FILTER.test(name)) tests.push({ name, run });
   };
+
+  add('version manager cancel is read-only and confirmed restore invalidates comparison', async ({ page }) => {
+    await mountVersion(page);
+    await compare(page);
+    assert.equal(await page.locator('#tgtFileBody .file-name').count(), 1);
+    const before = await snapshotMockPair(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-version-action="restore"]').first().click();
+    await page.locator('#restoreDialog').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#restoreSummary').innerText(), /report\.txt/);
+    assert.match(await page.locator('#restoreSummary').innerText(), /7 B/);
+    await page.locator('#btnCancelRestore').click();
+    assert.deepEqual(await snapshotMockPair(page), before);
+    await page.locator('[data-version-action="restore"]').first().click();
+    await page.locator('#btnConfirmRestore').click();
+    await page.waitForFunction(() => !document.querySelector('#restoreDialog').open);
+    const after = await snapshotMockPair(page);
+    assert.equal(after.target['report.txt'].content, 'old');
+    const index = JSON.parse(after.target['.filenally']['index.json'].content);
+    assert.equal(index.versions.length, 2);
+    assert.equal(index.versions[1].reason, 'before-restore');
+    assert.match(await page.locator('#versionStatus').innerText(), new RegExp(index.versions[1].id));
+    await page.locator('#btnCloseVersions').click();
+    await page.waitForFunction(() => document.activeElement.id === 'btnVersions');
+    assert.equal(await page.locator('#btnSync').isDisabled(), true);
+    assert.equal(await page.locator('#srcFileBody .file-name, #tgtFileBody .file-name').count(), 0);
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'btnVersions');
+  });
+
+  add('version manager merges physical roots newest first with 100-row paging and partial errors', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(() => {
+      const versions = Array.from({ length: 100 }, (_, i) => ({ ...window.__versionRecord,
+        id: `source-${i}`, storedPath: `versions/source-${i}/report.txt`, capturedAt: new Date(Date.UTC(2026, 8, 14, 0, 0, i)).toISOString() }));
+      window.__setMockFile('source', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions }) });
+    });
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => document.querySelectorAll('#versionBody tr').length === 100);
+    assert.match(await page.locator('#versionBody tr').first().innerText(), /source-99/);
+    assert.match(await page.locator('#versionBody tr').first().innerText(), /원본|Source/);
+    await page.locator('#btnVersionNext').click();
+    assert.equal(await page.locator('#versionBody tr').count(), 1);
+    assert.match(await page.locator('#versionBody').innerText(), /대상|Target/);
+    await page.evaluate(() => window.__setMockFile('source', '.filenally/index.json', { content: '{' }));
+    await page.locator('#btnVersionRefresh').click();
+    await page.waitForFunction(() => /source|원본/i.test(document.querySelector('#versionStatus').textContent));
+    assert.equal(await page.locator('#versionBody tr').count(), 1);
+  });
+
+  for (const content of ['한글\u0000é\r\n', 'binary']) {
+    add(`version manager download preserves exact ${content === 'binary' ? 'binary' : 'UTF-8'} bytes`, async ({ page }) => {
+      await mountVersion(page, { content });
+      if (content === 'binary') await page.evaluate(() => {
+        const entry = window.__mockPair.target.entries.get('.filenally').entries.get('versions').entries.get('saved-1').entries.get('report.txt');
+        entry.getFile = async () => new File([new Uint8Array([0, 255, 128, 13, 10, 1])], 'report.txt', { lastModified: 100 });
+      });
+      await page.locator('#btnVersions').click();
+      const pending = page.waitForEvent('download');
+      await page.locator('[data-version-action="download"]').first().click();
+      const download = await pending;
+      assert.equal(download.suggestedFilename(), 'report.txt');
+      const bytes = await fs.readFile(await download.path());
+      assert.deepEqual(bytes, content === 'binary' ? Buffer.from([0, 255, 128, 13, 10, 1]) : Buffer.from(content));
+    });
+  }
+
+  add('version manager restores missing files only after confirmation and follows root after swap', async ({ page }) => {
+    await mountVersion(page, { missing: true });
+    await page.locator('#btnSwapFolders').click();
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-version-action="restore"]').first().click();
+    await page.locator('#restoreDialog').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#restoreSummary').innerText(), /원본|Source/);
+    assert.match(await page.locator('#restoreSummary').innerText(), /새 파일|new file/i);
+    assert.equal((await snapshotMockPair(page)).target['report.txt'], undefined);
+    await page.locator('#btnConfirmRestore').click();
+    await page.waitForFunction(() => !document.querySelector('#restoreDialog').open);
+    const after = await snapshotMockPair(page);
+    assert.equal(after.target['report.txt'].content, 'old');
+    assert.equal(after.source['report.txt'], undefined);
+  });
+
+  for (const failure of ['stale', 'permission', 'backup', 'write']) {
+    add(`version manager ${failure} failure clears confirmation and permits fresh retry`, async ({ page }) => {
+      await mountVersion(page);
+      await page.locator('#btnVersions').click();
+      await page.locator('[data-version-action="restore"]').first().click();
+      await page.locator('#restoreDialog').waitFor({ state: 'visible' });
+      await page.evaluate((failure) => {
+        if (failure === 'stale') window.__mockPair.target.entries.get('report.txt').content = 'changed';
+        if (failure === 'permission') window.__setMockPermission('target', { state: 'denied', requestResult: 'denied' });
+        if (failure === 'backup') window.__setMockFailure({ operation: 'close', name: 'index.json' });
+        if (failure === 'write') window.__setMockFailure({ operation: 'write', name: 'report.txt', occurrence: 2 });
+      }, failure);
+      await page.locator('#btnConfirmRestore').click();
+      await page.waitForFunction(() => !document.querySelector('#restoreDialog').open);
+      assert.match(await page.locator('#versionStatus').innerText(), /실패|failed/i);
+      if (failure === 'write') assert.match(await page.locator('#versionStatus').innerText(), /\.filenally\/versions\//);
+      await page.evaluate(() => { window.__mockFailure = null; window.__setMockPermission('target', { state: 'granted' }); });
+      await page.locator('#versionBody tr').filter({ hasText: 'saved-1' }).locator('[data-version-action="restore"]').click();
+      await page.locator('#btnConfirmRestore').click();
+      await page.waitForFunction(() => !document.querySelector('#restoreDialog').open);
+      assert.equal((await snapshotMockPair(page)).target['report.txt'].content, 'old');
+    });
+  }
+
+  add('version manager busy restore excludes controller operations and duplicate confirmation', async ({ page }) => {
+    await mountVersion(page);
+    await compare(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-version-action="restore"]').first().click();
+    await page.locator('#restoreDialog').waitFor({ state: 'visible' });
+    await page.evaluate(() => { window.__mockPair.target.entries.get('report.txt').writeDelay = 200; });
+    await page.locator('#btnConfirmRestore').click();
+    await page.evaluate(async () => {
+      document.querySelector('#btnConfirmRestore').click();
+      const controller = window.FileNallyTest.Controller;
+      window.__configBeforeRestore = JSON.parse(localStorage.getItem('smart_sync_state')).config;
+      document.querySelector('#syncDirection').value = 'reverse';
+      document.querySelector('#syncDirection').dispatchEvent(new Event('change'));
+      document.querySelector('#excludeDirs').value = 'different';
+      document.querySelector('#excludeDirs').dispatchEvent(new Event('input'));
+      await Promise.all([controller.pick('source'), controller.swapFolders(), controller.compare(), controller.sync(),
+        controller.importState(new File(['{}'], 'state.json')), controller.selectProfile(window.FileNallyTest.getModel().profileId)]);
+    });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#btnCancelRestore').isDisabled(), true);
+    await page.waitForFunction(() => !document.querySelector('#restoreDialog').open);
+    const after = await snapshotMockPair(page);
+    assert.equal(after.target['report.txt'].content, 'old');
+    assert.equal(JSON.parse(after.target['.filenally']['index.json'].content).versions.length, 2);
+    assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('smart_sync_state')).config), await page.evaluate(() => window.__configBeforeRestore));
+    assert.equal(await page.locator('#btnVersionRefresh').isEnabled(), true);
+  });
+
+  add('version manager close discards delayed preparation and restores keyboard focus', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(() => {
+      const file = window.__mockPair.target.entries.get('report.txt');
+      const getFile = file.getFile.bind(file);
+      file.getFile = async () => { await new Promise(resolve => { window.__releaseVersionRead = resolve; }); return getFile(); };
+    });
+    const before = await snapshotMockPair(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-version-action="restore"]').first().click();
+    await page.waitForFunction(() => typeof window.__releaseVersionRead === 'function');
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.__releaseVersionRead());
+    await page.waitForTimeout(30);
+    assert.equal(await page.locator('#restoreDialog').isVisible(), false);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'btnVersions');
+    assert.deepEqual(await snapshotMockPair(page), before);
+  });
+
+  for (const operation of ['pick', 'import', 'profile']) {
+    add(`version manager cannot open during pending ${operation}`, async ({ page }) => {
+      await mountVersion(page);
+      await page.evaluate(operation => {
+        const controller = window.FileNallyTest.Controller;
+        const pending = () => new Promise(resolve => { window.__releaseAppOperation = resolve; });
+        if (operation === 'pick') { window.showDirectoryPicker = pending; window.__pendingOperation = controller.pick('source'); }
+        if (operation === 'import') window.__pendingOperation = controller.importState({ size: 2, text: pending });
+        if (operation === 'profile') {
+          window.__setMockPermission('source', { state: 'prompt' });
+          window.__mockPair.source.requestPermission = pending;
+          window.__pendingOperation = controller.selectProfile(window.FileNallyTest.getModel().profileId);
+        }
+      }, operation);
+      assert.equal(await page.locator('#btnVersions').isDisabled(), true);
+      await page.evaluate(() => document.querySelector('#btnVersions').click());
+      assert.equal(await page.locator('#versionDialog').isVisible(), false);
+      await page.evaluate(async operation => {
+        window.__releaseAppOperation(operation === 'pick' ? window.__mockPair.source : operation === 'profile' ? 'granted' : '{}');
+        await window.__pendingOperation;
+      }, operation);
+    });
+  }
+
+  for (const lang of ['ko', 'en']) {
+    add(`version manager ${lang} labels and hostile filenames remain text with Escape cancellation`, async ({ page }) => {
+      await mountVersion(page, { path: '<img src=x onerror=alert(1)>.txt', missing: true });
+      await page.locator(lang === 'ko' ? '#btnLangKo' : '#btnLangEn').click();
+      const before = await snapshotMockPair(page);
+      await page.locator('#btnVersions').click();
+      assert.equal(await page.getByRole('dialog', { name: lang === 'ko' ? '버전 관리' : 'Version manager', exact: true }).count(), 1);
+      assert.equal(await page.locator('#versionBody img').count(), 0);
+      await page.locator('[data-version-action="restore"]').first().click();
+      await page.locator('#restoreDialog').waitFor({ state: 'visible' });
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => document.activeElement.dataset.versionAction === 'restore');
+      assert.equal(await page.locator('#restoreDialog').isVisible(), false);
+      assert.equal(await page.locator('#versionDialog').isVisible(), true);
+      assert.equal(await page.evaluate(() => document.activeElement.dataset.versionAction), 'restore');
+      await page.keyboard.press('Escape');
+      assert.deepEqual(await snapshotMockPair(page), before);
+    });
+  }
 
   for (const missing of ['store', 'index']) {
     add(`version reader missing ${missing} is empty without writes`, async ({ page }) => {
@@ -1671,15 +1870,15 @@ async function main() {
     const snapshot = await snapshotMockPair(page);
     const version = JSON.parse(snapshot.target['.filenally']['index.json'].content).versions[0];
     await page.locator('.history-detail-button').first().click();
-    assert.match(await page.locator('.run-detail-table thead').innerText(), /버전 ID/);
-    assert.match(await page.locator('.run-detail-table thead').innerText(), /버전 경로/);
+    assert.match(await page.locator('#runDetailDialog thead').innerText(), /버전 ID/);
+    assert.match(await page.locator('#runDetailDialog thead').innerText(), /버전 경로/);
     assert.match(await page.locator('#runDetailBody').innerText(), new RegExp(version.id));
     assert.match(await page.locator('#runDetailBody').innerText(), /\.filenally\/versions\//);
     await page.locator('#btnCloseRunDetail').click();
     await page.locator('#btnLangEn').click();
     await page.locator('.history-detail-button').first().click();
-    assert.match(await page.locator('.run-detail-table thead').innerText(), /Version ID/);
-    assert.match(await page.locator('.run-detail-table thead').innerText(), /Version path/);
+    assert.match(await page.locator('#runDetailDialog thead').innerText(), /Version ID/);
+    assert.match(await page.locator('#runDetailDialog thead').innerText(), /Version path/);
     assert.match(await page.locator('#runDetailBody').innerText(), new RegExp(version.id));
     assert.match(await page.locator('#runDetailBody').innerText(), /\.filenally\/versions\//);
   });
@@ -2347,6 +2546,28 @@ async function main() {
       await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'success');
       await page.locator('.history-detail-button').first().click();
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-run-detail.png`), fullPage: true });
+      await page.keyboard.press('Escape');
+      const longPath = `reports/${'long-folder-name-'.repeat(6)}/${'분기별-최종-보고서-'.repeat(5)}.txt`;
+      await mountVersion(page, { path: longPath });
+      await page.evaluate(path => {
+        window.__setMockFile('target', path, { content: 'Current file before restoration', lastModified: 200 });
+        const record = window.__versionRecord;
+        const versions = [record, ...Array.from({ length: 104 }, (_, i) => ({ ...record,
+          id: `older-${i}`, originalPath: `archive/report-${i}.txt`, storedPath: `versions/older-${i}/archive/report-${i}.txt`, capturedAt: '2026-09-12T00:00:00.000Z' }))];
+        window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions }) });
+      }, longPath);
+      await page.locator('#btnVersions').click();
+      await page.waitForFunction(() => document.querySelectorAll('#versionBody tr').length === 100);
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${viewport.name} versions has no document overflow`);
+      assert.equal(await page.locator('.version-table').evaluate(el => el.scrollHeight > el.clientHeight), true);
+      await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-versions.png`), fullPage: true });
+      await page.locator('[data-version-action="restore"]').first().click();
+      await page.locator('#restoreDialog').waitFor({ state: 'visible' });
+      assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${viewport.name} restore has no document overflow`);
+      assert.equal(await page.locator('#restoreTitle').evaluate(el => el.getBoundingClientRect().top >= 0), true, `${viewport.name} restore heading stays visible on opening`);
+      await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-restore.png`), fullPage: true });
+      await page.locator('#btnConfirmRestore').focus();
+      assert.equal(await page.locator('#btnConfirmRestore').evaluate(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), true);
       await context.close();
     }
   }

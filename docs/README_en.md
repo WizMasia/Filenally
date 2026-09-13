@@ -106,7 +106,17 @@ Before overwriting an existing destination file, File-nally captures it. Capture
 
 Capture metadata is stored in schema v1 `.filenally/index.json`. `.filenally` is always excluded from synchronization, regardless of the visible exclusion list. If capture or index writing fails, File-nally does not perform that overwrite and stops the synchronization run.
 
-Version recovery is manual in this increment. There is no version list, restore, or diff UI, and there is no automatic expiry or cleanup. Creation date, author, owner, ACL, and similar metadata are unavailable.
+After connecting both folders, open **Version manager** to see captures from both roots, newest first, in pages of 100. Each entry shows its owning folder's current Source/Target side and name, original path, capture time, size, reason, and version ID. An unreadable index produces a folder-specific error while the healthy folder's entries remain available. **Refresh** rereads both folders; **Download** saves the exact file bytes with the original filename.
+
+**Restore** opens a separate confirmation showing the selected version and current file, including their path, size, modified time, and owning folder. **Restore this version** requests write permission and starts the operation. An existing file is saved as a new version and its index committed before replacement. A missing file is created at the original path only after the same explicit confirmation. Cancel and Escape make no filesystem changes. Duplicate execution and cancellation are blocked while restoration writes are running.
+
+Restoration always targets the folder that physically stores the version. Swapping Source and Target does not cause historical `toSide` metadata to redirect it. The displayed next synchronization direction remains in effect; manual restoration affects only the selected owning folder. Every restore attempt clears the old plan and displayed scans, so **Compare changes** again before synchronizing. Restoration does not rebuild synchronization manifests or checkpoints.
+
+Changes to the version or current file after preparation invalidate confirmation, including byte changes with identical size and modified time. Select the version again to retry with a fresh confirmation. If restoration fails after a backup was committed, its retained ID and `.filenally/versions/...` path appear in the manager status and live log. Folder selection/swapping, profile connection, settings import, comparison, and synchronization are locked while the manager is open.
+
+Version indexes remain schema v1 with the additive `before-restore` reason. Older builds reject these new records and safely block overwrites, so use the updated app after restoring. Settings remain schema v2. Freshness checks do not provide an atomic lock against external programs editing at the final write boundary.
+
+Diff, storage usage/manual cleanup, and automatic expiry are not yet available. Creation date, author, owner, ACL, and similar metadata are unavailable.
 
 ## JSON settings and folder profiles
 

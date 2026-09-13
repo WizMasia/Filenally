@@ -170,6 +170,26 @@ tbody tr:last-child td { border-bottom: 0; }
 .run-detail-pagination { display: flex; align-items: center; justify-content: center; gap: var(--space-3); padding: var(--space-3) var(--space-5) 0; }
 .run-detail-pagination span { min-width: 4rem; color: var(--text-secondary); text-align: center; font-size: 0.8125rem; font-weight: 700; }
 .run-detail-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--space-2); padding: var(--space-4) var(--space-5) var(--space-5); }
+.version-message { margin: var(--space-3) var(--space-5); font-size: 0.8125rem; white-space: pre-wrap; overflow-wrap: anywhere; }
+.version-dialog .run-detail-header button { flex-shrink: 0; }
+.version-table td { overflow-wrap: anywhere; white-space: normal; }
+.version-table table { table-layout: fixed; }
+.version-table th:nth-child(2) { width: 27%; }
+.version-row-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.version-row-actions button { padding: var(--space-2); font-size: 0.75rem; }
+.version-id { display: block; margin-top: var(--space-1); color: var(--text-secondary); font-size: 0.6875rem; }
+.restore-dialog { width: min(800px, calc(100% - var(--space-8))); }
+.restore-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); padding: var(--space-5); max-height: min(60dvh, 600px); overflow-y: auto; overflow-wrap: anywhere; }
+.restore-summary > p { grid-column: 1 / -1; margin: 0; }
+.restore-summary section { min-width: 0; padding: var(--space-3); border: 1px solid var(--border-default); border-radius: var(--radius-md); background: var(--surface-subtle); }
+.restore-summary h3 { margin: 0 0 var(--space-3); font-size: 0.9375rem; }
+.restore-summary dl { margin: 0; }
+.restore-summary dt { font-size: 0.75rem; color: var(--text-secondary); }
+.restore-summary dd { margin: var(--space-1) 0 var(--space-3); font-size: 0.8125rem; }
+@media (max-width: 760px) {
+    .restore-summary { grid-template-columns: minmax(0, 1fr); padding: var(--space-4); }
+    .version-table td > * { min-width: 0; }
+}
 .quick-guide-dialog { width: min(680px, calc(100% - var(--space-8))); }
 .quick-guide-dialog .run-detail-header button { flex: 0 0 auto; white-space: nowrap; }
 .quick-guide-body { max-height: calc(100dvh - 152px); overflow-y: auto; padding: var(--space-5); }
