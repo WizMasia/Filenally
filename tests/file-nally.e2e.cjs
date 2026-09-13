@@ -829,6 +829,444 @@ async function main() {
     assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
   });
 
+  add('version comparison engine keeps byte truth and deterministic changed rows', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      return {
+        changed: await analyze(new File(['a\nb\nc\n'], 'a'), new File(['a\nx\nc\n'], 'b')),
+        format: await analyze(new File(['\uFEFF가😀\r\n'], 'a'), new File(['가😀\n'], 'b')),
+        missing: await analyze(new File([''], 'a'), null),
+        equal: await analyze(new File(['same'], 'a', { lastModified: 1 }), new File(['same'], 'b', { lastModified: 2 })),
+      };
+    });
+    assert.equal(result.changed.equal, false);
+    assert.deepEqual(result.changed.rows.map((row) => [row.kind, row.leftLine, row.rightLine, row.text]),
+      [['context', 1, 1, 'a'], ['remove', 2, null, 'b'], ['add', null, 2, 'x'], ['context', 3, 3, 'c']]);
+    assert.deepEqual([result.changed.added, result.changed.removed], [1, 1]);
+    assert.equal(result.format.equal, false); assert.equal(result.format.lineContentEqual, true);
+    assert.equal(result.format.formats.left.bom, true); assert.equal(result.format.formats.left.crlf, 1);
+    assert.equal(result.missing.kind, 'missing'); assert.equal(result.missing.equal, null);
+    assert.equal(result.equal.kind, 'identical'); assert.equal(result.equal.equal, true);
+  });
+
+  add('version comparison engine hashes known complete snapshots', async ({ page }) => {
+    const result = await page.evaluate(() => window.FileNallyTest.VersionComparison.analyze(
+      new File(['abc'], 'a'), new File(['abd'], 'b')));
+    const { createHash } = require('node:crypto');
+    assert.equal(result.hashes.left.value, createHash('sha256').update('abc').digest('hex'));
+    assert.equal(result.hashes.right.value, createHash('sha256').update('abd').digest('hex'));
+  });
+
+  add('version comparison engine distinguishes empty, inserted, deleted, metadata-only and same-metadata changes', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      return {
+        empty: await analyze(new File([], 'a'), new File([], 'b')),
+        insert: await analyze(new File([], 'a'), new File(['line'], 'b')),
+        remove: await analyze(new File(['line'], 'a'), new File([], 'b')),
+        metadata: await analyze(new File(['same'], 'a', { lastModified: 1 }), new File(['same'], 'b', { lastModified: 2 })),
+        changed: await analyze(new File(['left'], 'a', { lastModified: 7 }), new File(['right'], 'b', { lastModified: 7 })),
+        missing: await analyze(new File([], 'a'), null),
+      };
+    });
+    assert.deepEqual([result.empty.kind, result.empty.equal], ['identical', true]);
+    assert.deepEqual(result.insert.rows.map((row) => [row.kind, row.leftLine, row.rightLine, row.text]),
+      [['add', null, 1, 'line']]);
+    assert.deepEqual([result.insert.added, result.insert.removed], [1, 0]);
+    assert.deepEqual(result.remove.rows.map((row) => [row.kind, row.leftLine, row.rightLine, row.text]),
+      [['remove', 1, null, 'line']]);
+    assert.deepEqual([result.remove.added, result.remove.removed], [0, 1]);
+    assert.deepEqual([result.metadata.kind, result.metadata.equal], ['identical', true]);
+    assert.deepEqual([result.changed.kind, result.changed.equal, result.changed.added, result.changed.removed], ['text', false, 1, 1]);
+    assert.deepEqual([result.missing.kind, result.missing.equal, result.missing.hashes.right.status], ['missing', null, 'missing']);
+  });
+
+  add('version comparison engine deletes before insert on repeated ambiguous LCS runs', async ({ page }) => {
+    const runs = await page.evaluate(async () => {
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      const results = [];
+      for (let index = 0; index < 3; index += 1) {
+        const result = await analyze(new File(['a\nb'], 'a'), new File(['b\na'], 'b'));
+        results.push(result.rows.map((row) => [row.kind, row.leftLine, row.rightLine, row.text]));
+      }
+      return results;
+    });
+    const expected = [['remove', 1, null, 'a'], ['context', 2, 1, 'b'], ['add', null, 2, 'a']];
+    assert.deepEqual(runs, [expected, expected, expected]);
+  });
+
+  add('version comparison engine preserves one BOM removal, Unicode and whitespace exactly', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      return {
+        bom: await analyze(new File(['\uFEFF\uFEFFx'], 'a'), new File(['\uFEFFx'], 'b')),
+        unicode: await analyze(new File(['가😀\n끝'], 'a'), new File(['가😀\n다름'], 'b')),
+        whitespace: await analyze(new File(['\ta '], 'a'), new File([' \ta'], 'b')),
+        canonical: await analyze(new File(['\u00e9'], 'a'), new File(['e\u0301'], 'b')),
+      };
+    });
+    assert.deepEqual([result.bom.formats.left.bom, result.bom.formats.right.bom], [true, true]);
+    assert.deepEqual(result.bom.rows.map((row) => [row.kind, row.text]), [['remove', '\uFEFFx'], ['add', 'x']]);
+    assert.deepEqual(result.unicode.rows.map((row) => [row.kind, row.text]),
+      [['context', '가😀'], ['remove', '끝'], ['add', '다름']]);
+    assert.deepEqual(result.whitespace.rows.map((row) => [row.kind, row.text]), [['remove', '\ta '], ['add', ' \ta']]);
+    assert.deepEqual(result.canonical.rows.map((row) => [row.kind, row.text]), [['remove', 'é'], ['add', 'e\u0301']]);
+  });
+
+  add('version comparison engine reports exact line terminator formats without changing byte truth', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      return {
+        mixed: await analyze(new File(['a\nb\rc\r\n'], 'a'), new File(['a\r\nb\nc\r'], 'b')),
+        final: await analyze(new File(['a\n'], 'a'), new File(['a'], 'b')),
+        positions: await analyze(new File(['a\nb\r'], 'a'), new File(['a\rb\n'], 'b')),
+      };
+    });
+    const counts = (format) => [format.crlf, format.lf, format.cr, format.finalNewline];
+    assert.deepEqual(counts(result.mixed.formats.left), [1, 1, 1, true]);
+    assert.deepEqual(counts(result.mixed.formats.right), [1, 1, 1, true]);
+    for (const value of Object.values(result)) {
+      assert.equal(value.equal, false);
+      assert.equal(value.lineContentEqual, true);
+      assert.deepEqual(value.rows, []);
+    }
+    assert.deepEqual(counts(result.final.formats.left), [0, 1, 0, true]);
+    assert.deepEqual(counts(result.final.formats.right), [0, 0, 0, false]);
+  });
+
+  add('version comparison engine merges six-line context and gaps seven-line context precisely', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const make = (between) => {
+        const left = ['head-1', 'head-2', 'head-3', 'head-4', 'left-1'];
+        const right = ['head-1', 'head-2', 'head-3', 'head-4', 'right-1'];
+        for (let index = 1; index <= between; index += 1) { left.push(`same-${index}`); right.push(`same-${index}`); }
+        left.push('left-2', 'tail-1', 'tail-2', 'tail-3', 'tail-4');
+        right.push('right-2', 'tail-1', 'tail-2', 'tail-3', 'tail-4');
+        return [left.join('\n'), right.join('\n')];
+      };
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      const six = make(6), seven = make(7);
+      return {
+        six: await analyze(new File([six[0]], 'a'), new File([six[1]], 'b')),
+        seven: await analyze(new File([seven[0]], 'a'), new File([seven[1]], 'b')),
+      };
+    });
+    assert.deepEqual(result.six.rows.filter((row) => row.kind === 'gap').map((row) => [row.leftLine, row.rightLine, row.count]),
+      [[1, 1, 1], [16, 16, 1]]);
+    assert.deepEqual(result.seven.rows.filter((row) => row.kind === 'gap').map((row) => [row.leftLine, row.rightLine, row.count]),
+      [[1, 1, 1], [9, 9, 1], [17, 17, 1]]);
+    assert.deepEqual([result.six.added, result.six.removed, result.seven.added, result.seven.removed], [2, 2, 2, 2]);
+  });
+
+  for (const [name, leftBytes, expected] of [
+    ['invalid UTF-8', [0xc3, 0x28], 'encoding'],
+    ['NUL', [65, 0], 'control'],
+    ['DEL', [65, 127], 'control'],
+    ['UTF-16 LE', [65, 0, 66, 0], 'control'],
+  ]) {
+    add(`version comparison engine fallback: ${name}`, async ({ page }) => {
+      const result = await page.evaluate(async ({ leftBytes }) => window.FileNallyTest.VersionComparison.analyze(
+        new File([new Uint8Array(leftBytes)], 'a.txt'), new File(['xyz'], 'b.bin')), { leftBytes });
+      assert.equal(result.kind, 'summary'); assert.equal(result.reason, expected);
+      assert.equal(result.equal, false); assert.deepEqual(result.rows, []);
+      assert.deepEqual([result.added, result.removed], [0, 0]);
+    });
+  }
+
+  add('version comparison engine enforces inclusive byte, line and UTF-16 line limits', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      const atBytes = `${'a'.repeat(8191)}\n`.repeat(64);
+      const changedAtBytes = `b${atBytes.slice(1)}`;
+      const overBytes = new File(['a'.repeat(524289)], 'over');
+      let overByteReads = 0;
+      const originalOverRead = overBytes.arrayBuffer.bind(overBytes);
+      overBytes.arrayBuffer = async () => { overByteReads += 1; return originalOverRead(); };
+      const atLines = `${'x\n'.repeat(4999)}x\n`;
+      const changedAtLines = `y\n${'x\n'.repeat(4999)}`;
+      const overLines = `${'x\n'.repeat(5000)}x\n`;
+      return {
+        atBytes: await analyze(new File([atBytes], 'a'), new File([changedAtBytes], 'b')),
+        overBytes: await analyze(overBytes, new File(['b'], 'b')),
+        overByteReads,
+        atLines: await analyze(new File([atLines], 'a'), new File([changedAtLines], 'b')),
+        overLines: await analyze(new File([overLines], 'a'), new File([`y\n${'x\n'.repeat(5000)}`], 'b')),
+        atUnits: await analyze(new File(['😀'.repeat(4096)], 'a'), new File([`😃${'😀'.repeat(4095)}`], 'b')),
+        overUnits: await analyze(new File([`😀${'a'.repeat(8191)}`], 'a'), new File([`😃${'a'.repeat(8191)}`], 'b')),
+      };
+    });
+    assert.deepEqual([result.atBytes.kind, result.atBytes.reason, result.atBytes.removed, result.atBytes.added], ['text', null, 1, 1]);
+    assert.deepEqual([result.overBytes.kind, result.overBytes.reason, result.overBytes.hashes.left.status, result.overByteReads],
+      ['summary', 'size', 'ok', 1]);
+    assert.deepEqual([result.atLines.kind, result.atLines.reason, result.atLines.removed, result.atLines.added], ['text', null, 1, 1]);
+    assert.deepEqual([result.overLines.kind, result.overLines.reason, result.overLines.rows.length], ['summary', 'line-count', 0]);
+    assert.deepEqual([result.atUnits.kind, result.atUnits.reason, result.atUnits.removed, result.atUnits.added], ['text', null, 1, 1]);
+    assert.deepEqual([result.overUnits.kind, result.overUnits.reason, result.overUnits.rows.length], ['summary', 'line-length', 0]);
+  });
+
+  add('version comparison engine accepts inclusive matrix cells and refuses allocation just over', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const Native = Uint32Array;
+      const allocations = [];
+      globalThis.Uint32Array = class extends Native {
+        constructor(length) { super(length); allocations.push(length); }
+      };
+      const lines = (prefix, count) => Array.from({ length: count }, (_, index) => `${prefix}${index}`).join('\n');
+      try {
+        const progress = [];
+        const inclusive = await window.FileNallyTest.VersionComparison.analyze(
+          new File([lines('L', 999)], 'a'), new File([lines('R', 1999)], 'b'), { onProgress: (value) => progress.push(value) });
+        const afterInclusive = allocations.slice();
+        const over = await window.FileNallyTest.VersionComparison.analyze(
+          new File([lines('L', 1000)], 'a'), new File([lines('R', 1999)], 'b'));
+        return { inclusive: { kind: inclusive.kind, reason: inclusive.reason, added: inclusive.added, removed: inclusive.removed },
+          over: { kind: over.kind, reason: over.reason, rows: over.rows.length, added: over.added, removed: over.removed },
+          afterInclusive, allocations, textProgress: progress.filter((value) => value.stage === 'text').at(-1) };
+      } finally { globalThis.Uint32Array = Native; }
+    });
+    assert.deepEqual(result.inclusive, { kind: 'text', reason: null, added: 1999, removed: 999 });
+    assert.deepEqual(result.over, { kind: 'summary', reason: 'work-limit', rows: 0, added: 0, removed: 0 });
+    assert.deepEqual(result.afterInclusive, [2000000]);
+    assert.deepEqual(result.allocations, [2000000]);
+    assert.deepEqual(result.textProgress, { stage: 'text', done: 1997001, total: 1997001 });
+  });
+
+  add('version comparison engine trims huge common edges and skips matrices for one empty unmatched side', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const Native = Uint32Array;
+      const allocations = [];
+      globalThis.Uint32Array = class extends Native {
+        constructor(length) { super(length); allocations.push(length); }
+      };
+      try {
+        const prefix = Array.from({ length: 2000 }, (_, index) => `p${index}`);
+        const suffix = Array.from({ length: 2000 }, (_, index) => `s${index}`);
+        const centered = await window.FileNallyTest.VersionComparison.analyze(
+          new File([[...prefix, 'left', ...suffix].join('\n')], 'a'),
+          new File([[...prefix, 'right', ...suffix].join('\n')], 'b'));
+        const afterCentered = allocations.slice();
+        const deletionOnly = await window.FileNallyTest.VersionComparison.analyze(
+          new File([Array.from({ length: 1000 }, (_, index) => `L${index}`).join('\n')], 'a'), new File([], 'b'));
+        return { centered: [centered.removed, centered.added], deletionOnly: [deletionOnly.removed, deletionOnly.added],
+          afterCentered, allocations };
+      } finally { globalThis.Uint32Array = Native; }
+    });
+    assert.deepEqual(result.centered, [1, 1]);
+    assert.deepEqual(result.deletionOnly, [1000, 0]);
+    assert.deepEqual(result.afterCentered, [4]);
+    assert.deepEqual(result.allocations, [4]);
+  });
+
+  add('version comparison engine fingerprints the inclusive cap and avoids over-cap whole-file reads', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      const at = new File([new Uint8Array(16777216)], 'at');
+      const over = new File([new Uint8Array(16777217)], 'over');
+      let atReads = 0, overReads = 0;
+      const atRead = at.arrayBuffer.bind(at);
+      at.arrayBuffer = async () => { atReads += 1; return atRead(); };
+      over.arrayBuffer = async () => { overReads += 1; throw new Error('over-cap read'); };
+      const atResult = await analyze(at, new File(['x'], 'right'));
+      const overResult = await analyze(over, new File(['x'], 'right'));
+      return { at: atResult.hashes.left, over: overResult.hashes.left, atReads, overReads };
+    });
+    assert.deepEqual(result.at, { status: 'ok', value: '080acf35a507ac9849cfcba47dc2ad83e01b75663a516279c8b9d243b719643e' });
+    assert.deepEqual(result.over, { status: 'too-large', value: '' });
+    assert.deepEqual([result.atReads, result.overReads], [1, 0]);
+  });
+
+  add('version comparison engine labels absent and unsupported crypto and hashes sequentially', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      let subtle = null, originalDigest = null;
+      try {
+        Object.defineProperty(globalThis, 'crypto', { configurable: true, value: {} });
+        const absent = await analyze(new File(['a'], 'a'), new File(['b'], 'b'));
+        Object.defineProperty(globalThis, 'crypto', descriptor);
+        subtle = crypto.subtle;
+        originalDigest = subtle.digest;
+        Object.defineProperty(subtle, 'digest', { configurable: true, value: async () => { throw new Error('unsupported'); } });
+        const unsupported = await analyze(new File(['a'], 'a'), new File(['b'], 'b'));
+        let active = 0, maximum = 0, calls = 0;
+        Object.defineProperty(subtle, 'digest', { configurable: true, value: async (...args) => {
+          calls += 1; active += 1; maximum = Math.max(maximum, active);
+          await new Promise((resolve) => setTimeout(resolve, 0));
+          try { return await originalDigest.apply(subtle, args); } finally { active -= 1; }
+        } });
+        const progress = [];
+        const sequential = await analyze(new File(['abc'], 'a'), new File(['abd'], 'b'), { onProgress: (value) => progress.push(value) });
+        return { absent: absent.hashes, unsupported: unsupported.hashes, sequential: sequential.hashes, calls, maximum,
+          hashProgress: progress.filter((value) => value.stage === 'hash') };
+      } finally {
+        if (subtle && originalDigest) Object.defineProperty(subtle, 'digest', { configurable: true, value: originalDigest });
+        Object.defineProperty(globalThis, 'crypto', descriptor);
+      }
+    });
+    assert.deepEqual(result.absent, { left: { status: 'unavailable', value: '' }, right: { status: 'unavailable', value: '' } });
+    assert.deepEqual(result.unsupported, result.absent);
+    assert.equal(result.calls, 2); assert.equal(result.maximum, 1);
+    assert.equal(result.sequential.left.status, 'ok'); assert.equal(result.sequential.right.status, 'ok');
+    assert.deepEqual(result.hashProgress, [{ stage: 'hash', done: 1, total: 2 }, { stage: 'hash', done: 2, total: 2 }]);
+  });
+
+  add('version comparison engine reuses an exact-equal fingerprint without retaining Files', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const left = new File(['same'], 'left'), right = new File(['same'], 'right');
+      let leftReads = 0, rightReads = 0;
+      const leftRead = left.arrayBuffer.bind(left), rightRead = right.arrayBuffer.bind(right);
+      left.arrayBuffer = async () => { leftReads += 1; return leftRead(); };
+      right.arrayBuffer = async () => { rightReads += 1; return rightRead(); };
+      const value = await window.FileNallyTest.VersionComparison.analyze(left, right);
+      const containsFile = (item, seen = new Set()) => {
+        if (item instanceof File) return true;
+        if (!item || typeof item !== 'object' || seen.has(item)) return false;
+        seen.add(item);
+        return Object.values(item).some((child) => containsFile(child, seen));
+      };
+      return { leftReads, rightReads, sameHash: value.hashes.left.value === value.hashes.right.value,
+        containsFile: containsFile(value), keys: Object.keys(window.FileNallyTest.VersionComparison) };
+    });
+    assert.deepEqual(result, { leftReads: 1, rightReads: 0, sameHash: true, containsFile: false, keys: ['analyze'] });
+  });
+
+  add('version comparison engine aborts when final progress cancels publication', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      let cancelled = false;
+      try {
+        await window.FileNallyTest.VersionComparison.analyze(new File(['a'], 'a'), new File(['b'], 'b'), {
+          isCancelled: () => cancelled,
+          onProgress: (value) => { if (value.stage === 'hash' && value.done === value.total) cancelled = true; },
+        });
+        return '';
+      } catch (error) { return error.name; }
+    });
+    assert.equal(result, 'AbortError');
+  });
+
+  add('version comparison engine completes large exact passes and exits early for unequal sizes and first bytes', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      const size = 16777217;
+      const bytes = new Uint8Array(size);
+      const equalLeft = new File([bytes], 'a'), equalRight = new File([bytes], 'b');
+      const equalSlices = [0, 0], equalWhole = [0, 0], progress = [];
+      for (const [index, file] of [equalLeft, equalRight].entries()) {
+        const slice = file.slice.bind(file);
+        file.slice = (...args) => { equalSlices[index] += 1; return slice(...args); };
+        file.arrayBuffer = async () => { equalWhole[index] += 1; throw new Error('over-cap whole read'); };
+      }
+      const equal = await analyze(equalLeft, equalRight, { onProgress: (value) => progress.push(value) });
+      const short = new File(['x'], 'short'), long = new File(['yz'], 'long');
+      let unequalSlices = 0;
+      short.slice = long.slice = () => { unequalSlices += 1; throw new Error('unequal-size slice'); };
+      const unequal = await analyze(short, long);
+      const firstLeftBytes = new Uint8Array(size), firstRightBytes = new Uint8Array(size);
+      firstRightBytes[0] = 1;
+      const firstLeft = new File([firstLeftBytes], 'a'), firstRight = new File([firstRightBytes], 'b');
+      const firstSlices = [0, 0], firstProgress = [];
+      for (const [index, file] of [firstLeft, firstRight].entries()) {
+        const slice = file.slice.bind(file);
+        file.slice = (...args) => { firstSlices[index] += 1; return slice(...args); };
+      }
+      const first = await analyze(firstLeft, firstRight, { onProgress: (value) => firstProgress.push(value) });
+      return { equal: [equal.equal, equal.hashes.left.status, equal.hashes.right.status], equalSlices, equalWhole,
+        equalByteProgress: progress.filter((value) => value.stage === 'bytes').at(-1),
+        unequal: [unequal.equal, unequalSlices], first: [first.equal, first.hashes.left.status], firstSlices,
+        firstByteProgress: firstProgress.filter((value) => value.stage === 'bytes') };
+    });
+    assert.deepEqual(result.equal, [true, 'too-large', 'too-large']);
+    assert.deepEqual(result.equalSlices, [5, 5]); assert.deepEqual(result.equalWhole, [0, 0]);
+    assert.deepEqual(result.equalByteProgress, { stage: 'bytes', done: 33554434, total: 33554434 });
+    assert.deepEqual(result.unequal, [false, 0]);
+    assert.deepEqual(result.first, [false, 'too-large']); assert.deepEqual(result.firstSlices, [1, 1]);
+    assert.deepEqual(result.firstByteProgress, []);
+  });
+
+  add('version comparison engine propagates empty, decode and hash read failures', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      const analyze = window.FileNallyTest.VersionComparison.analyze;
+      const capture = async (left, right) => {
+        try { await analyze(left, right); return ''; } catch (error) { return error.message; }
+      };
+      const empty = new File([], 'empty');
+      const emptySlice = empty.slice.bind(empty);
+      empty.slice = (...args) => { const blob = emptySlice(...args); blob.arrayBuffer = async () => { throw new Error('empty unreadable'); }; return blob; };
+      const decode = new File(['a'], 'decode');
+      decode.arrayBuffer = async () => { throw new Error('decode unreadable'); };
+      const hash = new File(['same'], 'hash');
+      hash.arrayBuffer = async () => { throw new Error('hash unreadable'); };
+      return {
+        empty: await capture(empty, new File([], 'other')),
+        decode: await capture(decode, new File(['b'], 'other')),
+        hash: await capture(hash, new File(['same'], 'other')),
+      };
+    });
+    assert.deepEqual(result, { empty: 'empty unreadable', decode: 'decode unreadable', hash: 'hash unreadable' });
+  });
+
+  add('version comparison engine yields and stops during matrix work', async ({ page }) => {
+    const result = await page.evaluate(async () => {
+      let stopped = false, timerFired = false;
+      const lines = (prefix) => Array.from({ length: 999 }, (_, index) => `${prefix}${index}`).join('\n');
+      try {
+        await window.FileNallyTest.VersionComparison.analyze(new File([lines('L')], 'a'), new File([lines('R')], 'b'), {
+          isCancelled: () => stopped,
+          onProgress: (progress) => {
+            if (progress.stage === 'text' && !timerFired) setTimeout(() => { timerFired = true; stopped = true; }, 0);
+          },
+        });
+        return { name: '', timerFired };
+      } catch (error) { return { name: error.name, timerFired }; }
+    });
+    assert.deepEqual(result, { name: 'AbortError', timerFired: true });
+  });
+
+  for (const pendingStage of ['slice', 'decode', 'hash-read', 'digest', 'digest-reject']) {
+    add(`version comparison engine cancellation after delayed ${pendingStage} prevents the next read`, async ({ page }) => {
+      const result = await page.evaluate(async (pendingStage) => {
+        const analyze = window.FileNallyTest.VersionComparison.analyze;
+        let cancelled = false, rightWholeReads = 0, digestCalls = 0;
+        const left = pendingStage === 'hash-read' ? new File(['a'.repeat(524289)], 'a') : new File(['a'], 'a');
+        const right = pendingStage === 'hash-read' ? new File(['b'], 'b') : new File(['b'], 'b');
+        const rightRead = right.arrayBuffer.bind(right);
+        right.arrayBuffer = async () => { rightWholeReads += 1; return rightRead(); };
+        const descriptor = Object.getOwnPropertyDescriptor(globalThis, 'crypto');
+        let restoreDigest = null;
+        if (pendingStage === 'slice') {
+          const slice = left.slice.bind(left);
+          left.slice = (...args) => {
+            const blob = slice(...args), read = blob.arrayBuffer.bind(blob);
+            blob.arrayBuffer = async () => { await new Promise((resolve) => setTimeout(resolve, 20)); return read(); };
+            return blob;
+          };
+        } else if (pendingStage === 'decode' || pendingStage === 'hash-read') {
+          const read = left.arrayBuffer.bind(left);
+          left.arrayBuffer = async () => { await new Promise((resolve) => setTimeout(resolve, 20)); return read(); };
+        } else {
+          const subtle = crypto.subtle, originalDigest = subtle.digest;
+          restoreDigest = () => Object.defineProperty(subtle, 'digest', { configurable: true, value: originalDigest });
+          Object.defineProperty(subtle, 'digest', { configurable: true, value: async (...args) => {
+            digestCalls += 1; setTimeout(() => { cancelled = true; }, 0);
+            await new Promise((resolve) => setTimeout(resolve, 20));
+            if (pendingStage === 'digest-reject') throw new Error('delayed unsupported');
+            return originalDigest.apply(subtle, args);
+          } });
+        }
+        if (!pendingStage.startsWith('digest')) setTimeout(() => { cancelled = true; }, 0);
+        try {
+          await analyze(left, right, { isCancelled: () => cancelled });
+          return { name: '', rightWholeReads, digestCalls };
+        } catch (error) { return { name: error.name, rightWholeReads, digestCalls }; }
+        finally { restoreDigest?.(); Object.defineProperty(globalThis, 'crypto', descriptor); }
+      }, pendingStage);
+      assert.equal(result.name, 'AbortError');
+      if (pendingStage === 'slice') assert.equal(result.rightWholeReads, 0);
+      if (pendingStage === 'decode' || pendingStage === 'hash-read') assert.equal(result.rightWholeReads, 0);
+      if (pendingStage.startsWith('digest')) assert.deepEqual([result.digestCalls, result.rightWholeReads], [1, 1]);
+    });
+  }
+
   for (const mutation of ['unsupported', 'corrupt', 'duplicate', 'forbidden', 'oversized', 'missing bytes', 'size mismatch', 'changed record', 'store collision', 'index collision', 'destination directory', 'parent file']) {
     add(`version reader rejects ${mutation} without writes`, async ({ page }) => {
       await mountVersion(page);

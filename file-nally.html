@@ -1038,6 +1038,190 @@
             comparisonChoices, prepareComparison, validateComparison });
     })();
 
+    const VersionComparison = (() => {
+        const TEXT_BYTES = 524288;
+        const TEXT_LINES = 5000;
+        const LINE_UNITS = 8192;
+        const MATRIX_CELLS = 2000000;
+        const HASH_BYTES = 16777216;
+        const pause = async (isCancelled) => {
+            comparisonCheck(isCancelled);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+            comparisonCheck(isCancelled);
+        };
+        const decode = async (file, isCancelled) => {
+            comparisonCheck(isCancelled);
+            if (file.size > TEXT_BYTES) return { reason: 'size', format: null };
+            const bytes = new Uint8Array(await file.arrayBuffer());
+            comparisonCheck(isCancelled);
+            let text;
+            try { text = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(bytes); }
+            catch { return { reason: 'encoding', format: null }; }
+            const bom = bytes[0] === 0xef && bytes[1] === 0xbb && bytes[2] === 0xbf;
+            if (bom) text = text.slice(1);
+            if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/.test(text)) return { reason: 'control', format: null };
+            const format = { bom, crlf: 0, lf: 0, cr: 0, finalNewline: /[\r\n]$/.test(text) };
+            const lines = [];
+            let start = 0;
+            for (const match of text.matchAll(/\r\n|\r|\n/g)) {
+                format[match[0] === '\r\n' ? 'crlf' : match[0] === '\n' ? 'lf' : 'cr'] += 1;
+                if (match.index - start > LINE_UNITS) return { reason: 'line-length', format: null };
+                if (lines.length === TEXT_LINES) return { reason: 'line-count', format: null };
+                lines.push(text.slice(start, match.index));
+                start = match.index + match[0].length;
+            }
+            if (start < text.length) {
+                if (text.length - start > LINE_UNITS) return { reason: 'line-length', format: null };
+                if (lines.length === TEXT_LINES) return { reason: 'line-count', format: null };
+                lines.push(text.slice(start));
+            }
+            return { reason: null, format, lines };
+        };
+        const lineDiff = async (left, right, isCancelled, onProgress) => {
+            let prefix = 0;
+            let suffix = 0;
+            while (prefix < left.length && prefix < right.length && left[prefix] === right[prefix]) prefix += 1;
+            while (suffix < left.length - prefix && suffix < right.length - prefix
+                && left[left.length - suffix - 1] === right[right.length - suffix - 1]) suffix += 1;
+            const n = left.length - prefix - suffix;
+            const m = right.length - prefix - suffix;
+            if (!n && !m) return { reason: null, lineContentEqual: true, rows: [], added: 0, removed: 0 };
+            const cells = (n + 1) * (m + 1);
+            if (n && m && cells > MATRIX_CELLS) return { reason: 'work-limit' };
+            let matrix = null;
+            if (n && m) {
+                matrix = new Uint32Array(cells);
+                let done = 0;
+                for (let i = n - 1; i >= 0; i -= 1) {
+                    for (let j = m - 1; j >= 0; j -= 1) {
+                        const at = i * (m + 1) + j;
+                        matrix[at] = left[prefix + i] === right[prefix + j]
+                            ? matrix[at + m + 2] + 1 : Math.max(matrix[at + m + 1], matrix[at + 1]);
+                        done += 1;
+                        if (done % 16384 === 0) {
+                            onProgress({ stage: 'text', done, total: n * m });
+                            await pause(isCancelled);
+                        }
+                    }
+                }
+                onProgress({ stage: 'text', done: n * m, total: n * m });
+            }
+            comparisonCheck(isCancelled);
+            const full = [];
+            let added = 0;
+            let removed = 0;
+            const append = (kind, i, j, text) => {
+                full.push({ kind, leftLine: i === null ? null : i + 1, rightLine: j === null ? null : j + 1, text });
+                if (kind === 'add') added += 1;
+                if (kind === 'remove') removed += 1;
+            };
+            for (let k = 0; k < prefix; k += 1) {
+                append('context', k, k, left[k]);
+                if (full.length % 256 === 0) await pause(isCancelled);
+            }
+            let i = 0;
+            let j = 0;
+            while (i < n || j < m) {
+                if (i < n && j < m && left[prefix + i] === right[prefix + j]) {
+                    append('context', prefix + i, prefix + j, left[prefix + i]);
+                    i += 1;
+                    j += 1;
+                } else if (i < n && (j === m || (matrix
+                    && matrix[(i + 1) * (m + 1) + j] >= matrix[i * (m + 1) + j + 1]))) {
+                    append('remove', prefix + i, null, left[prefix + i]);
+                    i += 1;
+                } else {
+                    append('add', null, prefix + j, right[prefix + j]);
+                    j += 1;
+                }
+                if (full.length % 256 === 0) await pause(isCancelled);
+            }
+            matrix = null;
+            for (let k = suffix; k > 0; k -= 1) {
+                append('context', left.length - k, right.length - k, left[left.length - k]);
+                if (full.length % 256 === 0) await pause(isCancelled);
+            }
+            const visible = new Uint8Array(full.length);
+            for (let k = 0; k < full.length; k += 1) {
+                if (full[k].kind !== 'context') visible.fill(1, Math.max(0, k - 3), Math.min(full.length, k + 4));
+                if (k % 256 === 255) await pause(isCancelled);
+            }
+            const rows = [];
+            let gap = null;
+            for (let k = 0; k < full.length; k += 1) {
+                if (visible[k]) {
+                    gap = null;
+                    rows.push(full[k]);
+                } else if (gap) gap.count += 1;
+                else {
+                    gap = { kind: 'gap', leftLine: full[k].leftLine, rightLine: full[k].rightLine, text: '', count: 1 };
+                    rows.push(gap);
+                }
+                if (k % 256 === 255) await pause(isCancelled);
+            }
+            comparisonCheck(isCancelled);
+            return { reason: null, lineContentEqual: false, rows, added, removed };
+        };
+        const fingerprint = async (file, isCancelled) => {
+            comparisonCheck(isCancelled);
+            if (!file) return { status: 'missing', value: '' };
+            if (file.size > HASH_BYTES) return { status: 'too-large', value: '' };
+            if (!globalThis.crypto?.subtle?.digest) return { status: 'unavailable', value: '' };
+            let buffer = await file.arrayBuffer();
+            comparisonCheck(isCancelled);
+            let digest;
+            try { digest = await crypto.subtle.digest('SHA-256', buffer); }
+            catch {
+                comparisonCheck(isCancelled);
+                return { status: 'unavailable', value: '' };
+            } finally { buffer = null; }
+            comparisonCheck(isCancelled);
+            return { status: 'ok', value: Array.from(new Uint8Array(digest),
+                (byte) => byte.toString(16).padStart(2, '0')).join('') };
+        };
+        const analyze = async (leftFile, rightFile, { isCancelled = () => false, onProgress = () => {} } = {}) => {
+            comparisonCheck(isCancelled);
+            const result = { kind: 'missing', equal: null, reason: null,
+                formats: { left: null, right: null }, lineContentEqual: null, rows: [], added: 0, removed: 0, hashes: null };
+            if (rightFile) {
+                result.equal = await equalFileBytes(leftFile, rightFile,
+                    (done, total) => onProgress({ stage: 'bytes', done, total }), isCancelled);
+                comparisonCheck(isCancelled);
+                result.kind = result.equal ? 'identical' : 'summary';
+                if (!result.equal) {
+                    if (leftFile.size > TEXT_BYTES || rightFile.size > TEXT_BYTES) result.reason = 'size';
+                    else {
+                        const left = await decode(leftFile, isCancelled);
+                        comparisonCheck(isCancelled);
+                        const right = await decode(rightFile, isCancelled);
+                        comparisonCheck(isCancelled);
+                        result.formats = { left: left.format, right: right.format };
+                        result.reason = left.reason || right.reason;
+                        if (!result.reason) {
+                            const diff = await lineDiff(left.lines, right.lines, isCancelled, onProgress);
+                            comparisonCheck(isCancelled);
+                            result.reason = diff.reason;
+                            if (!diff.reason) {
+                                Object.assign(result, diff);
+                                result.kind = 'text';
+                            }
+                        }
+                    }
+                }
+            }
+            const left = await fingerprint(leftFile, isCancelled);
+            comparisonCheck(isCancelled);
+            onProgress({ stage: 'hash', done: 1, total: rightFile ? 2 : 1 });
+            const right = result.equal ? { ...left } : await fingerprint(rightFile, isCancelled);
+            comparisonCheck(isCancelled);
+            onProgress({ stage: 'hash', done: rightFile ? 2 : 1, total: rightFile ? 2 : 1 });
+            comparisonCheck(isCancelled);
+            result.hashes = { left, right };
+            return result;
+        };
+        return Object.freeze({ analyze });
+    })();
+
     const StateStore = (() => {
         const createDefault = () => ({
             schemaVersion: STATE_VERSION,
@@ -2610,6 +2794,7 @@
         RunLogStore,
         StateStore,
         SyncPlanner,
+        VersionComparison,
         VersionStore,
         connectStoredProfile: (profileId, requestPermission) => Controller.connectStoredProfile(profileId, { requestPermission }),
         executeCurrentPlan: () => Controller.sync(),
