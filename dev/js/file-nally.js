@@ -143,6 +143,8 @@
 
     const VersionStore = (() => {
         const preparedRestores = new WeakMap();
+        const cleanupPreparations = new WeakMap();
+        const recoveryPreparations = new WeakMap();
         let versionWriting = false;
         const emptyIndex = () => ({ schemaVersion: VERSION_INDEX_SCHEMA, versions: [] });
         const hasKeys = (value, keys) => Object.keys(value).length === keys.length
@@ -779,6 +781,252 @@
             return { record, handle, file };
         };
         const read = async (root, record) => (await readVersion(root, record)).file;
+        const freezeRecords = (records) => Object.freeze(records.map(record => Object.freeze({ ...record })));
+        const takePreparation = (map, prepared) => {
+            const state = map.get(prepared);
+            if (!state) throw new Error('Invalid or consumed version preparation');
+            map.delete(prepared);
+            return state;
+        };
+        const cleanupCheck = (isCancelled) => () => {
+            let cancelled;
+            try { cancelled = isCancelled(); }
+            catch (error) {
+                const failure = new Error(safeMessage(error));
+                failure.code = 'VERSION_CLEANUP_CALLBACK';
+                throw failure;
+            }
+            if (cancelled) {
+                const error = new Error('Version cleanup stopped');
+                error.code = 'VERSION_CLEANUP_CANCELLED';
+                throw error;
+            }
+        };
+        const requireCleanupIndex = (snapshot) => {
+            if (!snapshot.indexHandle) throw new Error('Version index is missing');
+            for (const record of snapshot.index.versions) {
+                if (!/^[a-z0-9-]+$/.test(record.id)) throw new Error('Unsafe cleanup capture ID');
+                if (!Number.isSafeInteger(record.size) || record.size < 0) throw new Error('Invalid version size');
+            }
+        };
+        const pinCleanupFile = async (snapshot, record, check, allowMissing = false) => {
+            const parts = ['versions', record.id, ...originalSegments(record.originalPath)];
+            const name = parts.pop();
+            const parents = [snapshot.versionRoot];
+            let directory = snapshot.versionRoot;
+            await sameSnapshotHandle(directory, directory, true, check);
+            for (const part of parts) {
+                check();
+                try { directory = await directory.getDirectoryHandle(part); }
+                catch (error) {
+                    check();
+                    if (allowMissing && error?.name === 'NotFoundError') return { record, parents, handle: null, file: null };
+                    throw error;
+                }
+                check();
+                if (directory.name !== part) throw new Error('Cleanup directory name changed');
+                await sameSnapshotHandle(directory, directory, true, check);
+                parents.push(directory);
+            }
+            let handle;
+            check();
+            try { handle = await directory.getFileHandle(name); }
+            catch (error) {
+                check();
+                if (allowMissing && error?.name === 'NotFoundError') return { record, parents, handle: null, file: null };
+                throw error;
+            }
+            check();
+            if (handle.kind !== 'file' || handle.name !== name) throw new Error('Cleanup file changed');
+            await sameSnapshotHandle(handle, handle, true, check);
+            const file = await handle.getFile();
+            check();
+            if (!Number.isSafeInteger(file.size) || file.size < 0 || file.size !== record.size) {
+                throw new Error('Stored version size changed');
+            }
+            return { record, parents, handle, file };
+        };
+        const validateCleanupFile = async (snapshot, pinned, check, compareBytes) => {
+            const record = selectedRecord(snapshot.index.versions, pinned.record);
+            const fresh = await pinCleanupFile(snapshot, record, check, !pinned.handle);
+            if (pinned.parents.length !== fresh.parents.length) throw new Error('Cleanup path presence changed');
+            for (let i = 0; i < pinned.parents.length; i += 1) {
+                await sameSnapshotHandle(pinned.parents[i], fresh.parents[i], true, check);
+            }
+            await sameSnapshotHandle(pinned.handle, fresh.handle, true, check);
+            if (pinned.file && (pinned.file.size !== fresh.file.size
+                || pinned.file.lastModified !== fresh.file.lastModified)) throw new Error('Cleanup file metadata changed');
+            // Native identity compares locators; it is not an inode-history guarantee.
+            if (compareBytes && pinned.file && !await equalFileBytes(pinned.file, fresh.file,
+                () => {}, () => { check(); return false; })) throw new Error('Cleanup file bytes changed');
+            check();
+            return fresh;
+        };
+        const prepareCleanup = async (root, records, { isCancelled = () => false } = {}) => {
+            const check = cleanupCheck(isCancelled);
+            check();
+            if (!Array.isArray(records) || !records.length || records.length > 100
+                || new Set(records.map(record => record?.id)).size !== records.length) {
+                throw new Error('Select 1 to 100 distinct versions');
+            }
+            const snapshot = await readIndexSnapshot(root, check);
+            requireIdleIndex(snapshot.index);
+            requireCleanupIndex(snapshot);
+            await validateIndexSnapshot(snapshot, check, true);
+            const selected = records.map(record => selectedRecord(snapshot.index.versions, record))
+                .sort((a, b) => Date.parse(a.capturedAt) - Date.parse(b.capturedAt)
+                    || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+            const pinned = [];
+            for (const record of selected) pinned.push(await pinCleanupFile(snapshot, record, check));
+            const selectedIds = new Set(selected.map(record => record.id));
+            const witnesses = new Map(), lastPaths = [];
+            for (const path of new Set(selected.map(record => record.originalPath))) {
+                for (const record of snapshot.index.versions) {
+                    if (record.originalPath !== path || selectedIds.has(record.id)) continue;
+                    try {
+                        witnesses.set(path, await pinCleanupFile(snapshot, record, check));
+                        break;
+                    } catch (error) {
+                        check();
+                        if (['VERSION_CLEANUP_CANCELLED', 'VERSION_CLEANUP_CALLBACK'].includes(error?.code)) throw error;
+                        // An unreadable retained file cannot exempt the last-copy warning.
+                    }
+                }
+                if (!witnesses.has(path)) lastPaths.push(path);
+            }
+            await validateIndexSnapshot(snapshot, check, true);
+            const prepared = Object.freeze({ summary: Object.freeze({ records: freezeRecords(selected),
+                count: selected.length, bytes: selected.reduce((sum, record) => sum + BigInt(record.size), 0n).toString(),
+                lastPaths: Object.freeze(lastPaths), upgradesIndex: snapshot.index.schemaVersion === 1 }) });
+            cleanupPreparations.set(prepared, { snapshot, pinned, witnesses, lastPaths });
+            return prepared;
+        };
+        const nextCleanupIndex = (index, record) => {
+            const remainingIds = index.cleanup.remainingIds.filter(id => id !== record.id);
+            return { schemaVersion: 2,
+                versions: index.versions.filter(value => value.id !== record.id),
+                cleanup: remainingIds.length ? { ...index.cleanup, remainingIds,
+                    completedCount: index.cleanup.completedCount + 1,
+                    completedBytes: (BigInt(index.cleanup.completedBytes) + BigInt(record.size)).toString(),
+                } : null };
+        };
+        const writeCleanupIndex = async (snapshot, nextIndex) => {
+            await validateIndexSnapshot(snapshot, () => {}, true);
+            const fresh = await writeIndexSnapshot(snapshot, nextIndex);
+            await sameSnapshotHandle(snapshot.root, fresh.root, true, () => {});
+            await sameSnapshotHandle(snapshot.versionRoot, fresh.versionRoot, true, () => {});
+            await sameSnapshotHandle(snapshot.indexHandle, fresh.indexHandle, true, () => {});
+            await validateIndexSnapshot(fresh, () => {}, true);
+            return fresh;
+        };
+        const cleanup = (prepared, { acknowledgeLastVersions = false, isCancelled = () => false,
+            onProgress = () => {} } = {}) => withVersionWriter(async () => {
+            const state = takePreparation(cleanupPreparations, prepared);
+            const { pinned, witnesses, lastPaths } = state;
+            let snapshot = state.snapshot, operationId = null, intentAttempted = false, failedId = null;
+            const completedIds = [];
+            let completedBytes = 0n;
+            const check = cleanupCheck(isCancelled);
+            const result = (status, error = null) => Object.freeze({ operationId, status,
+                completedIds: Object.freeze([...completedIds]), completedBytes: completedBytes.toString(),
+                remainingIds: Object.freeze(pinned.map(value => value.record.id).filter(id => !completedIds.includes(id))),
+                failedId, recoveryRequired: intentAttempted && completedIds.length < pinned.length, error });
+            try {
+                check();
+                if (await snapshot.root.queryPermission({ mode: 'readwrite' }) !== 'granted') {
+                    throw new Error('Cleanup write permission is not granted');
+                }
+                check();
+                if (lastPaths.length && acknowledgeLastVersions !== true) throw new Error('Confirm removal of last stored versions');
+                await validateIndexSnapshot(snapshot, check, true);
+                for (const value of pinned) await validateCleanupFile(snapshot, value, check, true);
+                for (const value of witnesses.values()) await validateCleanupFile(snapshot, value, check, false);
+                check();
+                operationId = uid();
+                const intent = { schemaVersion: 2, versions: snapshot.index.versions,
+                    cleanup: { id: operationId, startedAt: nowIso(), remainingIds: pinned.map(value => value.record.id),
+                        completedCount: 0, completedBytes: '0' } };
+                parseIndexText(JSON.stringify(intent));
+                check();
+                intentAttempted = true;
+                snapshot = await writeCleanupIndex(snapshot, intent);
+                for (const value of pinned) {
+                    check();
+                    failedId = value.record.id;
+                    await validateIndexSnapshot(snapshot, check, true);
+                    if (snapshot.index.cleanup?.id !== operationId
+                        || !snapshot.index.cleanup.remainingIds.includes(failedId)) throw new Error('Cleanup ownership changed');
+                    const fresh = await validateCleanupFile(snapshot, value, check, true);
+                    const witness = witnesses.get(value.record.originalPath);
+                    if (witness) await validateCleanupFile(snapshot, witness, check, false);
+                    check();
+                    // One commit unit: do not call UI cancellation/progress until index readback finishes.
+                    const parent = fresh.parents.at(-1), name = fresh.handle.name;
+                    await parent.removeEntry(name);
+                    try {
+                        await parent.getFileHandle(name);
+                        throw new Error('Cleanup removal was not verified');
+                    } catch (error) {
+                        if (error?.name !== 'NotFoundError') throw error;
+                    }
+                    const absent = await pinCleanupFile(snapshot, value.record, () => {}, true);
+                    if (absent.handle || absent.parents.length !== fresh.parents.length) {
+                        throw new Error('Cleanup path changed during removal');
+                    }
+                    for (let i = 0; i < fresh.parents.length; i += 1) {
+                        await sameSnapshotHandle(fresh.parents[i], absent.parents[i], true, () => {});
+                    }
+                    await validateIndexSnapshot(snapshot, () => {}, true);
+                    snapshot = await writeCleanupIndex(snapshot, nextCleanupIndex(snapshot.index, value.record));
+                    completedIds.push(value.record.id);
+                    completedBytes += BigInt(value.record.size);
+                    failedId = null;
+                    await onProgress(Object.freeze({ operationId,
+                        completedIds: Object.freeze([...completedIds]), completedBytes: completedBytes.toString(),
+                        remainingIds: Object.freeze([...snapshot.index.cleanup?.remainingIds || []]) }));
+                }
+                return result('complete');
+            } catch (error) {
+                if (error?.code === 'VERSION_CLEANUP_CANCELLED') return result('stopped');
+                const failure = new Error(safeMessage(error));
+                failure.cleanupResult = result('failed', safeMessage(error));
+                throw failure;
+            }
+        });
+        const prepareCleanupRecovery = async (root, { isCancelled = () => false } = {}) => {
+            const check = cleanupCheck(isCancelled);
+            const snapshot = await readIndexSnapshot(root, check);
+            requireCleanupIndex(snapshot);
+            if (!snapshot.index.cleanup) throw new Error('No version cleanup requires recovery');
+            await validateIndexSnapshot(snapshot, check, true);
+            const pinned = [];
+            const byId = new Map(snapshot.index.versions.map(record => [record.id, record]));
+            for (const id of snapshot.index.cleanup.remainingIds) {
+                pinned.push(await pinCleanupFile(snapshot, byId.get(id), check, true));
+            }
+            await validateIndexSnapshot(snapshot, check, true);
+            const intent = snapshot.index.cleanup;
+            const prepared = Object.freeze({ summary: Object.freeze({ operationId: intent.id,
+                missingRecords: freezeRecords(pinned.filter(value => !value.handle).map(value => value.record)),
+                preservedRecords: freezeRecords(pinned.filter(value => value.handle).map(value => value.record)),
+                completedCount: intent.completedCount, completedBytes: intent.completedBytes }) });
+            recoveryPreparations.set(prepared, { snapshot, pinned });
+            return prepared;
+        };
+        const recoverCleanup = (prepared) => withVersionWriter(async () => {
+            const { snapshot, pinned } = takePreparation(recoveryPreparations, prepared);
+            if (await snapshot.root.queryPermission({ mode: 'readwrite' }) !== 'granted') {
+                throw new Error('Cleanup recovery write permission is not granted');
+            }
+            await validateIndexSnapshot(snapshot, () => {}, true);
+            for (const value of pinned) await validateCleanupFile(snapshot, value, () => {}, false);
+            const missingIds = new Set(pinned.filter(value => !value.handle).map(value => value.record.id));
+            await writeCleanupIndex(snapshot, { schemaVersion: 2,
+                versions: snapshot.index.versions.filter(record => !missingIds.has(record.id)), cleanup: null });
+            return Object.freeze({ operationId: snapshot.index.cleanup.id,
+                removedIds: Object.freeze([...missingIds]),
+                preservedIds: Object.freeze(pinned.filter(value => value.handle).map(value => value.record.id)) });
+        });
         const prepareRestore = async (root, record) => {
             const version = await readVersion(root, record);
             const currentHandle = await getExistingFile(root, version.record.originalPath);
@@ -881,7 +1129,8 @@
         };
         const restore = (prepared, options) => withVersionWriter(() => restoreOwned(prepared, options));
         return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText, inspectUsage, list, read, prepareRestore, restore,
-            comparisonChoices, prepareComparison, validateComparison });
+            comparisonChoices, prepareComparison, validateComparison, prepareCleanup, cleanup,
+            prepareCleanupRecovery, recoverCleanup });
     })();
 
     const VersionComparison = (() => {
