@@ -27,7 +27,7 @@
             usageRegistered: '등록: {count}개 · {bytes} B · {pathCount}개 경로', usageUnknown: '등록 용량 알 수 없음', usageTotal: '두 폴더 등록 합계: {count}개 · {bytes} B', usagePath: '{path} · {count}개 · {bytes} B',
             usageInspect: '실제 파일 검사', usageObserved: '관찰한 실제 파일 (논리 바이트)', usageCounts: '{label}: {count}개 · {bytes} B', usageAll: '전체 파일', usageSaved: '등록 파일', usageOrphan: '미등록 버전 파일', usageOther: '기타 파일', usageIndex: '인덱스', usageUnknownFiles: '확인 불가 {count}개', usageMissing: '누락 {missing}개 · 크기 불일치 {mismatched}개', usageErrors: '오류 {count}개 (상세 최대 100개)',
             usageReadAt: '읽은 시각: {time}', usageNotRun: '실제 파일 미검사', usageComplete: '검사 완료', usagePartial: '부분 검사 · 전체 용량이 아닙니다', usageStale: '검사 중 변경됨 · 오래된 결과', usageCancelled: '검사 중지 · 부분 결과', usageProgress: '검사 중: {count}개 엔트리', usageStop: '검사 중지',
-            cleanupSelection: '선택 {count}/100개 · {bytes} B · {root}', cleanupOneRoot: '한 번에 한 폴더만 선택할 수 있습니다. 선택을 해제하여 폴더를 바꾸세요.', cleanupLimit: '최대 100개입니다. 추가 선택을 거부했습니다.', cleanupSelect: '정리 선택',
+            cleanupSelection: '선택 {count}/100개 · {bytes} B · {root}', cleanupOneRoot: '한 번에 한 폴더만 선택할 수 있습니다. 선택을 해제하여 폴더를 바꾸세요.', cleanupLimit: '최대 100개입니다. 추가 선택을 거부했습니다.', cleanupSelect: '정리 선택', cleanupUnavailable: '기록된 크기가 올바르지 않아 정리에 사용할 수 없습니다.',
             cleanupTitle: '버전 영구 삭제 확인', cleanupDescription: '선택한 보관 버전을 영구 삭제합니다. 중요한 버전은 먼저 별도로 백업하세요. 현재 원본·미선택 버전·미등록 파일은 보존합니다. 논리 바이트는 실제 확보 공간을 보장하지 않습니다.',
             cleanupUpgrade: '확인하면 인덱스가 v2로 업그레이드됩니다. v0.14는 이 인덱스를 읽지 못하며, 거부 전에 미등록 캡처 파일을 남길 수 있습니다. 최신 버전만 사용하세요.',
             cleanupLast: '유효한 잔여 복사본을 확인하지 못한 경로 (누락·불일치 복사본은 보존 증거가 아닙니다):', cleanupLastAcknowledged: '표시된 경로의 마지막 유효 버전을 영구 삭제하는 데 동의합니다.', cleanupConfirm: '영구 삭제', cleanupWriting: '정리 중입니다. 현재 항목이 끝날 때까지 기다려 주세요.', cleanupStop: '현재 항목 후 중지', cleanupStopping: '현재 항목을 마친 뒤 중지합니다.', cleanupProgress: '작업 {id} · 완료 {count}개 · {bytes} B (논리 바이트)', cleanupComplete: '정리 완료', cleanupStopped: '정리 중지', cleanupFailed: '정리 실패', cleanupResult: '{status} · 작업 {id} · {root}\n확인된 완료 {count}개 · {bytes} B (논리 바이트)\n실패 ID: {failed}\n복구 필요: {recovery}', cleanupRetryCompare: '동기화 전에 변경사항을 다시 비교하세요.',
@@ -57,7 +57,7 @@
             usageRegistered: 'Registered: {count} · {bytes} B · {pathCount} paths', usageUnknown: 'Registered usage unknown', usageTotal: 'Both folders registered total: {count} · {bytes} B', usagePath: '{path} · {count} · {bytes} B',
             usageInspect: 'Inspect physical files', usageObserved: 'Observed physical files (logical bytes)', usageCounts: '{label}: {count} · {bytes} B', usageAll: 'All files', usageSaved: 'Registered files', usageOrphan: 'Unregistered version files', usageOther: 'Other files', usageIndex: 'Index', usageUnknownFiles: '{count} unknown files', usageMissing: '{missing} missing · {mismatched} size mismatches', usageErrors: '{count} errors (at most 100 details)',
             usageReadAt: 'Read at: {time}', usageNotRun: 'Physical files not inspected', usageComplete: 'Inspection complete', usagePartial: 'Partial inspection · not a total', usageStale: 'Changed during inspection · stale result', usageCancelled: 'Inspection cancelled · partial result', usageProgress: 'Inspecting: {count} entries', usageStop: 'Stop inspection',
-            cleanupSelection: 'Selected {count}/100 · {bytes} B · {root}', cleanupOneRoot: 'Select one folder per operation. Clear the selection to change folders.', cleanupLimit: 'Maximum 100 versions. Additional selection refused.', cleanupSelect: 'Select for cleanup',
+            cleanupSelection: 'Selected {count}/100 · {bytes} B · {root}', cleanupOneRoot: 'Select one folder per operation. Clear the selection to change folders.', cleanupLimit: 'Maximum 100 versions. Additional selection refused.', cleanupSelect: 'Select for cleanup', cleanupUnavailable: 'Unavailable for cleanup because the recorded size is invalid.',
             cleanupTitle: 'Confirm permanent version deletion', cleanupDescription: 'Permanently delete the selected saved versions. Back up important versions separately first. Current originals, unselected versions and unregistered files are preserved. Logical bytes do not guarantee reclaimed disk space.',
             cleanupUpgrade: 'Confirmation upgrades the index to v2. v0.14 cannot read this index and may leave an unregistered capture file before rejecting it. Use the current version only.',
             cleanupLast: 'Paths with no verified retained copy (missing or mismatched copies do not prove preservation):', cleanupLastAcknowledged: 'I acknowledge permanent deletion of the last valid versions for the listed paths.', cleanupConfirm: 'Delete permanently', cleanupWriting: 'Cleaning up. Please wait for the current item to finish.', cleanupStop: 'Stop after current item', cleanupStopping: 'Stopping after the current item finishes.', cleanupProgress: 'Operation {id} · completed {count} · {bytes} B (logical bytes)', cleanupComplete: 'Cleanup complete', cleanupStopped: 'Cleanup stopped', cleanupFailed: 'Cleanup failed', cleanupResult: '{status} · operation {id} · {root}\nConfirmed completed {count} · {bytes} B (logical bytes)\nFailed ID: {failed}\nRecovery required: {recovery}', cleanupRetryCompare: 'Compare changes again before synchronizing.',
@@ -2645,6 +2645,7 @@
         const maintenanceCurrent = (owner, child) => current(owner) && owner.maintenance === child;
         const hasVersionChild = owner => Boolean(owner.comparison || owner.maintenance || restoreDialog.open);
         const clearCleanupSelection = owner => { owner.cleanupSelection.side = null; owner.cleanupSelection.records.clear(); };
+        const cleanupEligible = record => Number.isSafeInteger(record.size) && record.size >= 0;
         const rootLabel = (owner, side) => `${t(side === 'source' ? 'sourceTitle' : 'targetTitle')} · ${owner.names[side]}`;
         const directionLabel = (owner) => t(owner.direction === 'unidirectional' ? 'directionOne' : owner.direction === 'reverse' ? 'directionReverse' : 'directionBoth');
         const node = (tag, text, className) => {
@@ -2666,17 +2667,19 @@
             $('#btnCancelRestore').disabled = owner.writing;
             dialog.querySelectorAll('[data-version-action]').forEach(button => { button.disabled = busy || childOpen; });
             const selected = owner.cleanupSelection;
+            const visibleRows = owner.rows.slice(owner.page * 100, (owner.page + 1) * 100);
             $('#versionCleanupSelection').textContent = [t('cleanupSelection', { count: selected.records.size,
                 bytes: [...selected.records.values()].reduce((sum, record) => sum + BigInt(record.size), 0n).toString(),
                 root: selected.side ? rootLabel(owner, selected.side) : '—' }), selected.side ? t('cleanupOneRoot') : '', owner.selectionMessage].filter(Boolean).join('\n');
             $('#btnPrepareCleanup').disabled = busy || childOpen || !selected.records.size;
-            $('#btnSelectVersionPage').disabled = busy || childOpen || !owner.rows.length;
+            $('#btnSelectVersionPage').disabled = busy || childOpen || !visibleRows.some(row => cleanupEligible(row.record) && (!selected.side || selected.side === row.side));
             $('#btnClearVersionSelection').disabled = busy || childOpen || !selected.records.size;
             dialog.querySelectorAll('[data-cleanup-id]').forEach(input => {
+                const eligible = input.dataset.cleanupEligible === 'true';
                 const other = selected.side && selected.side !== input.dataset.cleanupSide;
                 input.checked = selected.side === input.dataset.cleanupSide && selected.records.has(input.dataset.cleanupId);
-                input.disabled = busy || childOpen || Boolean(other);
-                input.title = other ? t('cleanupOneRoot') : '';
+                input.disabled = busy || childOpen || Boolean(other) || !eligible;
+                input.title = !eligible ? t('cleanupUnavailable') : other ? t('cleanupOneRoot') : '';
                 input.setAttribute('aria-describedby', 'versionCleanupSelection');
             });
             dialog.querySelectorAll('[data-inspect-side], [data-recover-side], [data-usage-page-side]').forEach(button => {
@@ -2702,7 +2705,8 @@
                 const actions = node('td', ''); actions.dataset.label = t('actionHead');
                 const checkbox = document.createElement('input'); checkbox.type = 'checkbox';
                 checkbox.dataset.cleanupId = row.record.id; checkbox.dataset.cleanupSide = row.side;
-                checkbox.setAttribute('aria-label', `${t('cleanupSelect')} · ${rootLabel(owner, row.side)} · ${row.record.originalPath} · ${new Date(row.record.capturedAt).toLocaleString(language())} · ${row.record.id}`);
+                checkbox.dataset.cleanupEligible = String(cleanupEligible(row.record));
+                checkbox.setAttribute('aria-label', `${t('cleanupSelect')} · ${rootLabel(owner, row.side)} · ${row.record.originalPath} · ${new Date(row.record.capturedAt).toLocaleString(language())} · ${row.record.id}${cleanupEligible(row.record) ? '' : ` · ${t('cleanupUnavailable')}`}`);
                 checkbox.addEventListener('change', () => changeCleanupSelection(owner, row, checkbox.checked));
                 actions.append(checkbox);
                 const buttons = node('div', '', 'version-row-actions');
@@ -2816,7 +2820,8 @@
             const selected = owner.cleanupSelection;
             owner.selectionMessage = '';
             if (checked) {
-                if (selected.side && selected.side !== row.side) owner.selectionMessage = t('cleanupOneRoot');
+                if (!cleanupEligible(row.record)) owner.selectionMessage = t('cleanupUnavailable');
+                else if (selected.side && selected.side !== row.side) owner.selectionMessage = t('cleanupOneRoot');
                 else if (!selected.records.has(row.record.id) && selected.records.size >= 100) owner.selectionMessage = t('cleanupLimit');
                 else { selected.side = row.side; selected.records.set(row.record.id, row.record); }
             } else if (selected.side === row.side) {
@@ -3265,7 +3270,7 @@
         $('#btnVersionRefresh').addEventListener('click', () => refresh());
         $('#btnVersionPrevious').addEventListener('click', () => { if (session && current(session) && !session.reading && !session.writing && !hasVersionChild(session) && session.page > 0) { session.page--; render(); } });
         $('#btnVersionNext').addEventListener('click', () => { if (session && current(session) && !session.reading && !session.writing && !hasVersionChild(session) && (session.page + 1) * 100 < session.rows.length) { session.page++; render(); } });
-        $('#btnPrepareCleanup').addEventListener('click', event => { if (session) prepareMaintenance(session, 'cleanup', session.cleanupSelection.side, event.currentTarget); });
+        $('#btnPrepareCleanup').addEventListener('click', event => session && prepareMaintenance(session, 'cleanup', session.cleanupSelection.side, event.currentTarget));
         $('#btnClearVersionSelection').addEventListener('click', () => {
             if (!session || !current(session) || session.reading || session.writing || hasVersionChild(session)) return;
             clearCleanupSelection(session); session.selectionMessage = ''; controls();
@@ -3274,8 +3279,8 @@
             const owner = session;
             if (!owner || !current(owner) || owner.reading || owner.writing || hasVersionChild(owner)) return;
             const visible = owner.rows.slice(owner.page * 100, (owner.page + 1) * 100);
-            const side = owner.cleanupSelection.side || visible[0]?.side;
-            for (const row of visible) if (row.side === side) changeCleanupSelection(owner, row, true);
+            const side = owner.cleanupSelection.side || visible.find(row => cleanupEligible(row.record))?.side;
+            for (const row of visible) if (row.side === side && cleanupEligible(row.record)) changeCleanupSelection(owner, row, true);
         });
         $('#cleanupLastAcknowledged').addEventListener('change', () => { if (session?.maintenance) maintenanceControls(session, session.maintenance); });
         $('#btnCancelCleanup').addEventListener('click', () => closeMaintenance());

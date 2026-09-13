@@ -131,6 +131,32 @@ async function mountCleanup(page, fixtures, {
   }, { fixtures, owner, schemaVersion, cleanup });
 }
 
+async function captureVersionAsyncClickCompletions(page) {
+  await page.addInitScript(() => {
+    window.__versionAsyncClickCompletions = [];
+    const addEventListener = EventTarget.prototype.addEventListener;
+    EventTarget.prototype.addEventListener = function (type, listener, options) {
+      const tracked = type === 'click' && typeof listener === 'function'
+        && (this.id === 'btnPrepareCleanup' || this.dataset?.inspectSide);
+      if (!tracked) return addEventListener.call(this, type, listener, options);
+      return addEventListener.call(this, type, function (...args) {
+        const result = listener.apply(this, args);
+        if (result && typeof result.then === 'function') {
+          const completion = { target: this.id || `inspect:${this.dataset.inspectSide}`, done: false, status: 'pending' };
+          window.__versionAsyncClickCompletions.push(completion);
+          Promise.resolve(result).then(
+            () => Object.assign(completion, { done: true, status: 'fulfilled' }),
+            () => Object.assign(completion, { done: true, status: 'rejected' }),
+          );
+        }
+        return result;
+      }, options);
+    };
+  });
+  await page.reload();
+  await page.waitForFunction(() => Boolean(window.FileNallyTest));
+}
+
 async function inspectVersionUsage(page, side = 'target', options = {}) {
   return page.evaluate(({ side, options }) => window.FileNallyTest.VersionStore
     .inspectUsage(window.__mockPair[side], options), { side, options });
@@ -1144,6 +1170,46 @@ async function main() {
     assert.equal(await page.locator('[data-usage-side="target"] .version-usage-paths li').count(), 100);
   });
 
+  for (const [name, size] of [['fractional', 0.5], ['unsafe integer', Number.MAX_SAFE_INTEGER + 1]]) {
+    add(`version storage UI ${name} legacy sizes stay listable without poisoning cleanup or healthy row actions`, async ({ page }) => {
+      const invalid = cleanupFixture('saved-1');
+      invalid.record.size = size;
+      await mountCleanup(page, [invalid, cleanupFixture('saved-2')]);
+      await page.locator('#btnVersions').click();
+      await page.waitForFunction(() => document.querySelectorAll('#versionBody tr').length === 2);
+      assert.match(await page.locator('#versionBody').innerText(), new RegExp(`${size} B`));
+
+      const invalidCheckbox = page.locator('[data-cleanup-id="saved-1"]');
+      await invalidCheckbox.evaluate(input => {
+        input.checked = true;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      await page.evaluate(() => Promise.resolve());
+      assert.deepEqual(await page.evaluate(() => window.__testUnhandledErrors), []);
+      assert.equal(await invalidCheckbox.isChecked(), false);
+      assert.equal(await invalidCheckbox.isDisabled(), true);
+      assert.match(await invalidCheckbox.getAttribute('aria-label'), /unavailable|사용할 수 없|정리.*불가/i);
+      assert.match(await page.locator('#versionCleanupSelection').innerText(), /0\/100.*0 B/);
+      await page.locator('#btnPrepareCleanup').dispatchEvent('click');
+      assert.equal(await page.locator('#cleanupDialog').isVisible(), false);
+
+      await page.locator('#btnSelectVersionPage').click();
+      assert.equal(await invalidCheckbox.isChecked(), false);
+      assert.equal(await page.locator('[data-cleanup-id="saved-2"]').isChecked(), true);
+      assert.match(await page.locator('#versionCleanupSelection').innerText(), /1\/100.*3 B/);
+      await page.locator('#btnClearVersionSelection').click();
+
+      await page.locator('[data-cleanup-id="saved-2"] + .version-row-actions [data-version-action="compare"]').click();
+      await page.locator('#comparisonDialog').waitFor({ state: 'visible' });
+      await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+      await page.locator('#btnCloseComparison').click();
+      assert.equal(await page.locator('#btnVersionRefresh').isEnabled(), true);
+      assert.equal(await page.locator('[data-version-action]').first().isEnabled(), true);
+      await page.locator('#btnCloseVersions').click();
+      await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+    });
+  }
+
   for (const lang of ['ko', 'en']) {
     add(`version storage UI ${lang} unknown summary and last valid version acknowledgment are explicit`, async ({ page }) => {
       await page.locator(lang === 'ko' ? '#btnLangKo' : '#btnLangEn').click();
@@ -1176,6 +1242,7 @@ async function main() {
 
   for (const mode of ['preparation', 'inspection']) {
     add(`version storage UI late ${mode} cannot alter replacement child locks or results`, async ({ page }) => {
+      await captureVersionAsyncClickCompletions(page);
       await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
       await compare(page);
       await installComparisonMutationSpies(page);
@@ -1203,7 +1270,8 @@ async function main() {
       await page.locator('#btnPrepareCleanup').click();
       await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
       await page.evaluate(() => window.__releaseOldRead());
-      await page.waitForTimeout(30);
+      await page.waitForFunction(() => window.__versionAsyncClickCompletions[0]?.done);
+      assert.equal(await page.evaluate(() => window.__versionAsyncClickCompletions[0].status), 'fulfilled');
       assert.equal(await page.locator('#btnConfirmCleanup').isEnabled(), true);
       assert.match(await page.locator('#cleanupRecords').innerText(), /saved-2/);
       assert.doesNotMatch(await page.locator('#cleanupRecords').innerText(), /saved-1/);
@@ -1420,6 +1488,7 @@ async function main() {
   });
 
   add('version storage UI replacement physical roots discard late old inspection', async ({ page }) => {
+    await captureVersionAsyncClickCompletions(page);
     await mountCleanup(page, [cleanupFixture('saved-1')]);
     await page.locator('#btnVersions').click();
     await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
@@ -1435,7 +1504,8 @@ async function main() {
     await page.locator('#btnVersions').click();
     await page.locator('[data-cleanup-id="replacement-1"]').waitFor();
     await page.evaluate(() => window.__releaseOldRoot());
-    await page.waitForTimeout(30);
+    await page.waitForFunction(() => window.__versionAsyncClickCompletions[0]?.done);
+    assert.equal(await page.evaluate(() => window.__versionAsyncClickCompletions[0].status), 'fulfilled');
     assert.match(await page.locator('[data-usage-side="target"]').innerText(), /1.*8 B/);
     assert.doesNotMatch(await page.locator('#versionBody').innerText(), /saved-1/);
     assert.equal(await page.locator('#btnVersionRefresh').isEnabled(), true);
