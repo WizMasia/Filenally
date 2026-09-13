@@ -1237,6 +1237,73 @@ async function main() {
     assert.equal(result.checkpoint.total, 3);
   });
 
+  add('legacy run entries normalize missing version fields', async ({ page }) => {
+    const normalized = await page.evaluate(async () => {
+      const run = {
+        id: 'legacy-run', entries: [{
+          sequence: 1, action: 'copy', path: 'a.txt', status: 'success',
+        }],
+      };
+      await window.FileNallyTest.RunLogStore.put(run);
+      return window.FileNallyTest.RunLogStore.get('legacy-run');
+    });
+    assert.equal(normalized.entries[0].versionId, '');
+    assert.equal(normalized.entries[0].versionPath, '');
+  });
+
+  add('versioned overwrite exports raw version fields to JSON and CSV', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    await mountPair(page, {
+      source: { 'report.txt': { content: 'new', lastModified: 200 } },
+      target: { 'report.txt': { content: 'old', lastModified: 100 } },
+    });
+    await compare(page);
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    const index = JSON.parse(snapshot.target['.filenally']['index.json'].content);
+    await page.locator('.history-detail-button').first().click();
+
+    const jsonPromise = page.waitForEvent('download');
+    await page.locator('#btnDownloadRunJson').click();
+    const json = JSON.parse(await downloadText(await jsonPromise));
+    assert.equal(json.entries[0].versionId, index.versions[0].id);
+    assert.equal(json.entries[0].versionPath, index.versions[0].storedPath);
+
+    const csvPromise = page.waitForEvent('download');
+    await page.locator('#btnDownloadRunCsv').click();
+    const csv = await downloadText(await csvPromise);
+    assert.match(csv, /versionId,versionPath/);
+    assert.match(csv, new RegExp(index.versions[0].id));
+    assert.match(csv, /versions\//);
+  });
+
+  add('failed version capture detail retains the captured version reference', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    await mountPair(page, {
+      source: { 'report.txt': { content: 'new', lastModified: 200 } },
+      target: { 'report.txt': { content: 'old', lastModified: 100 } },
+    });
+    await compare(page);
+    await page.evaluate(() => window.__setMockFailure({
+      operation: 'write', name: 'report.txt', occurrence: 2,
+    }));
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    const version = JSON.parse(snapshot.target['.filenally']['index.json'].content).versions[0];
+    await page.locator('.history-detail-button').first().click();
+    assert.match(await page.locator('.run-detail-table thead').innerText(), /버전 ID/);
+    assert.match(await page.locator('.run-detail-table thead').innerText(), /버전 경로/);
+    assert.match(await page.locator('#runDetailBody').innerText(), new RegExp(version.id));
+    assert.match(await page.locator('#runDetailBody').innerText(), /\.filenally\/versions\//);
+    await page.locator('#btnCloseRunDetail').click();
+    await page.locator('#btnLangEn').click();
+    await page.locator('.history-detail-button').first().click();
+    assert.match(await page.locator('.run-detail-table thead').innerText(), /Version ID/);
+    assert.match(await page.locator('.run-detail-table thead').innerText(), /Version path/);
+    assert.match(await page.locator('#runDetailBody').innerText(), new RegExp(version.id));
+    assert.match(await page.locator('#runDetailBody').innerText(), /\.filenally\/versions\//);
+  });
+
   add('verified deletion moves the remaining file into versioned trash', async ({ page }) => {
     await mountPair(page, {
       source: { 'nested': { type: 'directory', entries: { 'gone.txt': { content: 'keepable', lastModified: 100 } } } },
