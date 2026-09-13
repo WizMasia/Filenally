@@ -116,6 +116,78 @@ async function mountVersion(page, options = {}) {
   return fixture;
 }
 
+async function comparisonState(page) {
+  return page.evaluate(() => ({
+    storage: Object.fromEntries(Object.keys(localStorage).sort().map((key) => [key, localStorage.getItem(key)])),
+    plan: window.FileNallyTest.getModel().plan,
+    sourceRows: document.querySelector('#srcFileBody').innerHTML,
+    targetRows: document.querySelector('#tgtFileBody').innerHTML,
+    permissionCalls: window.__getPermissionCalls(),
+  }));
+}
+
+async function installComparisonMutationSpies(page) {
+  await page.evaluate(() => {
+    window.__comparisonMutationAttempts = [];
+    const visit = (directory) => {
+      const getDirectoryHandle = directory.getDirectoryHandle.bind(directory);
+      directory.getDirectoryHandle = async (name, options = {}) => {
+        if (options.create) window.__comparisonMutationAttempts.push(`getDirectoryHandle:${name}`);
+        return getDirectoryHandle(name, options);
+      };
+      const getFileHandle = directory.getFileHandle.bind(directory);
+      directory.getFileHandle = async (name, options = {}) => {
+        if (options.create) window.__comparisonMutationAttempts.push(`getFileHandle:${name}`);
+        return getFileHandle(name, options);
+      };
+      const removeEntry = directory.removeEntry.bind(directory);
+      directory.removeEntry = async (name, options = {}) => {
+        window.__comparisonMutationAttempts.push(`removeEntry:${name}`);
+        return removeEntry(name, options);
+      };
+      const requestPermission = directory.requestPermission.bind(directory);
+      directory.requestPermission = async (...args) => {
+        window.__comparisonMutationAttempts.push(`requestPermission:${directory.name}`);
+        return requestPermission(...args);
+      };
+      for (const entry of directory.entries.values()) {
+        if (entry.kind === 'directory') visit(entry);
+        else {
+          const createWritable = entry.createWritable.bind(entry);
+          entry.createWritable = async (...args) => {
+            window.__comparisonMutationAttempts.push(`createWritable:${entry.name}`);
+            return createWritable(...args);
+          };
+        }
+      }
+    };
+    visit(window.__mockPair.source);
+    if (window.__mockPair.target !== window.__mockPair.source) visit(window.__mockPair.target);
+  });
+}
+
+async function assertComparisonReadOnly(page, files, state) {
+  assert.deepEqual(await snapshotMockPair(page), files);
+  assert.deepEqual(await comparisonState(page), state);
+  assert.deepEqual(await page.evaluate(() => window.__comparisonMutationAttempts), []);
+}
+
+async function openVersionComparison(page) {
+  await page.locator('#btnVersions').click();
+  await page.waitForFunction(() => document.querySelector('#versionBody [data-version-action="compare"]'));
+  await page.locator('#versionBody [data-version-action="compare"]').first().click();
+  await page.locator('#comparisonDialog').waitFor({ state: 'visible' });
+  await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+}
+
+async function runVersionComparison(page) {
+  await page.locator('#btnRunComparison').click();
+  await page.waitForFunction(() => {
+    const button = document.querySelector('#btnRunComparison');
+    return !button.disabled && /다시|again/i.test(button.textContent);
+  });
+}
+
 async function planRename(page, { control = '#dirBoth', owner = 'target', nativeMove = false } = {}) {
   await page.locator(control).click();
   await mountPair(page, {
@@ -152,6 +224,638 @@ async function main() {
   const add = (name, run) => {
     if (!NAME_FILTER || NAME_FILTER.test(name)) tests.push({ name, run });
   };
+
+  add('version comparison UI is explicit and preserves files and sync state', async ({ page }) => {
+    await mountVersion(page);
+    await compare(page);
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page);
+    const state = await comparisonState(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('#versionBody [data-version-action="compare"]').first().click();
+    await page.locator('#comparisonDialog').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+    assert.equal(await page.locator('#comparisonTarget').inputValue(), 'current');
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    assert.match(await page.locator('#comparisonSummary').innerText(), /report\.txt/);
+    await page.locator('#btnRunComparison').click();
+    await page.waitForFunction(() => document.querySelector('#comparisonBody [data-diff-kind]'));
+    assert.match(await page.locator('#comparisonSummary').innerText(), /report\.txt/);
+    assert.equal(await page.locator('#restoreDialog').evaluate((dialog) => dialog.open), false);
+    await page.locator('#btnCloseComparison').click();
+    assert.equal(await page.locator('#versionDialog').evaluate((dialog) => dialog.open), true);
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  for (const direction of [
+    { control: '#dirBoth', expected: /양방향|Bidirectional/ },
+    { control: '#dirOne', expected: /단방향|One-way/ },
+    { control: '#dirReverse', expected: /역방향|Reverse/ },
+  ]) {
+    for (const swapped of [false, true]) {
+      add(`version comparison operands stay on the selected physical root for ${direction.control} ${swapped ? 'after swap' : 'before swap'}`, async ({ page }) => {
+        await page.locator(direction.control).click();
+        await mountVersion(page, { content: 'stored-left' });
+        if (swapped) {
+          await page.locator('#btnSwapFolders').click();
+          await page.waitForFunction(() => !window.FileNallyTest.getModel().appOperation);
+        }
+        await page.evaluate(() => {
+          const record = window.__versionRecord;
+          const historical = { ...record, id: 'historic-right', storedPath: 'versions/historic-right/report.txt',
+            size: 16, lastModified: 150, capturedAt: '2026-09-12T00:00:00.000Z', fromSide: 'target', toSide: 'source' };
+          window.__setMockFile('target', '.filenally/versions/historic-right/report.txt', { content: 'historical-right', lastModified: 150 });
+          window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [record, historical] }) });
+        });
+        const config = await page.evaluate(() => JSON.parse(localStorage.getItem('smart_sync_state')).config.direction);
+        await installComparisonMutationSpies(page);
+        const files = await snapshotMockPair(page), state = await comparisonState(page);
+        await openVersionComparison(page);
+        await runVersionComparison(page);
+        assert.match(await page.locator('#comparisonSummary').innerText(), direction.expected);
+        assert.equal(await page.locator('#comparisonBody [data-diff-kind="remove"] code').first().innerText(), 'stored-left');
+        assert.equal(await page.locator('#comparisonBody [data-diff-kind="add"] code').first().innerText(), 'current');
+        await page.locator('#comparisonTarget').selectOption('version:historic-right');
+        assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+        await runVersionComparison(page);
+        assert.equal(await page.locator('#comparisonBody [data-diff-kind="remove"] code').first().innerText(), 'stored-left');
+        assert.equal(await page.locator('#comparisonBody [data-diff-kind="add"] code').first().innerText(), 'historical-right');
+        assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('smart_sync_state')).config.direction), config);
+        await page.locator('#btnCloseComparison').click();
+        await page.locator('#btnCloseVersions').click();
+        await assertComparisonReadOnly(page, files, state);
+      });
+    }
+  }
+
+  add('version comparison pages 102 historical choices without silently restoring current', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(() => {
+      const base = window.__versionRecord;
+      const versions = [base];
+      for (let index = 0; index < 102; index += 1) {
+        const id = `history-${String(index).padStart(3, '0')}`;
+        const content = `history ${index}`;
+        const record = { ...base, id, storedPath: `versions/${id}/report.txt`, size: content.length,
+          lastModified: 300 + index, capturedAt: new Date(Date.UTC(2026, 7, 1, 0, index)).toISOString() };
+        versions.push(record);
+        window.__setMockFile('target', `.filenally/${record.storedPath}`, { content, lastModified: record.lastModified });
+      }
+      window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions }) });
+    });
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await openVersionComparison(page);
+    assert.equal(await page.locator('#comparisonTarget option').count(), 102);
+    assert.equal(await page.locator('#comparisonTarget').inputValue(), 'current');
+    await page.locator('#btnComparisonTargetNext').click();
+    assert.equal(await page.locator('#comparisonTarget option').count(), 4);
+    assert.equal(await page.locator('#comparisonTarget').inputValue(), 'current');
+    const historicValue = await page.locator('#comparisonTarget option').last().getAttribute('value');
+    await page.locator('#comparisonTarget').selectOption(historicValue);
+    assert.equal(await page.locator('#btnRunComparison').isEnabled(), true);
+    await page.locator('#btnComparisonTargetPrevious').click();
+    assert.equal(await page.locator('#comparisonTarget').inputValue(), '');
+    assert.equal(await page.locator('#btnRunComparison').isDisabled(), true);
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    await page.locator('#btnCloseComparison').click();
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version comparison pages 300 changed rows with complete totals and original line numbers', async ({ page }) => {
+    const left = Array.from({ length: 150 }, (_, index) => `left-${index + 1}`).join('\n');
+    const right = Array.from({ length: 150 }, (_, index) => `right-${index + 1}`).join('\n');
+    await mountVersion(page, { content: left });
+    await page.evaluate((content) => window.__setMockFile('target', 'report.txt', { content, lastModified: 200 }), right);
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await openVersionComparison(page);
+    await runVersionComparison(page);
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 200);
+    assert.match(await page.locator('#comparisonSummary').innerText(), /150.*150/);
+    await page.locator('#btnComparisonNext').click();
+    await page.waitForFunction(() => document.querySelector('#comparisonPageStatus').textContent === '2 / 2');
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 100);
+    assert.equal(await page.locator('#comparisonBody li').first().locator('span').nth(1).innerText(), '51');
+    assert.equal(await page.locator('#comparisonBody li').last().locator('span').nth(1).innerText(), '150');
+    await page.locator('#btnCloseComparison').click();
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  for (const outcome of ['missing current', 'empty current', 'binary', 'too-large text', 'work fallback']) {
+    add(`version comparison UI reports ${outcome} distinctly without mutation`, async ({ page }) => {
+      if (outcome === 'missing current') {
+        await mountVersion(page, { missing: true });
+        await page.evaluate(() => {
+          const base = window.__versionRecord;
+          const historical = { ...base, id: 'missing-current-history', storedPath: 'versions/missing-current-history/report.txt',
+            size: 7, lastModified: 90, capturedAt: '2026-09-12T00:00:00.000Z' };
+          window.__setMockFile('target', '.filenally/versions/missing-current-history/report.txt', { content: 'history', lastModified: 90 });
+          window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [base, historical] }) });
+        });
+      }
+      else if (outcome === 'empty current') {
+        await mountVersion(page);
+        await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: '', lastModified: 200 }));
+      } else if (outcome === 'binary') {
+        await mountVersion(page);
+        await page.evaluate(() => {
+          const record = { ...window.__versionRecord, size: 2, type: 'application/octet-stream' };
+          window.__versionRecord = record;
+          window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [record] }) });
+          const stored = window.__mockPair.target.entries.get('.filenally').entries.get('versions').entries.get('saved-1').entries.get('report.txt');
+          stored.getFile = async () => new File([new Uint8Array([0, 255])], 'report.txt', { type: record.type, lastModified: 100 });
+          const current = window.__mockPair.target.entries.get('report.txt');
+          current.getFile = async () => new File([new Uint8Array([1, 254])], 'report.txt', { type: record.type, lastModified: 200 });
+        });
+      } else if (outcome === 'too-large text') {
+        await mountVersion(page);
+        await page.evaluate(() => {
+          const left = 'a'.repeat(524289), right = 'b'.repeat(524290);
+          const record = { ...window.__versionRecord, size: left.length };
+          window.__versionRecord = record;
+          window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [record] }) });
+          window.__setMockFile('target', `.filenally/${record.storedPath}`, { content: left, lastModified: 100 });
+          window.__setMockFile('target', 'report.txt', { content: right, lastModified: 200 });
+        });
+      } else {
+        await mountVersion(page);
+        await page.evaluate(() => {
+          const left = Array.from({ length: 1414 }, (_, index) => `left-${index}`).join('\n');
+          const right = Array.from({ length: 1414 }, (_, index) => `right-${index}`).join('\n');
+          const record = { ...window.__versionRecord, size: new Blob([left]).size };
+          window.__versionRecord = record;
+          window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [record] }) });
+          window.__setMockFile('target', `.filenally/${record.storedPath}`, { content: left, lastModified: 100 });
+          window.__setMockFile('target', 'report.txt', { content: right, lastModified: 200 });
+        });
+      }
+      await installComparisonMutationSpies(page);
+      const files = await snapshotMockPair(page), state = await comparisonState(page);
+      await openVersionComparison(page);
+      await runVersionComparison(page);
+      const summary = await page.locator('#comparisonSummary').innerText();
+      const status = await page.locator('#comparisonStatus').innerText();
+      if (outcome === 'missing current') {
+        assert.match(status, /없어 비교하지|missing; not compared/i);
+        assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+        await page.locator('#comparisonTarget').selectOption('version:missing-current-history');
+        await runVersionComparison(page);
+        assert.match(await page.locator('#comparisonStatus').innerText(), /다릅니다|different/i);
+        assert.ok(await page.locator('#comparisonBody [data-diff-kind]').count());
+      }
+      if (outcome === 'empty current') {
+        assert.doesNotMatch(status, /없어 비교하지|missing; not compared/i);
+        assert.equal(await page.locator('#comparisonBody [data-diff-kind="remove"]').count(), 1);
+      }
+      if (outcome === 'binary') assert.match(summary, /UTF-8/);
+      if (outcome === 'too-large text') assert.match(summary, /512 KiB/);
+      if (outcome === 'work fallback') assert.match(summary, /2,000,000/);
+      if (!['empty current', 'missing current'].includes(outcome)) assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+      await page.locator('#btnCloseComparison').click();
+      await page.locator('#btnCloseVersions').click();
+      await assertComparisonReadOnly(page, files, state);
+    });
+  }
+
+  for (const fallback of ['control', 'line-count', 'line-length', 'line-format-only']) {
+    add(`version comparison UI maps ${fallback} text metadata without partial diff`, async ({ page }) => {
+      let left;
+      let right;
+      if (fallback === 'control') { left = 'left\u0000'; right = 'right\u0000'; }
+      if (fallback === 'line-count') { left = `${'left\n'.repeat(5001)}`; right = `${'right\n'.repeat(5001)}`; }
+      if (fallback === 'line-length') { left = 'a'.repeat(8193); right = 'b'.repeat(8193); }
+      if (fallback === 'line-format-only') { left = '\uFEFFsame\r\n'; right = 'same\n'; }
+      await mountVersion(page, { content: left });
+      await page.evaluate((content) => window.__setMockFile('target', 'report.txt', { content, lastModified: 200 }), right);
+      await openVersionComparison(page);
+      await runVersionComparison(page);
+      const summary = await page.locator('#comparisonSummary').innerText();
+      if (fallback === 'control') assert.match(summary, /제어 문자|control characters/i);
+      if (fallback === 'line-count') assert.match(summary, /5,000/);
+      if (fallback === 'line-length') assert.match(summary, /8,192/);
+      if (fallback === 'line-format-only') {
+        assert.match(summary, /줄 내용은 같습니다|Line content is equal/);
+        assert.match(summary, /BOM: .*CRLF 1 .* LF 0/);
+      }
+      assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    });
+  }
+
+  add('version comparison handler guards ignore programmatic manager actions while child is open', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(() => {
+      const base = window.__versionRecord;
+      const versions = [base, ...Array.from({ length: 100 }, (_, index) => ({ ...base, id: `manager-${index}`,
+        originalPath: `archive/${index}.txt`, storedPath: `versions/manager-${index}/archive/${index}.txt`,
+        capturedAt: '2026-09-12T00:00:00.000Z' }))];
+      window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions }) });
+    });
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await openVersionComparison(page);
+    await page.evaluate(() => {
+      window.__comparisonManagerReads = 0;
+      const visit = (directory) => {
+        for (const entry of directory.entries.values()) {
+          if (entry.kind === 'directory') visit(entry);
+          else {
+            const getFile = entry.getFile.bind(entry);
+            entry.getFile = async (...args) => { window.__comparisonManagerReads += 1; return getFile(...args); };
+          }
+        }
+      };
+      visit(window.__mockPair.source); visit(window.__mockPair.target);
+      const ids = ['btnVersionRefresh', 'btnVersionPrevious', 'btnVersionNext', 'btnConfirmRestore'];
+      for (const id of ids) document.querySelector(`#${id}`).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      for (const action of ['download', 'restore']) {
+        document.querySelector(`[data-version-action="${action}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      }
+    });
+    await page.waitForTimeout(30);
+    assert.equal(await page.evaluate(() => window.__comparisonManagerReads), 0);
+    assert.equal(await page.locator('#comparisonDialog').evaluate((dialog) => dialog.open), true);
+    assert.equal(await page.locator('#restoreDialog').evaluate((dialog) => dialog.open), false);
+    assert.equal(await page.locator('#versionPageStatus').innerText(), '1 / 2');
+    for (const selector of ['#btnVersionRefresh', '[data-version-action="download"]', '[data-version-action="restore"]', '#btnConfirmRestore']) {
+      assert.equal(await page.locator(selector).first().isDisabled(), true);
+    }
+    await page.locator('#btnCloseComparison').click();
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version comparison choice failure keeps selected identity and disables analysis', async ({ page }) => {
+    await mountVersion(page);
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => document.querySelector('[data-version-action="compare"]'));
+    await page.evaluate(() => { window.__mockPair.target.entries.get('.filenally').entries.get('index.json').content = '{'; });
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await page.locator('[data-version-action="compare"]').first().click();
+    await page.locator('#comparisonDialog').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+    assert.match(await page.locator('#comparisonStatus').innerText(), /비교 실패|Comparison failed/);
+    assert.match(await page.locator('#comparisonSummary').innerText(), /report\.txt.*saved-1/s);
+    assert.equal(await page.locator('#btnRunComparison').isDisabled(), true);
+    assert.equal(await page.locator('#btnStopComparison').isDisabled(), true);
+    assert.equal(await page.locator('#restoreDialog').evaluate((dialog) => dialog.open), false);
+    await page.locator('#btnCloseComparison').click();
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version comparison UI labels unavailable SHA-256 without changing byte truth', async ({ page }) => {
+    await mountVersion(page, { content: 'left' });
+    await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: 'right', lastModified: 200 }));
+    await openVersionComparison(page);
+    await page.evaluate(() => {
+      const subtle = crypto.subtle;
+      window.__originalDigest = subtle.digest;
+      Object.defineProperty(subtle, 'digest', { configurable: true, value: undefined });
+    });
+    await runVersionComparison(page);
+    assert.match(await page.locator('#comparisonStatus').innerText(), /다릅니다|different/i);
+    const summary = await page.locator('#comparisonSummary').innerText();
+    assert.match(summary, /Web Crypto/);
+    assert.equal((summary.match(/Web Crypto/g) || []).length, 2);
+    await page.evaluate(() => Object.defineProperty(crypto.subtle, 'digest', { configurable: true, value: window.__originalDigest }));
+  });
+
+  for (const failure of ['corrupt index', 'stale index', 'missing stored bytes', 'stored path directory', 'revoked read', 'unreadable pinned file']) {
+    add(`version comparison UI clears prior output after ${failure}`, async ({ page }) => {
+      await mountVersion(page);
+      await openVersionComparison(page);
+      await runVersionComparison(page);
+      assert.ok(await page.locator('#comparisonSummary').getByText('SHA-256', { exact: true }).count());
+      await page.evaluate((failure) => {
+        const root = window.__mockPair.target;
+        const filenally = root.entries.get('.filenally');
+        const index = filenally.entries.get('index.json');
+        const storedDirectory = filenally.entries.get('versions').entries.get('saved-1');
+        const stored = storedDirectory.entries.get('report.txt');
+        if (failure === 'corrupt index') index.content = '{';
+        if (failure === 'stale index') {
+          const changed = { ...window.__versionRecord, capturedAt: '2026-09-12T00:00:00.000Z' };
+          index.content = JSON.stringify({ schemaVersion: 1, versions: [changed] });
+        }
+        if (failure === 'missing stored bytes') storedDirectory.entries.delete('report.txt');
+        if (failure === 'stored path directory') storedDirectory.entries.set('report.txt', window.__mockPair.source);
+        if (failure === 'revoked read') root.getDirectoryHandle = async () => { throw new DOMException('Read permission revoked', 'NotAllowedError'); };
+        if (failure === 'unreadable pinned file') {
+          const getFile = stored.getFile.bind(stored);
+          stored.getFile = async () => {
+            const file = await getFile(), slice = file.slice.bind(file);
+            file.arrayBuffer = async () => { throw new Error('Pinned file unreadable'); };
+            file.slice = (...args) => { const chunk = slice(...args); chunk.arrayBuffer = async () => { throw new Error('Pinned file unreadable'); }; return chunk; };
+            return file;
+          };
+        }
+      }, failure);
+      await installComparisonMutationSpies(page);
+      const files = await snapshotMockPair(page), state = await comparisonState(page);
+      await runVersionComparison(page);
+      assert.match(await page.locator('#comparisonStatus').innerText(), /비교 실패|Comparison failed/);
+      assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+      assert.equal(await page.locator('#comparisonSummary').getByText('SHA-256', { exact: true }).count(), 0);
+      assert.equal(await page.locator('#restoreDialog').evaluate((dialog) => dialog.open), false);
+      await page.locator('#btnCloseComparison').click();
+      await page.locator('#btnCloseVersions').click();
+      await assertComparisonReadOnly(page, files, state);
+    });
+  }
+
+  add('version comparison Stop keeps native byte read busy through settlement and ignores duplicate input', async ({ page }) => {
+    await mountVersion(page, { content: 'old' });
+    await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: 'new', lastModified: 200 }));
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await openVersionComparison(page);
+    await page.evaluate(() => {
+      const stored = window.__mockPair.target.entries.get('.filenally').entries.get('versions').entries.get('saved-1').entries.get('report.txt');
+      const getFile = stored.getFile.bind(stored);
+      let first = true;
+      stored.getFile = async () => {
+        const file = await getFile();
+        if (!first) return file;
+        first = false;
+        const slice = file.slice.bind(file);
+        file.slice = (...args) => {
+          const chunk = slice(...args), arrayBuffer = chunk.arrayBuffer.bind(chunk);
+          chunk.arrayBuffer = async () => {
+            window.__comparisonReadStarted = (window.__comparisonReadStarted || 0) + 1;
+            await new Promise((resolve) => { window.__releaseComparisonRead = resolve; });
+            const bytes = await arrayBuffer();
+            window.__comparisonReadSettled = true;
+            return bytes;
+          };
+          return chunk;
+        };
+        return file;
+      };
+    });
+    await page.locator('#btnRunComparison').click();
+    await page.waitForFunction(() => window.__comparisonReadStarted === 1);
+    await page.evaluate(() => {
+      document.querySelector('#btnRunComparison').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      document.querySelector('#comparisonTarget').value = '';
+      document.querySelector('#comparisonTarget').dispatchEvent(new Event('change', { bubbles: true }));
+      document.querySelector('#btnComparisonTargetNext').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await page.locator('#btnStopComparison').click();
+    assert.match(await page.locator('#comparisonStatus').innerText(), /중지 중|Stopping/);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'btnCloseComparison');
+    assert.equal(await page.locator('#comparisonTarget').isDisabled(), true);
+    assert.equal(await page.locator('#btnRunComparison').isDisabled(), true);
+    assert.equal(await page.locator('#btnCloseComparison').isEnabled(), true);
+    assert.equal(await page.locator('#comparisonTarget').inputValue(), 'current');
+    await page.evaluate(() => window.__releaseComparisonRead());
+    await page.waitForFunction(() => window.__comparisonReadSettled && !document.querySelector('#comparisonTarget').disabled);
+    assert.equal(await page.evaluate(() => window.__comparisonReadStarted), 1);
+    assert.match(await page.locator('#comparisonStatus').innerText(), /중지했습니다|stopped/i);
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'btnCloseComparison');
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    await page.locator('#btnCloseComparison').click();
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.versionAction), 'compare');
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version comparison Close and reopen discard a delayed native read without unlocking the new child', async ({ page }) => {
+    await mountVersion(page, { content: 'old' });
+    await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: 'new', lastModified: 200 }));
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await openVersionComparison(page);
+    await page.evaluate(() => {
+      const stored = window.__mockPair.target.entries.get('.filenally').entries.get('versions').entries.get('saved-1').entries.get('report.txt');
+      const getFile = stored.getFile.bind(stored);
+      let first = true;
+      stored.getFile = async () => {
+        const file = await getFile();
+        if (!first) return file;
+        first = false;
+        const slice = file.slice.bind(file);
+        file.slice = (...args) => {
+          const chunk = slice(...args), read = chunk.arrayBuffer.bind(chunk);
+          chunk.arrayBuffer = async () => {
+            window.__oldReadStarted = true;
+            await new Promise((resolve) => { window.__releaseOldRead = resolve; });
+            const bytes = await read(); window.__oldReadSettled = true; return bytes;
+          };
+          return chunk;
+        };
+        return file;
+      };
+    });
+    await page.locator('#btnRunComparison').click();
+    await page.waitForFunction(() => window.__oldReadStarted);
+    await page.locator('#btnCloseComparison').click();
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().versionBusy), true);
+    await page.locator('[data-version-action="compare"]').first().click();
+    await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+    await page.evaluate(() => window.__releaseOldRead());
+    await page.waitForFunction(() => window.__oldReadSettled);
+    assert.equal(await page.locator('#comparisonDialog').evaluate((dialog) => dialog.open), true);
+    assert.equal(await page.locator('#comparisonTarget').isEnabled(), true);
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    await page.locator('#btnCloseComparison').click();
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version comparison choice loading can close and reopen without stale unlock or Stop', async ({ page }) => {
+    await mountVersion(page);
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => document.querySelector('[data-version-action="compare"]'));
+    await page.evaluate(() => {
+      const index = window.__mockPair.target.entries.get('.filenally').entries.get('index.json');
+      const getFile = index.getFile.bind(index);
+      let first = true;
+      index.getFile = async () => {
+        const file = await getFile();
+        if (!first) return file;
+        first = false;
+        const text = file.text.bind(file);
+        file.text = async () => { window.__choiceReadStarted = true;
+          await new Promise((resolve) => { window.__releaseChoiceRead = resolve; });
+          const value = await text(); window.__choiceReadSettled = true; return value; };
+        return file;
+      };
+    });
+    await page.locator('[data-version-action="compare"]').first().click();
+    await page.waitForFunction(() => window.__choiceReadStarted);
+    assert.equal(await page.locator('#btnStopComparison').isDisabled(), true);
+    assert.equal(await page.locator('#btnCloseComparison').isEnabled(), true);
+    assert.equal(await page.locator('#comparisonTarget').isDisabled(), true);
+    await page.locator('#btnCloseComparison').click();
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().versionBusy), true);
+    await page.locator('[data-version-action="compare"]').first().click();
+    await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+    await page.evaluate(() => window.__releaseChoiceRead());
+    await page.waitForFunction(() => window.__choiceReadSettled);
+    assert.equal(await page.locator('#comparisonTarget').inputValue(), 'current');
+    assert.equal(await page.locator('#comparisonTarget').isEnabled(), true);
+    await page.locator('#btnCloseComparison').click();
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version comparison Stop during LCS and delayed digest publishes no stale rows or hashes', async ({ page }) => {
+    const left = Array.from({ length: 999 }, (_, index) => `left-${index}`).join('\n');
+    const right = Array.from({ length: 999 }, (_, index) => `right-${index}`).join('\n');
+    await mountVersion(page, { content: left });
+    await page.evaluate((content) => window.__setMockFile('target', 'report.txt', { content, lastModified: 200 }), right);
+    await openVersionComparison(page);
+    await page.locator('#btnRunComparison').click();
+    await page.waitForFunction(() => /텍스트|Text/.test(document.querySelector('#comparisonStatus').textContent));
+    await page.locator('#btnStopComparison').click();
+    await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    await page.evaluate((content) => window.__setMockFile('target', 'report.txt', { content, lastModified: 200 }), left);
+    await page.locator('#comparisonTarget').selectOption('current');
+    await page.evaluate(() => {
+      const subtle = crypto.subtle, original = subtle.digest.bind(subtle);
+      window.__restoreDigest = () => Object.defineProperty(subtle, 'digest', { configurable: true, value: original });
+      Object.defineProperty(subtle, 'digest', { configurable: true, value: async (...args) => {
+        window.__digestStarted = true;
+        await new Promise((resolve) => { window.__releaseDigest = resolve; });
+        const value = await original(...args); window.__digestSettled = true; return value;
+      } });
+    });
+    await page.locator('#btnRunComparison').click();
+    await page.waitForFunction(() => window.__digestStarted);
+    await page.locator('#btnStopComparison').click();
+    await page.evaluate(() => window.__releaseDigest());
+    await page.waitForFunction(() => window.__digestSettled && !document.querySelector('#comparisonTarget').disabled);
+    await page.evaluate(() => window.__restoreDigest());
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    assert.equal(await page.locator('#comparisonSummary').getByText('SHA-256', { exact: true }).count(), 0);
+  });
+
+  add('version comparison Close and reopen discard delayed digest before any second fingerprint', async ({ page }) => {
+    await mountVersion(page, { content: 'same' });
+    await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: 'same', lastModified: 200 }));
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await openVersionComparison(page);
+    await page.evaluate(() => {
+      const subtle = crypto.subtle, original = subtle.digest.bind(subtle);
+      window.__digestCalls = 0;
+      window.__restoreDigest = () => Object.defineProperty(subtle, 'digest', { configurable: true, value: original });
+      Object.defineProperty(subtle, 'digest', { configurable: true, value: async (...args) => {
+        window.__digestCalls += 1; window.__digestStarted = true;
+        await new Promise((resolve) => { window.__releaseDigest = resolve; });
+        const value = await original(...args); window.__digestSettled = true; return value;
+      } });
+    });
+    await page.locator('#btnRunComparison').click();
+    await page.waitForFunction(() => window.__digestStarted);
+    await page.locator('#btnCloseComparison').click();
+    await page.locator('[data-version-action="compare"]').first().click();
+    await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+    await page.evaluate(() => window.__releaseDigest());
+    await page.waitForFunction(() => window.__digestSettled);
+    await page.evaluate(() => window.__restoreDigest());
+    assert.equal(await page.evaluate(() => window.__digestCalls), 1);
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    assert.equal(await page.locator('#comparisonSummary').getByText('SHA-256', { exact: true }).count(), 0);
+    assert.equal(await page.locator('#comparisonTarget').isEnabled(), true);
+    await page.locator('#btnCloseComparison').click();
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version comparison parent close invalidates delayed work and prevents late publication', async ({ page }) => {
+    await mountVersion(page, { content: 'old' });
+    await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: 'new', lastModified: 200 }));
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await openVersionComparison(page);
+    await page.evaluate(() => {
+      const stored = window.__mockPair.target.entries.get('.filenally').entries.get('versions').entries.get('saved-1').entries.get('report.txt');
+      const getFile = stored.getFile.bind(stored);
+      stored.getFile = async () => {
+        const file = await getFile(), slice = file.slice.bind(file);
+        file.slice = (...args) => {
+          const chunk = slice(...args), read = chunk.arrayBuffer.bind(chunk);
+          chunk.arrayBuffer = async () => { window.__parentReadStarted = true;
+            await new Promise((resolve) => { window.__releaseParentRead = resolve; });
+            const bytes = await read(); window.__parentReadSettled = true; return bytes; };
+          return chunk;
+        };
+        return file;
+      };
+    });
+    await page.locator('#btnRunComparison').click();
+    await page.waitForFunction(() => window.__parentReadStarted);
+    await page.evaluate(() => document.querySelector('#btnCloseVersions').dispatchEvent(new MouseEvent('click', { bubbles: true })));
+    await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+    assert.equal(await page.locator('#versionDialog').evaluate((dialog) => dialog.open), false);
+    assert.equal(await page.locator('#comparisonDialog').evaluate((dialog) => dialog.open), false);
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().versionBusy), false);
+    await page.evaluate(() => window.__releaseParentRead());
+    await page.waitForFunction(() => window.__parentReadSettled);
+    assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 0);
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version comparison error completion preserves deliberate Close focus and returns to trigger', async ({ page }) => {
+    await mountVersion(page, { content: 'old' });
+    await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: 'new', lastModified: 200 }));
+    await openVersionComparison(page);
+    await page.evaluate(() => {
+      const stored = window.__mockPair.target.entries.get('.filenally').entries.get('versions').entries.get('saved-1').entries.get('report.txt');
+      const getFile = stored.getFile.bind(stored);
+      stored.getFile = async () => {
+        const file = await getFile();
+        file.arrayBuffer = async () => { window.__errorReadStarted = true;
+          await new Promise((resolve) => { window.__releaseErrorRead = resolve; });
+          throw new Error('Delayed read failure'); };
+        return file;
+      };
+    });
+    await page.locator('#btnRunComparison').focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => window.__errorReadStarted);
+    await page.locator('#btnCloseComparison').focus();
+    await page.evaluate(() => window.__releaseErrorRead());
+    await page.waitForFunction(() => /비교 실패|Comparison failed/.test(document.querySelector('#comparisonStatus').textContent));
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'btnCloseComparison');
+    await page.keyboard.press('Enter');
+    assert.equal(await page.evaluate(() => document.activeElement.dataset.versionAction), 'compare');
+  });
+
+  for (const lang of ['ko', 'en']) {
+    add(`version comparison ${lang} keyboard flow renders hostile path and content as literal text`, async ({ page }) => {
+      const hostile = '<img src=x onerror=alert(1)>.txt';
+      await mountVersion(page, { path: hostile, content: '<script>left</script>' });
+      await page.evaluate((filePath) => window.__setMockFile('target', filePath, { content: '<script>right</script>', lastModified: 200 }), hostile);
+      await page.locator(lang === 'ko' ? '#btnLangKo' : '#btnLangEn').click();
+      await installComparisonMutationSpies(page);
+      const files = await snapshotMockPair(page), state = await comparisonState(page);
+      await openVersionComparison(page);
+      assert.equal(await page.getByRole('dialog', { name: lang === 'ko' ? '버전 비교' : 'Version comparison', exact: true }).count(), 1);
+      assert.equal(await page.locator('#comparisonDialog img, #comparisonDialog script').count(), 0);
+      assert.match(await page.locator('#comparisonSummary').innerText(), /<img src=x onerror=alert\(1\)>/);
+      await page.locator('#btnRunComparison').focus();
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() => !document.querySelector('#btnRunComparison').disabled);
+      assert.equal(await page.locator('#comparisonDialog img, #comparisonDialog script').count(), 0);
+      assert.equal(await page.locator('#comparisonBody [data-diff-kind="remove"] code').innerText(), '<script>left</script>');
+      assert.equal(await page.locator('#comparisonBody [data-diff-kind="add"] code').innerText(), '<script>right</script>');
+      assert.match(await page.locator('#comparisonLegend').innerText(), lang === 'ko' ? /왼쪽 줄/ : /Left line/);
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(() => document.activeElement.dataset.versionAction === 'compare');
+      await page.keyboard.press('Escape');
+      await assertComparisonReadOnly(page, files, state);
+    });
+  }
 
   add('version manager cancel is read-only and confirmed restore invalidates comparison', async ({ page }) => {
     await mountVersion(page);
@@ -3399,6 +4103,8 @@ async function main() {
 
   if (VISUAL) {
     await fs.mkdir(path.join(ROOT, 'artifacts', 'visual'), { recursive: true });
+    const comparisonVisualRoot = path.join(ROOT, 'artifacts', 'issue-12-version-comparison', 'visual');
+    await fs.mkdir(comparisonVisualRoot, { recursive: true });
     for (const viewport of [
       { name: 'mobile', width: 375, height: 900 },
       { name: 'tablet', width: 768, height: 1000 },
@@ -3463,6 +4169,43 @@ async function main() {
       await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `${viewport.name}-restore.png`), fullPage: true });
       await page.locator('#btnConfirmRestore').focus();
       assert.equal(await page.locator('#btnConfirmRestore').evaluate(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), true);
+      await page.locator('#btnCancelRestore').click();
+      await page.locator('#btnCloseVersions').click();
+      await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+      for (const lang of ['ko', 'en']) {
+        await page.locator(lang === 'ko' ? '#btnLangKo' : '#btnLangEn').click();
+        const visualLeft = [`left-${'가'.repeat(180)}`, ...Array.from({ length: 239 }, (_, index) => `left-${index + 2}`)].join('\n');
+        const visualRight = [`right-${'나'.repeat(180)}`, ...Array.from({ length: 239 }, (_, index) => `right-${index + 2}`)].join('\n');
+        await mountVersion(page, { path: longPath, content: visualLeft });
+        await page.evaluate(({ filePath, content }) => window.__setMockFile('target', filePath, { content, lastModified: 200 }), { filePath: longPath, content: visualRight });
+        await openVersionComparison(page);
+        await runVersionComparison(page);
+        assert.equal(await page.locator('#comparisonBody [data-diff-kind]').count(), 200);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${viewport.name} ${lang} comparison has no document overflow`);
+        assert.equal(await page.locator('.comparison-scroll').evaluate((element) => element.scrollHeight > element.clientHeight), true, `${viewport.name} ${lang} comparison scrolls internally`);
+        assert.equal(await page.locator('.comparison-scroll').evaluate((element) => element.scrollTop), 0, `${viewport.name} ${lang} comparison opens at metadata`);
+        for (const selector of ['#comparisonTitle', '#btnCloseComparison', '#btnRunComparison', '#btnStopComparison', '#btnComparisonNext']) {
+          assert.equal(await page.locator(selector).evaluate((element) => { const rect = element.getBoundingClientRect(); return rect.top >= 0 && rect.bottom <= innerHeight; }), true, `${viewport.name} ${lang} ${selector} is reachable`);
+        }
+        await page.screenshot({ path: path.join(comparisonVisualRoot, `${viewport.name}-${lang}-comparison-initial.png`), fullPage: false });
+        await page.locator('.comparison-scroll').evaluate((element) => {
+          const row = element.querySelector('#comparisonBody li');
+          row.scrollIntoView({ block: 'start', inline: 'nearest' });
+        });
+        await page.waitForTimeout(30);
+        assert.equal(await page.locator('.comparison-scroll').evaluate((element) => element.scrollTop > 0), true, `${viewport.name} ${lang} comparison reaches diff rows`);
+        assert.equal(await page.locator('#comparisonBody li').first().evaluate((element) => {
+          const row = element.getBoundingClientRect(), scroll = document.querySelector('.comparison-scroll').getBoundingClientRect();
+          return row.bottom > scroll.top && row.top < scroll.bottom && element.querySelector('code').textContent.length > 180;
+        }), true, `${viewport.name} ${lang} long diff line is visible`);
+        for (const selector of ['#btnCloseComparison', '#btnRunComparison', '#btnStopComparison', '#btnComparisonNext']) {
+          assert.equal(await page.locator(selector).evaluate((element) => { const rect = element.getBoundingClientRect(); return rect.top >= 0 && rect.bottom <= innerHeight; }), true, `${viewport.name} ${lang} fixed ${selector} stays reachable`);
+        }
+        await page.screenshot({ path: path.join(comparisonVisualRoot, `${viewport.name}-${lang}-comparison-diff-scrolled.png`), fullPage: false });
+        await page.locator('#btnCloseComparison').click();
+        await page.locator('#btnCloseVersions').click();
+        await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+      }
       await context.close();
     }
   }

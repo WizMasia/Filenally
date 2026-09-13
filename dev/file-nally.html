@@ -269,6 +269,39 @@
             </div>
         </div>
     </dialog>
+    <dialog id="comparisonDialog" class="run-detail-dialog comparison-dialog" aria-labelledby="comparisonTitle" aria-describedby="comparisonDescription">
+        <div class="run-detail-surface comparison-surface">
+            <header class="run-detail-header">
+                <div><h2 id="comparisonTitle" data-i18n="comparisonTitle">버전 비교</h2><p id="comparisonDescription" data-i18n="comparisonDescription">선택한 버전을 왼쪽에 두고 읽기 전용으로 비교합니다. 동기화 방향은 변경되지 않습니다.</p></div>
+                <button id="btnCloseComparison" type="button" class="button-ghost" data-i18n="close">닫기</button>
+            </header>
+            <div class="comparison-target-controls">
+                <label for="comparisonTarget" data-i18n="comparisonTarget">오른쪽 비교 대상</label>
+                <select id="comparisonTarget"></select>
+                <div class="run-detail-pagination">
+                    <button id="btnComparisonTargetPrevious" type="button" class="button-ghost" data-i18n="previousPage">이전</button>
+                    <span id="comparisonTargetPageStatus" aria-live="polite"></span>
+                    <button id="btnComparisonTargetNext" type="button" class="button-ghost" data-i18n="nextPage">다음</button>
+                </div>
+            </div>
+            <p id="comparisonStatus" class="version-message" role="status" aria-live="polite"></p>
+            <progress id="comparisonProgress" max="1" value="0" hidden></progress>
+            <div class="comparison-scroll" tabindex="0" role="region" aria-labelledby="comparisonTitle">
+                <div id="comparisonSummary" class="comparison-summary"></div>
+                <p id="comparisonLegend" data-i18n="comparisonLegend">왼쪽 줄 / 오른쪽 줄 · − 삭제 · + 추가 · = 문맥</p>
+                <ol id="comparisonBody" class="comparison-diff"></ol>
+            </div>
+            <div class="run-detail-pagination">
+                <button id="btnComparisonPrevious" type="button" class="button-ghost" data-i18n="previousPage">이전</button>
+                <span id="comparisonPageStatus" aria-live="polite"></span>
+                <button id="btnComparisonNext" type="button" class="button-ghost" data-i18n="nextPage">다음</button>
+            </div>
+            <div class="run-detail-actions">
+                <button id="btnRunComparison" type="button" data-i18n="comparisonRun">비교</button>
+                <button id="btnStopComparison" type="button" class="button-ghost" data-i18n="comparisonStop" disabled>비교 중지</button>
+            </div>
+        </div>
+    </dialog>
 
     <footer>
         <div><strong>File-nally</strong> · MIT License</div>

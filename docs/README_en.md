@@ -108,6 +108,12 @@ Capture metadata is stored in schema v1 `.filenally/index.json`. `.filenally` is
 
 After connecting both folders, open **Version manager** to see captures from both roots, newest first, in pages of 100. Each entry shows its owning folder's current Source/Target side and name, original path, capture time, size, reason, and version ID. An unreadable index produces a folder-specific error while the healthy folder's entries remain available. **Refresh** rereads both folders; **Download** saves the exact file bytes with the original filename.
 
+**Compare** is read-only: the selected stored version stays on the left; the right side is the current original (default) or another stored version with the same original path in the same owning folder. Choose a counterpart and explicitly start comparison. Stop, Close and Escape do not change files or the existing sync plan. Historical Source/Target fields and the configured sync direction never reverse the operands.
+
+Exact byte equality is checked first. Unequal UTF-8 text receives a line diff within 512 KiB and 5,000 lines per file, 8,192 UTF-16 code units per line, and 2,000,000 LCS cells including boundary rows/columns after trimming common prefix/suffix lines. Larger work receives a reasoned summary. Changes include three context lines; results page at 200 rows and historical choices at 100. Changing history pages clears a historical selection until a visible counterpart is chosen. BOM, CRLF/LF/CR and final-newline differences remain byte differences. Invalid UTF-8, control characters and UTF-16 are not silently converted.
+
+Full SHA-256 fingerprints are optional for each file up to 16 MiB when Web Crypto is available; unavailable fingerprints have explicit reasons and do not determine byte equality. Missing current files are not compared, not treated as empty. Results describe snapshots at their displayed read times. Observed file/record changes before publication cause an error, but there is no atomic lock against external edits; later changes retaining size and mtime may be undetected.
+
 **Restore** opens a separate confirmation showing the selected version and current file, including their path, size, modified time, and owning folder. **Restore this version** requests write permission and starts the operation. An existing file is saved as a new version and its index committed before replacement. A missing file is created at the original path only after the same explicit confirmation. Cancel and Escape make no filesystem changes. Duplicate execution and cancellation are blocked while restoration writes are running.
 
 Restoration always targets the folder that physically stores the version. Swapping Source and Target does not cause historical `toSide` metadata to redirect it. The displayed next synchronization direction remains in effect; manual restoration affects only the selected owning folder. Every restore attempt clears the old plan and displayed scans, so **Compare changes** again before synchronizing. Restoration does not rebuild synchronization manifests or checkpoints.
@@ -116,7 +122,7 @@ Changes to the version or current file after preparation invalidate confirmation
 
 Version indexes remain schema v1 with the additive `before-restore` reason. Older builds reject these new records and safely block overwrites, so use the updated app after restoring. Settings remain schema v2. Freshness checks do not provide an atomic lock against external programs editing at the final write boundary.
 
-Diff, storage usage/manual cleanup, and automatic expiry are not yet available. Creation date, author, owner, ACL, and similar metadata are unavailable.
+Storage usage/manual cleanup and automatic expiry are not yet available. Creation date, author, owner, ACL, and similar metadata are unavailable.
 
 ## JSON settings and folder profiles
 

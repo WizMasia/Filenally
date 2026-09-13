@@ -186,9 +186,35 @@ tbody tr:last-child td { border-bottom: 0; }
 .restore-summary dl { margin: 0; }
 .restore-summary dt { font-size: 0.75rem; color: var(--text-secondary); }
 .restore-summary dd { margin: var(--space-1) 0 var(--space-3); font-size: 0.8125rem; }
+.comparison-dialog { width: min(1100px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
+.comparison-dialog .run-detail-header button { flex: 0 0 auto; white-space: nowrap; }
+.comparison-surface { display: flex; flex-direction: column; max-height: calc(100dvh - 24px); min-height: 0; }
+.comparison-surface > :not(.comparison-scroll) { flex: 0 0 auto; }
+.comparison-scroll { min-height: 0; overflow: auto; overscroll-behavior: contain; }
+.comparison-target-controls { min-width: 0; padding: 0 20px; }
+#comparisonTarget { display: block; width: 100%; min-width: 0; max-width: 100%; }
+#comparisonProgress { width: calc(100% - 40px); margin: 0 20px var(--space-2); }
+#comparisonLegend { margin: 0; padding: 0 20px var(--space-3); color: var(--text-secondary); font-size: 0.75rem; }
+.comparison-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 16px 20px; }
+.comparison-summary > p { grid-column: 1 / -1; margin: 0; }
+.comparison-summary section { min-width: 0; }
+.comparison-summary h3 { margin: 0 0 var(--space-2); }
+.comparison-summary dl { margin: 0; }
+.comparison-summary dt { color: var(--text-secondary); font-size: 0.75rem; }
+.comparison-summary dd { margin: 0 0 8px; overflow-wrap: anywhere; }
+.comparison-diff { list-style: none; margin: 0; padding: 0 16px 16px; }
+.comparison-diff li { display: grid; grid-template-columns: 4ch 4ch 2ch minmax(0, 1fr); gap: 8px; }
+.comparison-diff code { white-space: pre-wrap; overflow-wrap: anywhere; tab-size: 4; }
+.comparison-diff [data-diff-kind="add"] { background: #e7f4ec; color: #17482c; }
+.comparison-diff [data-diff-kind="remove"] { background: #fbe9e7; color: #69251f; }
+.comparison-diff [data-diff-kind="gap"] { display: block; padding: 8px 0; }
 @media (max-width: 760px) {
     .restore-summary { grid-template-columns: minmax(0, 1fr); padding: var(--space-4); }
     .version-table td > * { min-width: 0; }
+    .comparison-summary { grid-template-columns: minmax(0, 1fr); }
+    .comparison-target-controls { padding-inline: 12px; }
+    .comparison-diff { padding-inline: 8px; }
+    .comparison-diff li { gap: 4px; }
 }
 .quick-guide-dialog { width: min(680px, calc(100% - var(--space-8))); }
 .quick-guide-dialog .run-detail-header button { flex: 0 0 auto; white-space: nowrap; }

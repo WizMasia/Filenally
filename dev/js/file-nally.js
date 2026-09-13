@@ -22,7 +22,8 @@
 
     const TEXT = {
         ko: {
-            versionsTitle: '버전 관리', versionsDescription: '현재 연결된 두 폴더의 캡처본입니다. 복원은 버전을 보관한 폴더의 원래 경로에 적용됩니다.', owningRoot: '보관 폴더', capturedAt: '캡처 시각', versionReason: '보관 이유', beforeOverwrite: '덮어쓰기 전', beforeRestore: '복원 전', versionDownload: '다운로드', versionRestore: '복원', versionRefresh: '새로고침', versionsEmpty: '보관된 버전이 없습니다.', versionsLoading: '버전을 읽는 중입니다.', versionFailed: '버전 작업 실패: {message}', restoreTitle: '버전 복원 확인', restoreDescription: '선택한 버전과 현재 파일을 확인한 뒤 복원을 실행하세요.', selectedVersion: '선택한 버전', currentFile: '현재 파일', restoreReplace: '현재 파일을 새 버전으로 먼저 보관한 뒤 선택한 버전으로 교체합니다.', restoreCreate: '현재 파일이 없습니다. 원래 경로에 새 파일을 만듭니다.', cancelRestore: '취소', confirmRestore: '이 버전 복원', restoreWriting: '복원 중입니다. 파일 쓰기가 끝날 때까지 기다려 주세요.', restoreDone: '복원이 완료되었습니다. 동기화 전에 변경사항을 다시 비교하세요.', restoreFailed: '복원 실패: {message}. 버전을 다시 선택하여 확인해 주세요.', retainedBackup: '보관된 백업: {id} · .filenally/{path}', versionDirection: '다음 동기화: {direction}. 수동 복원은 표시된 보관 폴더에만 적용됩니다.',
+            versionsTitle: '버전 관리', versionsDescription: '현재 연결된 두 폴더의 캡처본입니다. 복원은 버전을 보관한 폴더의 원래 경로에 적용됩니다.', owningRoot: '보관 폴더', capturedAt: '캡처 시각', versionReason: '보관 이유', beforeOverwrite: '덮어쓰기 전', beforeRestore: '복원 전', versionDownload: '다운로드', versionRestore: '복원', versionCompare: '비교', versionRefresh: '새로고침', versionsEmpty: '보관된 버전이 없습니다.', versionsLoading: '버전을 읽는 중입니다.', versionFailed: '버전 작업 실패: {message}', restoreTitle: '버전 복원 확인', restoreDescription: '선택한 버전과 현재 파일을 확인한 뒤 복원을 실행하세요.', selectedVersion: '선택한 버전', currentFile: '현재 파일', restoreReplace: '현재 파일을 새 버전으로 먼저 보관한 뒤 선택한 버전으로 교체합니다.', restoreCreate: '현재 파일이 없습니다. 원래 경로에 새 파일을 만듭니다.', cancelRestore: '취소', confirmRestore: '이 버전 복원', restoreWriting: '복원 중입니다. 파일 쓰기가 끝날 때까지 기다려 주세요.', restoreDone: '복원이 완료되었습니다. 동기화 전에 변경사항을 다시 비교하세요.', restoreFailed: '복원 실패: {message}. 버전을 다시 선택하여 확인해 주세요.', retainedBackup: '보관된 백업: {id} · .filenally/{path}', versionDirection: '다음 동기화: {direction}. 수동 복원은 표시된 보관 폴더에만 적용됩니다.',
+            comparisonTitle: '버전 비교', comparisonDescription: '선택한 버전을 왼쪽에 두고 읽기 전용으로 비교합니다. 동기화 방향은 변경되지 않습니다.', comparisonTarget: '오른쪽 비교 대상', comparisonLeft: '왼쪽', comparisonRight: '오른쪽', comparisonChoose: '비교 대상을 선택하세요', comparisonRun: '비교', comparisonAgain: '다시 비교', comparisonStop: '비교 중지', comparisonStopping: '비교 중지 중…', comparisonStopped: '비교를 중지했습니다.', comparisonReady: '대상을 확인한 뒤 비교를 실행하세요.', comparisonLoading: '비교 대상을 읽는 중…', comparisonWorking: '비교 중: {stage} ({done}/{total})', comparisonBytes: '바이트', comparisonText: '텍스트', comparisonHash: '지문', comparisonFailed: '비교 실패: {message}', comparisonIdentical: '바이트가 같습니다.', comparisonDifferent: '바이트가 다릅니다.', comparisonMissing: '현재 파일이 없어 비교하지 않았습니다.', comparisonLineEqual: '줄 내용은 같습니다. BOM·줄바꿈 형식 또는 위치가 다릅니다.', comparisonCounts: '왼쪽 → 오른쪽: 추가 {added}줄, 삭제 {removed}줄', comparisonSnapshot: '각 읽기 시점의 스냅샷입니다. 외부 변경을 원자적으로 잠그지 않으며 같은 크기·수정 시각의 후속 변경은 감지되지 않을 수 있습니다.', comparisonReadAt: '읽은 시각', comparisonType: 'MIME 유형', comparisonPresence: '파일 상태', comparisonPresent: '있음', comparisonAbsent: '없음', comparisonUnavailable: '정보 없음', comparisonFormat: 'BOM: {bom} · CRLF {crlf} · LF {lf} · CR {cr} · 마지막 줄바꿈: {final}', comparisonYes: '있음', comparisonNo: '없음', comparisonSize: '텍스트 크기 한도(파일당 512 KiB)를 초과했습니다.', comparisonEncoding: '유효한 UTF-8 텍스트가 아닙니다.', comparisonControl: '텍스트로 표시하지 않는 제어 문자가 있습니다.', comparisonLineCount: '파일당 5,000줄 한도를 초과했습니다.', comparisonLineLength: '한 줄 8,192 UTF-16 코드 단위 한도를 초과했습니다.', comparisonWorkLimit: '줄 차이 계산 한도(2,000,000셀)를 초과했습니다.', comparisonHashLarge: 'SHA-256 미계산: 파일당 16 MiB 한도 초과', comparisonHashUnavailable: 'SHA-256 미계산: Web Crypto를 사용할 수 없습니다.', comparisonHashMissing: 'SHA-256 미계산: 파일 없음', comparisonLegend: '왼쪽 줄 / 오른쪽 줄 · − 삭제 · + 추가 · = 문맥', comparisonGap: '문맥 {count}줄 생략: 왼쪽 {left}, 오른쪽 {right}',
             desc: '두 로컬 폴더를 비교한 뒤 변경 계획을 검토하고 안전하게 동기화합니다.', controlTitle: '동기화 제어', selectSource: '원본 폴더 선택', selectTarget: '대상 폴더 선택', notSelected: '선택되지 않음', languageLabel: '언어', progressLabel: '작업 진행률', workspaceLabel: '폴더 비교 결과', activityLabel: '동기화 기록',
             profileNone: '선택된 동기화 프로필이 없습니다.', profileUnverified: '폴더 쌍 미확인', profileVerified: '폴더 쌍 확인됨', profileLabel: '{source} ⇄ {target}',
             directionLabel: '동기화 방향', directionBoth: '양방향 (원본 ⇄ 대상)', directionOne: '단방향 (원본 → 대상)', directionReverse: '역방향 (대상 → 원본)', policyLabel: '충돌 해결 정책', policyLatest: '최신 파일 유지', policySource: '원본 우선 덮어쓰기', policySkip: '기존 파일 건너뛰기', policyRename: '이름을 바꿔 두 버전 보존', comparisonLabel: '비교 모드', comparisonQuick: '빠른 비교 (크기 + 수정 시각, 기본값)', comparisonExact: '정확 비교 (바이트 단위, 느림)', excludeLabel: '제외할 하위 폴더명',
@@ -41,7 +42,8 @@
             detailsHead: '상세', details: '상세 보기', runDetailTitle: '실행 상세', runDetailDescription: '실행 중 처리한 모든 작업과 결과입니다.', close: '닫기', loadingDetails: '상세 기록을 불러오는 중입니다.', detailsUnavailable: '상세 기록을 찾을 수 없습니다.', durationHead: '소요 시간', sequenceHead: '순서', actionHead: '작업', versionIdHead: '버전 ID', versionPathHead: '버전 경로', errorHead: '오류', previousPage: '이전', nextPage: '다음', downloadCsv: 'CSV 다운로드', downloadRunJson: 'JSON 다운로드', entrySuccess: '성공', entryFailed: '실패', entryNotRun: '미실행', actionCopy: '복사', actionRename: '이름 변경', actionTrash: '휴지통 이동', actionBaseline: '기준 저장', actionCreateDirectory: '폴더 생성', actionBaselineDirectory: '폴더 기준 저장', actionTrashDirectory: '폴더 휴지통 이동', actionUnknown: '기타',
         },
         en: {
-            versionsTitle: 'Version manager', versionsDescription: 'Captured files in both connected folders. Restore applies to the original path in the folder that stores the version.', owningRoot: 'Owning folder', capturedAt: 'Captured', versionReason: 'Reason', beforeOverwrite: 'Before overwrite', beforeRestore: 'Before restore', versionDownload: 'Download', versionRestore: 'Restore', versionRefresh: 'Refresh', versionsEmpty: 'No saved versions.', versionsLoading: 'Reading versions.', versionFailed: 'Version operation failed: {message}', restoreTitle: 'Confirm version restore', restoreDescription: 'Review the selected version and current file before restoring.', selectedVersion: 'Selected version', currentFile: 'Current file', restoreReplace: 'Save the current file as a new version first, then replace it with the selected version.', restoreCreate: 'The current file is missing. Create a new file at the original path.', cancelRestore: 'Cancel', confirmRestore: 'Restore this version', restoreWriting: 'Restoring. Please wait until the file write finishes.', restoreDone: 'Restore complete. Compare changes again before synchronizing.', restoreFailed: 'Restore failed: {message}. Select the version again for a fresh confirmation.', retainedBackup: 'Retained backup: {id} · .filenally/{path}', versionDirection: 'Next synchronization: {direction}. Manual restore affects only the displayed owning folder.',
+            versionsTitle: 'Version manager', versionsDescription: 'Captured files in both connected folders. Restore applies to the original path in the folder that stores the version.', owningRoot: 'Owning folder', capturedAt: 'Captured', versionReason: 'Reason', beforeOverwrite: 'Before overwrite', beforeRestore: 'Before restore', versionDownload: 'Download', versionRestore: 'Restore', versionCompare: 'Compare', versionRefresh: 'Refresh', versionsEmpty: 'No saved versions.', versionsLoading: 'Reading versions.', versionFailed: 'Version operation failed: {message}', restoreTitle: 'Confirm version restore', restoreDescription: 'Review the selected version and current file before restoring.', selectedVersion: 'Selected version', currentFile: 'Current file', restoreReplace: 'Save the current file as a new version first, then replace it with the selected version.', restoreCreate: 'The current file is missing. Create a new file at the original path.', cancelRestore: 'Cancel', confirmRestore: 'Restore this version', restoreWriting: 'Restoring. Please wait until the file write finishes.', restoreDone: 'Restore complete. Compare changes again before synchronizing.', restoreFailed: 'Restore failed: {message}. Select the version again for a fresh confirmation.', retainedBackup: 'Retained backup: {id} · .filenally/{path}', versionDirection: 'Next synchronization: {direction}. Manual restore affects only the displayed owning folder.',
+            comparisonTitle: 'Version comparison', comparisonDescription: 'Read-only comparison with the selected version on the left. Sync direction is unchanged.', comparisonTarget: 'Right-hand counterpart', comparisonLeft: 'Left', comparisonRight: 'Right', comparisonChoose: 'Choose a counterpart', comparisonRun: 'Compare', comparisonAgain: 'Compare again', comparisonStop: 'Stop comparison', comparisonStopping: 'Stopping comparison…', comparisonStopped: 'Comparison stopped.', comparisonReady: 'Check the counterpart, then start comparison.', comparisonLoading: 'Reading comparison choices…', comparisonWorking: 'Comparing: {stage} ({done}/{total})', comparisonBytes: 'Bytes', comparisonText: 'Text', comparisonHash: 'Fingerprints', comparisonFailed: 'Comparison failed: {message}', comparisonIdentical: 'Bytes are identical.', comparisonDifferent: 'Bytes are different.', comparisonMissing: 'Current file is missing; not compared.', comparisonLineEqual: 'Line content is equal; BOM or line-ending format/positions differ.', comparisonCounts: 'Left → right: {added} added, {removed} removed', comparisonSnapshot: 'Snapshots at their read times, not an atomic lock. Later edits retaining size and mtime may be undetected.', comparisonReadAt: 'Read time', comparisonType: 'MIME type', comparisonPresence: 'File presence', comparisonPresent: 'Present', comparisonAbsent: 'Missing', comparisonUnavailable: 'Unavailable', comparisonFormat: 'BOM: {bom} · CRLF {crlf} · LF {lf} · CR {cr} · Final newline: {final}', comparisonYes: 'Yes', comparisonNo: 'No', comparisonSize: 'Text exceeds the 512 KiB per-file limit.', comparisonEncoding: 'Not valid UTF-8 text.', comparisonControl: 'Contains control characters not displayed as text.', comparisonLineCount: 'Exceeds 5,000 lines per file.', comparisonLineLength: 'Exceeds 8,192 UTF-16 code units per line.', comparisonWorkLimit: 'Exceeds the 2,000,000-cell line-diff limit.', comparisonHashLarge: 'SHA-256 not computed: exceeds 16 MiB per file', comparisonHashUnavailable: 'SHA-256 not computed: Web Crypto unavailable.', comparisonHashMissing: 'SHA-256 not computed: file missing', comparisonLegend: 'Left line / right line · − removed · + added · = context', comparisonGap: '{count} context lines omitted: left {left}, right {right}',
             desc: 'Compare two local folders, review the change plan, and synchronize them safely.', controlTitle: 'Synchronization controls', selectSource: 'Select source folder', selectTarget: 'Select target folder', notSelected: 'Not selected', languageLabel: 'Language', progressLabel: 'Operation progress', workspaceLabel: 'Folder comparison results', activityLabel: 'Synchronization activity',
             profileNone: 'No synchronization profile is selected.', profileUnverified: 'Folder pair unverified', profileVerified: 'Folder pair verified', profileLabel: '{source} ⇄ {target}',
             directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', directionReverse: 'Reverse (Target → Source)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', comparisonLabel: 'Comparison mode', comparisonQuick: 'Quick comparison (size + modified time, default)', comparisonExact: 'Exact comparison (byte-by-byte, slower)', excludeLabel: 'Excluded directory names',
@@ -1891,8 +1893,10 @@
     const VersionManager = (() => {
         const dialog = $('#versionDialog');
         const restoreDialog = $('#restoreDialog');
+        const comparisonDialog = $('#comparisonDialog');
         let session = null;
         const current = (owner) => session === owner && dialog.open && owner.roots.source === model.source && owner.roots.target === model.target;
+        const comparisonCurrent = (owner, child) => current(owner) && owner.comparison === child && comparisonDialog.open;
         const rootLabel = (owner, side) => `${t(side === 'source' ? 'sourceTitle' : 'targetTitle')} · ${owner.names[side]}`;
         const directionLabel = (owner) => t(owner.direction === 'unidirectional' ? 'directionOne' : owner.direction === 'reverse' ? 'directionReverse' : 'directionBoth');
         const node = (tag, text, className) => {
@@ -1905,13 +1909,14 @@
             const owner = session;
             if (!owner) return;
             const busy = owner.reading || owner.writing;
-            $('#btnVersionRefresh').disabled = busy || restoreDialog.open;
-            $('#btnVersionPrevious').disabled = busy || owner.page === 0;
-            $('#btnVersionNext').disabled = busy || (owner.page + 1) * 100 >= owner.rows.length;
+            const childOpen = Boolean(owner.comparison);
+            $('#btnVersionRefresh').disabled = busy || restoreDialog.open || childOpen;
+            $('#btnVersionPrevious').disabled = busy || childOpen || owner.page === 0;
+            $('#btnVersionNext').disabled = busy || childOpen || (owner.page + 1) * 100 >= owner.rows.length;
             $('#btnCloseVersions').disabled = owner.writing;
-            $('#btnConfirmRestore').disabled = owner.writing || !owner.selection;
+            $('#btnConfirmRestore').disabled = owner.writing || childOpen || !owner.selection;
             $('#btnCancelRestore').disabled = owner.writing;
-            dialog.querySelectorAll('[data-version-action]').forEach(button => { button.disabled = busy; });
+            dialog.querySelectorAll('[data-version-action]').forEach(button => { button.disabled = busy || childOpen; });
             renderControls();
         };
         const render = () => {
@@ -1931,8 +1936,9 @@
                 });
                 const actions = node('td', ''); actions.dataset.label = t('actionHead');
                 const buttons = node('div', '', 'version-row-actions');
-                for (const action of ['download', 'restore']) {
-                    const button = node('button', t(action === 'download' ? 'versionDownload' : 'versionRestore'), 'button-ghost');
+                for (const action of ['compare', 'download', 'restore']) {
+                    const labels = { compare: 'versionCompare', download: 'versionDownload', restore: 'versionRestore' };
+                    const button = node('button', t(labels[action]), 'button-ghost');
                     button.type = 'button'; button.dataset.versionAction = action;
                     button.setAttribute('aria-label', `${button.textContent} · ${row.record.originalPath} · ${rootLabel(owner, row.side)}`);
                     button.addEventListener('click', () => select(row, action, button)); buttons.append(button);
@@ -1946,7 +1952,7 @@
         };
         const refresh = async (keepMessage = false) => {
             const owner = session;
-            if (!owner || owner.reading || owner.writing || restoreDialog.open) return;
+            if (!owner || owner.reading || owner.writing || owner.comparison || restoreDialog.open) return;
             owner.reading = true;
             if (!keepMessage) owner.message = t('versionsLoading');
             render();
@@ -1982,9 +1988,200 @@
                 section.append(dl); container.append(section);
             }
         };
+        const clearComparisonOutput = (owner, child) => {
+            if (!comparisonCurrent(owner, child)) return;
+            child.result = null; child.metadata = null; child.resultPage = 0;
+            $('#comparisonBody').replaceChildren();
+            $('#comparisonSummary').replaceChildren(node('p', `${t('comparisonLeft')} · ${t('selectedVersion')} · ${rootLabel(owner, child.row.side)} · ${child.row.record.originalPath} · ${child.row.record.id}`));
+            $('#comparisonPageStatus').textContent = '1 / 1';
+        };
+        const comparisonMetadata = (snapshot) => {
+            const value = { path: snapshot.path };
+            for (const key of ['left', 'right']) {
+                const { kind, record, file, readAt } = snapshot[key];
+                value[key] = { kind, record, readAt,
+                    file: file ? { size: file.size, type: file.type, lastModified: file.lastModified } : null };
+            }
+            return value;
+        };
+        const comparisonControls = (owner, child) => {
+            if (!comparisonCurrent(owner, child)) return;
+            const busy = Boolean(child.run);
+            $('#comparisonTarget').disabled = busy;
+            $('#btnRunComparison').disabled = busy || child.counterpart === undefined;
+            $('#btnRunComparison').textContent = t(child.attempted ? 'comparisonAgain' : 'comparisonRun');
+            $('#btnStopComparison').disabled = !busy || child.run.cancelled || child.run.loading;
+            $('#btnComparisonTargetPrevious').disabled = busy || child.choicePage === 0;
+            $('#btnComparisonTargetNext').disabled = busy || (child.choicePage + 1) * 100 >= child.choices.length;
+            $('#btnComparisonPrevious').disabled = busy || child.resultPage === 0;
+            $('#btnComparisonNext').disabled = busy || (child.resultPage + 1) * 200 >= (child.result?.rows.length || 0);
+            $('#comparisonStatus').textContent = child.message;
+            controls();
+        };
+        const renderComparisonChoices = (owner, child) => {
+            if (!comparisonCurrent(owner, child)) return;
+            const select = $('#comparisonTarget'); select.replaceChildren();
+            for (const [value, label] of [['', t('comparisonChoose')], ['current', t('currentFile')]]) {
+                const option = node('option', label); option.value = value; select.append(option);
+            }
+            for (const record of child.choices.slice(child.choicePage * 100, (child.choicePage + 1) * 100)) {
+                const option = node('option', `${new Date(record.capturedAt).toLocaleString(language())} · ${record.id}`);
+                option.value = `version:${record.id}`; select.append(option);
+            }
+            select.value = child.counterpart === undefined ? '' : child.counterpart === null ? 'current' : `version:${child.counterpart.id}`;
+            $('#comparisonTargetPageStatus').textContent = `${child.choicePage + 1} / ${Math.max(1, Math.ceil(child.choices.length / 100))}`;
+            comparisonControls(owner, child);
+        };
+        const renderComparisonOutput = async (owner, child) => {
+            if (!comparisonCurrent(owner, child) || !child.result || !child.metadata) return;
+            const generation = child.generation, result = child.result, metadata = child.metadata;
+            const stale = () => !comparisonCurrent(owner, child) || child.generation !== generation;
+            const summary = document.createDocumentFragment();
+            summary.append(node('p', t('comparisonSnapshot')));
+            summary.append(node('p', t('versionDirection', { direction: directionLabel(owner) })));
+            const reasons = { size: 'comparisonSize', encoding: 'comparisonEncoding', control: 'comparisonControl',
+                'line-count': 'comparisonLineCount', 'line-length': 'comparisonLineLength', 'work-limit': 'comparisonWorkLimit' };
+            if (result.reason) summary.append(node('p', t(reasons[result.reason])));
+            if (result.lineContentEqual) summary.append(node('p', t('comparisonLineEqual')));
+            if (result.kind === 'text' && !result.lineContentEqual) summary.append(node('p', t('comparisonCounts', result)));
+            for (const key of ['left', 'right']) {
+                const side = metadata[key], file = side.file, record = side.record;
+                const section = node('section', '');
+                section.append(node('h3', `${t(key === 'left' ? 'comparisonLeft' : 'comparisonRight')} · ${t(side.kind === 'current' ? 'currentFile' : 'selectedVersion')}`));
+                const fields = [['owningRoot', rootLabel(owner, child.row.side)], ['pathHead', metadata.path],
+                    ['comparisonPresence', t(file ? 'comparisonPresent' : 'comparisonAbsent')],
+                    ['comparisonReadAt', new Date(side.readAt).toLocaleString(language())]];
+                const absent = t('comparisonUnavailable');
+                fields.push(['sizeHead', file ? `${file.size} B` : absent], ['comparisonType', file?.type || absent],
+                    ['dateHead', file ? new Date(record ? record.lastModified : file.lastModified).toLocaleString(language()) : absent]);
+                if (record) fields.push(['versionIdHead', record.id], ['capturedAt', new Date(record.capturedAt).toLocaleString(language())]);
+                const dl = node('dl', '');
+                for (const [label, value] of fields) dl.append(node('dt', t(label)), node('dd', value));
+                const hash = result.hashes[key];
+                const hashKeys = { 'too-large': 'comparisonHashLarge', unavailable: 'comparisonHashUnavailable', missing: 'comparisonHashMissing' };
+                dl.append(node('dt', 'SHA-256'), node('dd', hash.status === 'ok' ? hash.value : t(hashKeys[hash.status])));
+                section.append(dl);
+                const fileFormat = result.formats[key];
+                if (fileFormat) section.append(node('p', t('comparisonFormat', { ...fileFormat,
+                    bom: t(fileFormat.bom ? 'comparisonYes' : 'comparisonNo'), final: t(fileFormat.finalNewline ? 'comparisonYes' : 'comparisonNo') })));
+                summary.append(section);
+            }
+            const body = document.createDocumentFragment();
+            const rows = result.rows.slice(child.resultPage * 200, (child.resultPage + 1) * 200);
+            for (let index = 0; index < rows.length; index += 1) {
+                const row = rows[index], li = node('li', ''); li.dataset.diffKind = row.kind;
+                if (row.kind === 'gap') li.textContent = t('comparisonGap', { count: row.count,
+                    left: `${row.leftLine}–${row.leftLine + row.count - 1}`, right: `${row.rightLine}–${row.rightLine + row.count - 1}` });
+                else li.append(node('span', row.leftLine ?? ''), node('span', row.rightLine ?? ''),
+                    node('span', { context: '=', remove: '−', add: '+' }[row.kind]), node('code', row.text));
+                body.append(li);
+                if (index % 50 === 49) { await new Promise(resolve => setTimeout(resolve, 0)); if (stale()) return; }
+            }
+            if (stale()) return;
+            $('#comparisonSummary').replaceChildren(summary); $('#comparisonBody').replaceChildren(body);
+            $('#comparisonPageStatus').textContent = `${child.resultPage + 1} / ${Math.max(1, Math.ceil(result.rows.length / 200))}`;
+            comparisonControls(owner, child);
+        };
+        const openComparison = async (owner, row, trigger) => {
+            if (!current(owner) || owner.reading || owner.writing || owner.comparison || restoreDialog.open) return;
+            const child = { row, trigger, choices: [], choicePage: 0, counterpart: null,
+                result: null, metadata: null, resultPage: 0, generation: 1, run: null,
+                message: t('comparisonLoading'), attempted: false };
+            const run = { cancelled: false, generation: child.generation, loading: true };
+            child.run = run; owner.comparison = child; owner.reading = true;
+            comparisonDialog.showModal();
+            $('#comparisonProgress').hidden = true;
+            $('#comparisonProgress').setAttribute('aria-label', t('comparisonTitle'));
+            clearComparisonOutput(owner, child);
+            renderComparisonChoices(owner, child); $('#btnCloseComparison').focus();
+            const isCancelled = () => run.cancelled || !comparisonCurrent(owner, child) || child.generation !== run.generation;
+            try {
+                const choices = await VersionStore.comparisonChoices(row.root, row.record, { isCancelled });
+                if (isCancelled()) return;
+                child.choices = choices; child.message = t('comparisonReady');
+            } catch (error) {
+                if (!isCancelled()) { child.counterpart = undefined; child.message = t('comparisonFailed', { message: safeMessage(error) }); }
+            } finally {
+                if (comparisonCurrent(owner, child) && child.run === run) {
+                    child.run = null; owner.reading = false; renderComparisonChoices(owner, child);
+                }
+            }
+        };
+        const startComparison = async () => {
+            const owner = session, child = owner?.comparison;
+            if (!child || !comparisonCurrent(owner, child) || child.run || owner.reading || owner.writing
+                || restoreDialog.open || child.counterpart === undefined) return;
+            const run = { cancelled: false, generation: ++child.generation };
+            const focusWasStart = document.activeElement === $('#btnRunComparison');
+            child.run = run; child.attempted = true; clearComparisonOutput(owner, child);
+            child.message = t('comparisonLoading'); owner.reading = true;
+            $('#comparisonProgress').hidden = true;
+            const isCancelled = () => run.cancelled || !comparisonCurrent(owner, child) || child.generation !== run.generation;
+            comparisonControls(owner, child);
+            if (focusWasStart) $('#btnStopComparison').focus();
+            try {
+                const snapshot = await VersionStore.prepareComparison(child.row.root, child.row.record, child.counterpart, { isCancelled });
+                if (isCancelled()) return;
+                const result = await VersionComparison.analyze(snapshot.left.file, snapshot.right.file, {
+                    isCancelled, onProgress: ({ stage, done, total }) => {
+                        if (isCancelled()) return;
+                        const keys = { bytes: 'comparisonBytes', text: 'comparisonText', hash: 'comparisonHash' };
+                        child.message = t('comparisonWorking', { stage: t(keys[stage]), done, total });
+                        $('#comparisonStatus').textContent = child.message;
+                        const progress = $('#comparisonProgress'); progress.hidden = false;
+                        progress.max = Math.max(1, total); progress.value = done;
+                    },
+                });
+                if (isCancelled()) return;
+                await VersionStore.validateComparison(snapshot, { isCancelled });
+                if (isCancelled()) return;
+                child.metadata = comparisonMetadata(snapshot); child.result = result;
+                child.message = t(result.kind === 'missing' ? 'comparisonMissing' : result.equal ? 'comparisonIdentical' : 'comparisonDifferent');
+                await renderComparisonOutput(owner, child);
+                if (isCancelled()) return;
+            } catch (error) {
+                if (!isCancelled()) {
+                    clearComparisonOutput(owner, child);
+                    child.message = t('comparisonFailed', { message: safeMessage(error) });
+                }
+            } finally {
+                if (comparisonCurrent(owner, child) && child.run === run) {
+                    const focusWasStop = document.activeElement === $('#btnStopComparison');
+                    child.run = null; owner.reading = false;
+                    if (run.cancelled) child.message = t('comparisonStopped');
+                    $('#comparisonProgress').hidden = true;
+                    comparisonControls(owner, child);
+                    if (focusWasStop) $('#btnRunComparison').focus();
+                }
+            }
+        };
+        const stopComparison = () => {
+            const owner = session, child = owner?.comparison;
+            if (!child || !comparisonCurrent(owner, child) || !child.run || child.run.loading) return;
+            const focusWasStop = document.activeElement === $('#btnStopComparison');
+            child.run.cancelled = true; child.generation += 1;
+            clearComparisonOutput(owner, child); $('#comparisonProgress').hidden = true;
+            child.message = t('comparisonStopping'); comparisonControls(owner, child);
+            if (focusWasStop) $('#btnCloseComparison').focus();
+        };
+        const closeComparison = (returnFocus = true) => {
+            const owner = session, child = owner?.comparison;
+            if (!child) return;
+            if (child.run) child.run.cancelled = true;
+            child.generation += 1; child.metadata = null; child.result = null; child.choices = [];
+            owner.comparison = null; owner.reading = false;
+            $('#comparisonBody').replaceChildren(); $('#comparisonSummary').replaceChildren();
+            $('#comparisonProgress').hidden = true;
+            if (comparisonDialog.open) comparisonDialog.close();
+            controls();
+            if (returnFocus && current(owner)) {
+                (child.trigger?.isConnected ? child.trigger : $('#btnCloseVersions')).focus();
+            }
+        };
         const select = async (row, action, trigger) => {
             const owner = session;
-            if (!owner || !current(owner) || owner.reading || owner.writing || restoreDialog.open) return;
+            if (!owner || !current(owner) || owner.reading || owner.writing || owner.comparison || restoreDialog.open) return;
+            if (action === 'compare') { await openComparison(owner, row, trigger); return; }
             const returnFocus = document.activeElement === trigger;
             owner.reading = true; owner.message = t('versionsLoading'); controls();
             $('#versionStatus').textContent = owner.message;
@@ -1993,7 +2190,7 @@
                     const file = await VersionStore.read(row.root, row.record);
                     if (!current(owner)) return;
                     downloadBlob(file, row.record.originalPath.split('/').at(-1));
-                } else {
+                } else if (action === 'restore') {
                     const prepared = await VersionStore.prepareRestore(row.root, row.record);
                     if (!current(owner)) return;
                     owner.selection = { row, prepared }; owner.trigger = trigger;
@@ -2014,7 +2211,7 @@
         };
         const confirm = async () => {
             const owner = session;
-            if (!owner || !current(owner) || !owner.selection || owner.writing || !restoreDialog.open) return;
+            if (!owner || !current(owner) || owner.comparison || !owner.selection || owner.writing || !restoreDialog.open) return;
             const { row, prepared } = owner.selection;
             owner.writing = true; controls();
             $('#restoreStatus').textContent = t('restoreWriting');
@@ -2044,23 +2241,62 @@
         };
         const close = () => {
             if (!session || session.writing) return;
+            closeComparison(false);
             if (restoreDialog.open) restoreDialog.close();
             dialog.close();
         };
         const open = () => {
             if (operationBlocked() || !model.source || !model.target || !model.profile || !model.trustedProfile) return;
-            session = { roots: { source: model.source, target: model.target }, names: { source: model.source.name, target: model.target.name }, direction: model.state.config.direction, rows: [], errors: [], page: 0, reading: false, writing: false, selection: null, message: '' };
+            session = { roots: { source: model.source, target: model.target }, names: { source: model.source.name, target: model.target.name }, direction: model.state.config.direction, rows: [], errors: [], page: 0, reading: false, writing: false, selection: null, comparison: null, message: '' };
             model.versionBusy = true;
             dialog.showModal(); $('#btnCloseVersions').focus(); refresh();
         };
         $('#btnVersions').addEventListener('click', open);
         $('#btnCloseVersions').addEventListener('click', close);
         $('#btnVersionRefresh').addEventListener('click', () => refresh());
-        $('#btnVersionPrevious').addEventListener('click', () => { if (session && !session.reading && session.page > 0) { session.page--; render(); } });
-        $('#btnVersionNext').addEventListener('click', () => { if (session && !session.reading && (session.page + 1) * 100 < session.rows.length) { session.page++; render(); } });
+        $('#btnVersionPrevious').addEventListener('click', () => { if (session && !session.reading && !session.comparison && session.page > 0) { session.page--; render(); } });
+        $('#btnVersionNext').addEventListener('click', () => { if (session && !session.reading && !session.comparison && (session.page + 1) * 100 < session.rows.length) { session.page++; render(); } });
         $('#btnConfirmRestore').addEventListener('click', confirm);
         $('#btnCancelRestore').addEventListener('click', () => { if (!session?.writing) restoreDialog.close(); });
+        $('#btnRunComparison').addEventListener('click', startComparison);
+        $('#btnStopComparison').addEventListener('click', stopComparison);
+        $('#btnCloseComparison').addEventListener('click', () => closeComparison());
+        $('#comparisonTarget').addEventListener('change', event => {
+            const owner = session, child = owner?.comparison;
+            if (!child || !comparisonCurrent(owner, child)) return;
+            if (child.run) { renderComparisonChoices(owner, child); return; }
+            const value = event.target.value;
+            const visible = child.choices.slice(child.choicePage * 100, (child.choicePage + 1) * 100);
+            child.counterpart = value === 'current' ? null : visible.find(record => `version:${record.id}` === value);
+            child.generation += 1; clearComparisonOutput(owner, child);
+            child.message = t('comparisonReady'); comparisonControls(owner, child);
+        });
+        for (const [id, delta] of [['btnComparisonTargetPrevious', -1], ['btnComparisonTargetNext', 1]]) {
+            $(`#${id}`).addEventListener('click', () => {
+                const owner = session, child = owner?.comparison;
+                if (!child || !comparisonCurrent(owner, child) || child.run) return;
+                const next = child.choicePage + delta;
+                if (next < 0 || next >= Math.max(1, Math.ceil(child.choices.length / 100))) return;
+                child.choicePage = next;
+                if (child.counterpart !== null) child.counterpart = undefined;
+                child.generation += 1; clearComparisonOutput(owner, child);
+                child.message = t('comparisonReady'); renderComparisonChoices(owner, child);
+            });
+        }
+        for (const [id, delta] of [['btnComparisonPrevious', -1], ['btnComparisonNext', 1]]) {
+            $(`#${id}`).addEventListener('click', async () => {
+                const owner = session, child = owner?.comparison;
+                if (!child || !comparisonCurrent(owner, child) || child.run || !child.result) return;
+                const next = child.resultPage + delta;
+                if (next < 0 || next >= Math.max(1, Math.ceil(child.result.rows.length / 200))) return;
+                child.resultPage = next; child.generation += 1;
+                $('#comparisonBody').replaceChildren(); comparisonControls(owner, child);
+                await renderComparisonOutput(owner, child);
+            });
+        }
         dialog.addEventListener('cancel', event => { if (session?.writing) event.preventDefault(); });
+        comparisonDialog.addEventListener('cancel', event => { event.preventDefault(); closeComparison(); });
+        comparisonDialog.addEventListener('close', () => { if (!comparisonDialog.open) closeComparison(); });
         restoreDialog.addEventListener('cancel', event => { if (session?.writing) event.preventDefault(); });
         restoreDialog.addEventListener('close', () => {
             if (!session) return;
@@ -2070,6 +2306,7 @@
         });
         dialog.addEventListener('close', () => {
             if (session?.writing) { dialog.showModal(); return; }
+            closeComparison(false);
             session = null; model.versionBusy = false; renderControls(); $('#btnVersions').focus();
         });
         return Object.freeze({ open });
