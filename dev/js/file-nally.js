@@ -4,7 +4,9 @@
     const STORAGE_KEY = 'smart_sync_state';
     const SHOW_CHANGED_ONLY_KEY = 'file_nally_show_changed_only';
     const STATE_VERSION = 2;
+    const VERSION_INDEX_SCHEMA = 1;
     const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+    const MAX_VERSION_RECORDS = 100000;
     const MAX_PROFILES = 100;
     const MAX_MANIFEST_ENTRIES = 100000;
     const MAX_PROFILE_HISTORY = 30;
@@ -12,7 +14,8 @@
     const RUN_LOG_PAGE_SIZE = 100;
     const CONTENT_CHUNK_BYTES = 4 * 1024 * 1024;
     const FORBIDDEN_KEYS = new Set(['__proto__', 'prototype', 'constructor']);
-    const DEFAULT_EXCLUDES = ['node_modules', '.git', 'dist', 'temp', '.trash'];
+    const RESERVED_EXCLUDES = ['.trash', '.filenally'];
+    const DEFAULT_EXCLUDES = ['node_modules', '.git', 'dist', 'temp', ...RESERVED_EXCLUDES];
 
     const MAX_BOOKMARKS = 20;
     const MAX_RECENT_FOLDERS = 5;
@@ -65,7 +68,7 @@
     const normalizeExcludes = (value) => {
         const values = Array.isArray(value) ? value : String(value || '').split(',');
         const normalized = values.map((item) => String(item).trim()).filter(Boolean);
-        normalized.push('.trash');
+        normalized.push(...RESERVED_EXCLUDES);
         return [...new Set(normalized)].slice(0, 100);
     };
     const format = (template, values = {}) => Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), template);
@@ -75,6 +78,66 @@
         if (!parts.length || parts.some((part) => !part || part === '.' || part === '..')) throw new Error(`Unsafe relative path: ${path}`);
         return parts;
     };
+
+    const rejectForbidden = (value, seen = new Set(), location = []) => {
+        if (!value || typeof value !== 'object' || seen.has(value)) return;
+        seen.add(value);
+        // Only directory-manifest keys are filesystem paths; their values remain checked.
+        const directoryPaths = location.length === 3 && location[0] === 'profiles' && location[2] === 'directoryManifest';
+        for (const key of Object.keys(value)) {
+            if (!directoryPaths && FORBIDDEN_KEYS.has(key)) throw new Error(`Forbidden JSON key: ${key}`);
+            rejectForbidden(value[key], seen, [...location, key]);
+        }
+        seen.delete(value);
+    };
+
+    const VersionStore = (() => {
+        const emptyIndex = () => ({ schemaVersion: VERSION_INDEX_SCHEMA, versions: [] });
+        const cleanRecord = (value) => {
+            if (!isObject(value)
+                || typeof value.id !== 'string' || !value.id
+                || typeof value.capturedAt !== 'string' || !Number.isFinite(Date.parse(value.capturedAt))
+                || typeof value.originalPath !== 'string'
+                || typeof value.storedPath !== 'string'
+                || !Number.isFinite(Number(value.size))
+                || !Number.isFinite(Number(value.lastModified))
+                || value.reason !== 'before-overwrite'
+                || !['bidirectional', 'unidirectional', 'reverse'].includes(value.direction)
+                || !['source', 'target'].includes(value.fromSide)
+                || !['source', 'target'].includes(value.toSide)
+                || value.fromSide === value.toSide) return null;
+            safeSegments(value.originalPath);
+            const expectedStoredPath = ['versions', value.id, ...safeSegments(value.originalPath)].join('/');
+            if (value.storedPath !== expectedStoredPath) return null;
+            return {
+                id: value.id,
+                capturedAt: value.capturedAt,
+                originalPath: value.originalPath,
+                storedPath: expectedStoredPath,
+                size: Number(value.size),
+                type: typeof value.type === 'string' ? value.type : '',
+                lastModified: Number(value.lastModified),
+                reason: 'before-overwrite',
+                runId: typeof value.runId === 'string' ? value.runId : '',
+                direction: value.direction,
+                fromSide: value.fromSide,
+                toSide: value.toSide,
+            };
+        };
+        const parseIndexText = (text) => {
+            if (new Blob([text]).size > MAX_IMPORT_BYTES) throw new Error('Version index exceeds 5MB');
+            const raw = JSON.parse(text);
+            rejectForbidden(raw);
+            if (!isObject(raw) || raw.schemaVersion !== VERSION_INDEX_SCHEMA || !Array.isArray(raw.versions)) {
+                throw new Error('Unsupported version index');
+            }
+            if (raw.versions.length > MAX_VERSION_RECORDS) throw new Error('Version index has too many records');
+            const versions = raw.versions.map(cleanRecord);
+            if (versions.some((record) => !record)) throw new Error('Malformed version record');
+            return { schemaVersion: VERSION_INDEX_SCHEMA, versions };
+        };
+        return Object.freeze({ cleanRecord, emptyIndex, parseIndexText });
+    })();
 
     const StateStore = (() => {
         const createDefault = () => ({
@@ -87,18 +150,6 @@
             recentFolders: [],
             ui: { advancedExpanded: null },
         });
-
-        const rejectForbidden = (value, seen = new Set(), location = []) => {
-            if (!value || typeof value !== 'object' || seen.has(value)) return;
-            seen.add(value);
-            // Only directory-manifest keys are filesystem paths; their values remain checked.
-            const directoryPaths = location.length === 3 && location[0] === 'profiles' && location[2] === 'directoryManifest';
-            for (const key of Object.keys(value)) {
-                if (!directoryPaths && FORBIDDEN_KEYS.has(key)) throw new Error(`Forbidden JSON key: ${key}`);
-                rejectForbidden(value[key], seen, [...location, key]);
-            }
-            seen.delete(value);
-        };
 
         const cleanConfig = (raw = {}) => ({
             direction: ['bidirectional', 'unidirectional', 'reverse'].includes(raw.direction) ? raw.direction : 'bidirectional',
@@ -1451,6 +1502,7 @@
         RunLogStore,
         StateStore,
         SyncPlanner,
+        VersionStore,
         connectStoredProfile: (profileId, requestPermission) => Controller.connectStoredProfile(profileId, { requestPermission }),
         executeCurrentPlan: () => Controller.sync(),
         getModel: () => ({ phase: model.phase, trustedProfile: model.trustedProfile, profileId: model.profile?.id || null, profileConnectionPending: model.profileConnectionPending, plan: model.plan ? cloneJson({ id: model.plan.id, actions: model.plan.actions, summary: model.plan.summary }) : null }),

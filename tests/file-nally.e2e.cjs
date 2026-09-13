@@ -355,6 +355,60 @@ async function main() {
     assert.match(result[1], /exceeds 5MB/);
   });
 
+  add('version index accepts schema v1 and reconstructs allowlisted records', async ({ page }) => {
+    const parsed = await page.evaluate(() => window.FileNallyTest.VersionStore.parseIndexText(JSON.stringify({
+      schemaVersion: 1,
+      versions: [{
+        id: 'version-1',
+        capturedAt: '2026-09-13T00:00:00.000Z',
+        originalPath: 'docs/report.txt',
+        storedPath: 'versions/version-1/docs/report.txt',
+        size: 4,
+        type: 'text/plain',
+        lastModified: 100,
+        reason: 'before-overwrite',
+        runId: 'run-1',
+        direction: 'unidirectional',
+        fromSide: 'source',
+        toSide: 'target',
+        ignored: 'drop-me',
+      }],
+    })));
+    assert.deepEqual(parsed, {
+      schemaVersion: 1,
+      versions: [{
+        id: 'version-1',
+        capturedAt: '2026-09-13T00:00:00.000Z',
+        originalPath: 'docs/report.txt',
+        storedPath: 'versions/version-1/docs/report.txt',
+        size: 4,
+        type: 'text/plain',
+        lastModified: 100,
+        reason: 'before-overwrite',
+        runId: 'run-1',
+        direction: 'unidirectional',
+        fromSide: 'source',
+        toSide: 'target',
+      }],
+    });
+  });
+
+  add('version index rejects unsafe or unsupported input without resetting it', async ({ page }) => {
+    const results = await page.evaluate(() => {
+      const parse = window.FileNallyTest.VersionStore.parseIndexText;
+      const inputs = [
+        '{"schemaVersion":2,"versions":[]}',
+        '{"schemaVersion":1,"versions":[{"id":"v","originalPath":"../escape"}]}',
+        '{"schemaVersion":1,"versions":{"not":"an array"}}',
+        '{"schemaVersion":1,"versions":[],"constructor":{}}',
+      ];
+      return inputs.map((text) => {
+        try { parse(text); return 'accepted'; } catch (error) { return error.message; }
+      });
+    });
+    assert.deepEqual(results.map((value) => value === 'accepted'), [false, false, false, false]);
+  });
+
   add('directory path exceptions do not bypass configuration or entry key protection', async ({ page }) => {
     const messages = await page.evaluate(() => {
       const results = [];
@@ -641,6 +695,28 @@ async function main() {
     assert.match(await page.locator('#srcFileBody').innerText(), /included-empty\//);
     assert.doesNotMatch(await page.locator('#srcFileBody').innerText(), /\.git/);
     assert.doesNotMatch(await page.locator('#tgtFileBody').innerText(), /\.git/);
+  });
+
+  add('reserved version directories never enter scans or plans', async ({ page }) => {
+    await mountPair(page, {
+      source: {
+        '.filenally': { type: 'directory', entries: {
+          'index.json': { content: '{"schemaVersion":1,"versions":[]}' },
+          versions: { type: 'directory', entries: { secret: { type: 'directory', entries: {
+            'old.txt': { content: 'old' },
+          } } } },
+        } },
+        'visible.txt': { content: 'new' },
+      },
+      target: {},
+    });
+    await page.locator('#excludeDirs').fill('');
+    await compare(page);
+    const plan = await page.evaluate(() => window.FileNallyTest.getModel().plan);
+    assert.deepEqual(plan.actions.map(({ type, path }) => ({ type, path })), [
+      { type: 'copy', path: 'visible.txt' },
+    ]);
+    assert.doesNotMatch(await page.locator('#srcFileBody').innerText(), /\.filenally|old\.txt/);
   });
 
   add('one-way source recreates a target file deleted on the non-authoritative side', async ({ page }) => {
