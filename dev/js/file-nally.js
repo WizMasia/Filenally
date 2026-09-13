@@ -143,8 +143,14 @@
 
     const VersionStore = (() => {
         const preparedRestores = new WeakMap();
-        let restoring = false;
+        let versionWriting = false;
         const emptyIndex = () => ({ schemaVersion: VERSION_INDEX_SCHEMA, versions: [] });
+        const hasKeys = (value, keys) => Object.keys(value).length === keys.length
+            && keys.every(key => Object.hasOwn(value, key));
+        const validCompletedBytes = (value, count) => typeof value === 'string'
+            && value.length <= 18 && /^(0|[1-9][0-9]*)$/.test(value)
+            && BigInt(value) <= 100n * BigInt(Number.MAX_SAFE_INTEGER)
+            && (count !== 0 || value === '0');
         const originalSegments = (path) => {
             const parts = safeSegments(path);
             if (parts.some((part) => RESERVED_EXCLUDES.includes(part.toLowerCase()) || /[\\\0]/.test(part))) {
@@ -152,13 +158,14 @@
             }
             return parts;
         };
-        const cleanRecord = (value) => {
+        const cleanRecord = (value, strictSize = false) => {
             if (!isObject(value)
                 || typeof value.id !== 'string' || !value.id
                 || typeof value.capturedAt !== 'string' || !Number.isFinite(Date.parse(value.capturedAt))
                 || typeof value.originalPath !== 'string'
                 || typeof value.storedPath !== 'string'
                 || !Number.isFinite(Number(value.size))
+                || (strictSize && (!Number.isSafeInteger(value.size) || value.size < 0))
                 || !Number.isFinite(Number(value.lastModified))
                 || !['before-overwrite', 'before-restore'].includes(value.reason)
                 || !['bidirectional', 'unidirectional', 'reverse'].includes(value.direction)
@@ -187,13 +194,55 @@
             if (new Blob([text]).size > MAX_IMPORT_BYTES) throw new Error('Version index exceeds 5MB');
             const raw = JSON.parse(text);
             rejectForbidden(raw);
-            if (!isObject(raw) || raw.schemaVersion !== VERSION_INDEX_SCHEMA || !Array.isArray(raw.versions)) {
+            if (!isObject(raw) || ![1, 2].includes(raw.schemaVersion) || !Array.isArray(raw.versions)) {
                 throw new Error('Unsupported version index');
             }
+            if (raw.schemaVersion === 2 && !Object.hasOwn(raw, 'cleanup')) {
+                throw new Error('Unsupported version index');
+            }
+            if (raw.schemaVersion === 2 && !hasKeys(raw, ['schemaVersion', 'versions', 'cleanup'])) {
+                throw new Error('Malformed version index');
+            }
             if (raw.versions.length > MAX_VERSION_RECORDS) throw new Error('Version index has too many records');
-            const versions = raw.versions.map(cleanRecord);
+            const versions = raw.versions.map((record) => cleanRecord(record, raw.schemaVersion === 2));
             if (versions.some((record) => !record)) throw new Error('Malformed version record');
-            return { schemaVersion: VERSION_INDEX_SCHEMA, versions };
+            const versionIds = new Set(versions.map((record) => record.id));
+            if (versionIds.size !== versions.length) throw new Error('Duplicate version IDs');
+            if (raw.schemaVersion === 1) return { schemaVersion: 1, versions };
+            if (raw.cleanup === null) return { schemaVersion: 2, versions, cleanup: null };
+            const cleanup = raw.cleanup;
+            if (!isObject(cleanup) || !hasKeys(cleanup,
+                ['id', 'startedAt', 'remainingIds', 'completedCount', 'completedBytes'])
+                || typeof cleanup.id !== 'string' || !cleanup.id
+                || safeSegments(cleanup.id).length !== 1 || /[\\\0]/.test(cleanup.id)
+                || typeof cleanup.startedAt !== 'string'
+                || !Number.isFinite(Date.parse(cleanup.startedAt))
+                || new Date(cleanup.startedAt).toISOString() !== cleanup.startedAt
+                || !Array.isArray(cleanup.remainingIds) || !cleanup.remainingIds.length
+                || cleanup.remainingIds.length > 100
+                || new Set(cleanup.remainingIds).size !== cleanup.remainingIds.length
+                || cleanup.remainingIds.some((id) => typeof id !== 'string' || !versionIds.has(id))
+                || !Number.isInteger(cleanup.completedCount) || cleanup.completedCount < 0
+                || cleanup.completedCount > 100
+                || cleanup.completedCount + cleanup.remainingIds.length > 100
+                || !validCompletedBytes(cleanup.completedBytes, cleanup.completedCount)) {
+                throw new Error('Malformed version cleanup');
+            }
+            return { schemaVersion: 2, versions, cleanup: {
+                id: cleanup.id,
+                startedAt: cleanup.startedAt,
+                remainingIds: [...cleanup.remainingIds],
+                completedCount: cleanup.completedCount,
+                completedBytes: cleanup.completedBytes,
+            } };
+        };
+        const requireIdleIndex = (index) => {
+            if (!index.cleanup) return;
+            const error = new Error('Version cleanup requires recovery');
+            error.code = 'VERSION_CLEANUP_PENDING';
+            error.cleanup = Object.freeze({ ...index.cleanup,
+                remainingIds: Object.freeze([...index.cleanup.remainingIds]) });
+            throw error;
         };
         const getExistingFile = async (root, path, check = () => {}) => {
             check();
@@ -206,6 +255,51 @@
                 if (error?.name === 'NotFoundError') return null;
                 throw error;
             }
+        };
+        const readIndexSnapshot = async (root, check = () => {}) => {
+            check();
+            let versionRoot;
+            try { versionRoot = await root.getDirectoryHandle('.filenally'); }
+            catch (error) {
+                check();
+                if (error?.name === 'NotFoundError') {
+                    return { root, versionRoot: null, indexHandle: null, indexFile: null,
+                        text: null, index: emptyIndex() };
+                }
+                throw error;
+            }
+            check();
+            const indexHandle = await getExistingFile(versionRoot, 'index.json', check);
+            check();
+            if (!indexHandle) return { root, versionRoot, indexHandle: null, indexFile: null,
+                text: null, index: emptyIndex() };
+            const indexFile = await indexHandle.getFile();
+            check();
+            if (indexFile.size > MAX_IMPORT_BYTES) throw new Error('Version index exceeds 5MB');
+            const text = await indexFile.text();
+            check();
+            return { root, versionRoot, indexHandle, indexFile, text, index: parseIndexText(text) };
+        };
+        const sameSnapshotHandle = async (before, after, strict, check) => {
+            check();
+            if (Boolean(before) !== Boolean(after)) throw new Error('Version index changed');
+            if (!before) return;
+            if (strict && (typeof before.isSameEntry !== 'function'
+                || typeof after.isSameEntry !== 'function')) throw new Error('Handle identity unavailable');
+            if (typeof before.isSameEntry === 'function' && !await before.isSameEntry(after)) {
+                throw new Error('Version index identity changed');
+            }
+            check();
+        };
+        const validateIndexSnapshot = async (snapshot, check = () => {}, strictIdentity = false) => {
+            check();
+            if (strictIdentity) await sameSnapshotHandle(snapshot.root, snapshot.root, true, check);
+            const fresh = await readIndexSnapshot(snapshot.root, check);
+            check();
+            await sameSnapshotHandle(snapshot.versionRoot, fresh.versionRoot, strictIdentity, check);
+            await sameSnapshotHandle(snapshot.indexHandle, fresh.indexHandle, strictIdentity, check);
+            if (snapshot.text !== fresh.text) throw new Error('Version index changed');
+            return fresh;
         };
         const writeFile = async (root, path, value, handle = null) => {
             if (!handle) {
@@ -223,25 +317,48 @@
                 throw error;
             }
         };
-        const loadIndex = async (versionRoot, check = () => {}) => {
-            check();
-            const handle = await getExistingFile(versionRoot, 'index.json', check);
-            check();
-            if (!handle) return emptyIndex();
-            const file = await handle.getFile();
-            check();
-            if (file.size > MAX_IMPORT_BYTES) throw new Error('Version index exceeds 5MB');
-            const text = await file.text();
-            check();
-            return parseIndexText(text);
+        const writeIndexSnapshot = async (snapshot, nextIndex) => {
+            if (!snapshot.versionRoot) throw new Error('Version store is missing');
+            const requestedText = JSON.stringify(nextIndex);
+            const parsed = parseIndexText(requestedText);
+            const text = parsed.schemaVersion === 1
+                ? JSON.stringify(parsed, null, 2) : JSON.stringify(parsed);
+            parseIndexText(text);
+            const current = await validateIndexSnapshot(snapshot);
+            let indexHandle = current.indexHandle;
+            if (!indexHandle) {
+                if (parsed.schemaVersion !== 1) throw new Error('Version index is missing');
+                indexHandle = await current.versionRoot.getFileHandle('index.json', { create: true });
+            }
+            await writeFile(current.versionRoot, 'index.json', text, indexHandle);
+            const fresh = await readIndexSnapshot(current.root);
+            await sameSnapshotHandle(current.versionRoot, fresh.versionRoot, false, () => {});
+            await sameSnapshotHandle(indexHandle, fresh.indexHandle, false, () => {});
+            if (fresh.text !== text) throw new Error('Version index write was not verified');
+            return fresh;
         };
-        const capture = async ({ action, handles, runId, direction, reason = 'before-overwrite' }) => {
+        const withVersionWriter = async (work) => {
+            if (versionWriting) throw new Error('Version write already running');
+            versionWriting = true;
+            try { return await work(); }
+            finally { versionWriting = false; }
+        };
+        const captureOwned = async ({ action, handles, runId, direction, reason = 'before-overwrite' }) => {
             const root = handles[action.toSide];
             const destinationPath = action.destinationPath || action.path;
             const parts = originalSegments(destinationPath);
             const destination = await getExistingFile(root, destinationPath);
             if (!destination) return null;
-            const snapshot = await destination.getFile();
+            const destinationFile = await destination.getFile();
+            let indexSnapshot = await readIndexSnapshot(root);
+            requireIdleIndex(indexSnapshot.index);
+            if (!indexSnapshot.versionRoot) {
+                await validateIndexSnapshot(indexSnapshot);
+                const versionRoot = await directoryFor(root, ['.filenally'], true);
+                indexSnapshot = await readIndexSnapshot(root);
+                await sameSnapshotHandle(versionRoot, indexSnapshot.versionRoot, false, () => {});
+                if (indexSnapshot.indexHandle) throw new Error('Version index changed');
+            }
             const id = uid();
             const storedPath = ['versions', id, ...parts].join('/');
             const record = cleanRecord({
@@ -249,9 +366,9 @@
                 capturedAt: nowIso(),
                 originalPath: destinationPath,
                 storedPath,
-                size: snapshot.size,
-                type: snapshot.type,
-                lastModified: snapshot.lastModified,
+                size: destinationFile.size,
+                type: destinationFile.type,
+                lastModified: destinationFile.lastModified,
                 reason,
                 runId,
                 direction,
@@ -259,29 +376,24 @@
                 toSide: action.toSide,
             });
             if (!record) throw new Error('Could not create version record');
-            const filenally = await directoryFor(root, ['.filenally'], true);
-            await writeFile(filenally, storedPath, snapshot);
-            const index = await loadIndex(filenally);
-            index.versions.push(record);
-            const indexText = JSON.stringify(index, null, 2);
-            parseIndexText(indexText);
-            await writeFile(filenally, 'index.json', indexText);
+            if (indexSnapshot.index.versions.some((item) => item.id === record.id)) {
+                throw new Error('Duplicate version IDs');
+            }
+            await writeFile(indexSnapshot.versionRoot, storedPath, destinationFile);
+            indexSnapshot = await validateIndexSnapshot(indexSnapshot);
+            requireIdleIndex(indexSnapshot.index);
+            const index = { ...indexSnapshot.index, versions: [...indexSnapshot.index.versions, record] };
+            await writeIndexSnapshot(indexSnapshot, index);
             return Object.freeze(record);
         };
+        const capture = (options) => withVersionWriter(() => captureOwned(options));
         const list = async (root, check = () => {}) => {
             check();
-            let versionRoot;
-            try { versionRoot = await root.getDirectoryHandle('.filenally'); }
-            catch (error) {
-                check();
-                if (error?.name === 'NotFoundError') return [];
-                throw error;
-            }
+            const snapshot = await readIndexSnapshot(root, check);
             check();
-            const { versions } = await loadIndex(versionRoot, check);
+            requireIdleIndex(snapshot.index);
             check();
-            if (new Set(versions.map((record) => record.id)).size !== versions.length) throw new Error('Duplicate version IDs');
-            return versions.map(Object.freeze);
+            return snapshot.index.versions.map(Object.freeze);
         };
         const selectedRecord = (records, selected) => {
             const expected = cleanRecord(selected);
@@ -380,20 +492,19 @@
             await requireSameFile(currentHandle, currentFile, current, current ? await current.getFile() : null);
             return current;
         };
-        const restore = async (prepared, { side, direction, runId }) => {
-            if (restoring || !preparedRestores.has(prepared)) throw new Error('Restore confirmation expired or restore already running');
+        const restoreOwned = async (prepared, { side, direction, runId }) => {
+            if (!preparedRestores.has(prepared)) throw new Error('Restore confirmation expired or restore already running');
             if (!['source', 'target'].includes(side) || !['bidirectional', 'unidirectional', 'reverse'].includes(direction)
                 || typeof runId !== 'string' || !runId) throw new Error('Invalid restore operation');
             const versionHandle = preparedRestores.get(prepared);
             preparedRestores.delete(prepared);
-            restoring = true;
             let backup = null;
             try {
                 const { root, record, currentFile, versionFile } = prepared;
                 if (await root.queryPermission({ mode: 'readwrite' }) !== 'granted') throw new Error('Restore write permission is not granted');
                 await checkPrepared(prepared, versionHandle);
                 if (currentFile) {
-                    backup = await capture({ action: { path: record.originalPath, fromSide: side, toSide: side },
+                    backup = await captureOwned({ action: { path: record.originalPath, fromSide: side, toSide: side },
                         handles: { [side]: root }, direction, runId, reason: 'before-restore' });
                     if (!backup) throw new Error('Restore destination disappeared before backup');
                 }
@@ -403,8 +514,9 @@
             } catch (error) {
                 if (backup) error.backup = backup;
                 throw error;
-            } finally { restoring = false; }
+            }
         };
+        const restore = (prepared, options) => withVersionWriter(() => restoreOwned(prepared, options));
         return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText, list, read, prepareRestore, restore,
             comparisonChoices, prepareComparison, validateComparison });
     })();

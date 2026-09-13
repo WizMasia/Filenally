@@ -105,6 +105,32 @@ function versionFixture(originalPath = 'report.txt', content = 'old') {
   }, content };
 }
 
+function cleanupFixture(id, originalPath = 'report.txt', content = 'old',
+  capturedAt = '2026-09-13T00:00:00.000Z') {
+  const fixture = versionFixture(originalPath, content);
+  fixture.record = { ...fixture.record, id, capturedAt,
+    storedPath: `versions/${id}/${originalPath}` };
+  return fixture;
+}
+
+async function mountCleanup(page, fixtures, {
+  owner = 'target', schemaVersion = 1, cleanup = null,
+} = {}) {
+  await mountPair(page, { source: { 'report.txt': { content: 'source-current' } },
+    target: { 'report.txt': { content: 'target-current' } } });
+  await page.evaluate(({ fixtures, owner, schemaVersion, cleanup }) => {
+    window.__cleanupOwner = owner;
+    window.__cleanupRecords = fixtures.map(item => item.record);
+    const index = { schemaVersion, versions: window.__cleanupRecords };
+    if (schemaVersion === 2) index.cleanup = cleanup;
+    window.__setMockFile(owner, '.filenally/index.json', { content: JSON.stringify(index) });
+    for (const { record, content } of fixtures) {
+      window.__setMockFile(owner, `.filenally/${record.storedPath}`,
+        { content, lastModified: 100 });
+    }
+  }, { fixtures, owner, schemaVersion, cleanup });
+}
+
 async function mountVersion(page, options = {}) {
   const fixture = versionFixture(options.path, options.content);
   await mountPair(page, { source: {}, target: options.missing ? {} : { 'report.txt': { content: 'current', lastModified: 200 } } });
@@ -2045,6 +2071,358 @@ async function main() {
     });
   }
 
+  add('version maintenance lists an idle v2 index without rewriting it', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')], { schemaVersion: 2 });
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    const ids = await page.evaluate(async () => (await window.FileNallyTest.VersionStore
+      .list(window.__mockPair.target)).map(record => record.id));
+    assert.deepEqual(ids, ['saved-1']);
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  const cleanupIntent = (overrides = {}) => ({
+    id: 'cleanup-1', startedAt: '2026-09-13T00:00:00.000Z', remainingIds: ['saved-1'],
+    completedCount: 0, completedBytes: '0', ...overrides,
+  });
+  const maintenanceInvalidIndexes = [
+    ['missing cleanup field', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record] })],
+    ['extra top-level field', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: null, extra: true })],
+    ['extra cleanup field', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ extra: true }) })],
+    ['unknown schema', () => ({ schemaVersion: 3, versions: [cleanupFixture('saved-1').record] })],
+    ['duplicate records', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record, cleanupFixture('saved-1').record], cleanup: null })],
+    ['unknown remaining ID', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ remainingIds: ['missing'] }) })],
+    ['duplicate remaining IDs', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ remainingIds: ['saved-1', 'saved-1'] }) })],
+    ['empty remaining IDs', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ remainingIds: [] }) })],
+    ['more than 100 remaining IDs', () => {
+      const fixtures = Array.from({ length: 101 }, (_, index) => cleanupFixture(`saved-${index}`));
+      return { schemaVersion: 2, versions: fixtures.map(item => item.record),
+        cleanup: cleanupIntent({ remainingIds: fixtures.map(item => item.record.id) }) };
+    }],
+    ['noncanonical startedAt', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ startedAt: '2026-09-13' }) })],
+    ['unsafe cleanup ID', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ id: 'bad/id' }) })],
+    ['negative completed count', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ completedCount: -1 }) })],
+    ['fractional completed count', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ completedCount: 0.5 }) })],
+    ['completed count above 100', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ completedCount: 101 }) })],
+    ['count plus remaining above 100', () => {
+      const fixtures = Array.from({ length: 100 }, (_, index) => cleanupFixture(`saved-${index}`));
+      return { schemaVersion: 2, versions: fixtures.map(item => item.record), cleanup: cleanupIntent({
+        remainingIds: fixtures.map(item => item.record.id), completedCount: 1, completedBytes: '1',
+      }) };
+    }],
+    ['leading-zero completed bytes', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ completedCount: 1, completedBytes: '01' }) })],
+    ['negative completed bytes', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ completedCount: 1, completedBytes: '-1' }) })],
+    ['non-string completed bytes', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ completedCount: 1, completedBytes: 1 }) })],
+    ['more than 18 completed-byte digits', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ completedCount: 1, completedBytes: '1000000000000000000' }) })],
+    ['completed bytes above maximum', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ completedCount: 1, completedBytes: '900719925474099101' }) })],
+    ['zero count with nonzero bytes', () => ({ schemaVersion: 2, versions: [cleanupFixture('saved-1').record], cleanup: cleanupIntent({ completedBytes: '1' }) })],
+    ['negative v2 record size', () => ({ schemaVersion: 2, versions: [{ ...cleanupFixture('saved-1').record, size: -1 }], cleanup: null })],
+    ['fractional v2 record size', () => ({ schemaVersion: 2, versions: [{ ...cleanupFixture('saved-1').record, size: 0.5 }], cleanup: null })],
+    ['unsafe v2 record size', () => ({ schemaVersion: 2, versions: [{ ...cleanupFixture('saved-1').record, size: Number.MAX_SAFE_INTEGER + 1 }], cleanup: null })],
+  ];
+  for (const [name, makeIndex] of maintenanceInvalidIndexes) {
+    add(`version maintenance rejects ${name} without rewriting it`, async ({ page }) => {
+      const index = makeIndex();
+      const fixtures = index.versions.map((record) => ({ record,
+        content: 'x'.repeat(Number.isSafeInteger(record.size) && record.size >= 0 && record.size < 1024 ? record.size : 1) }));
+      await mountCleanup(page, fixtures, { schemaVersion: 2 });
+      await page.evaluate((value) => {
+        window.__mockPair.target.entries.get('.filenally').entries.get('index.json').content = JSON.stringify(value);
+      }, index);
+      await installComparisonMutationSpies(page);
+      const files = await snapshotMockPair(page), state = await comparisonState(page);
+      const result = await page.evaluate(async () => {
+        try { await window.FileNallyTest.VersionStore.list(window.__mockPair.target); return { rejected: false }; }
+        catch (error) { return { rejected: true, message: error.message }; }
+      });
+      assert.equal(result.rejected, true);
+      assert.ok(result.message); assert.doesNotMatch(result.message, /is not a function/);
+      await assertComparisonReadOnly(page, files, state);
+    });
+  }
+
+  for (const schemaVersion of [1, 2]) {
+    add(`version maintenance capture preserves schema v${schemaVersion}`, async ({ page }) => {
+      await mountCleanup(page, [cleanupFixture('saved-1')], { schemaVersion });
+      const result = await page.evaluate(async () => {
+        const store = window.FileNallyTest.VersionStore;
+        const record = await store.capture({ action: { path: 'report.txt', fromSide: 'source', toSide: 'target' },
+          handles: { target: window.__mockPair.target }, runId: 'capture-1', direction: 'unidirectional' });
+        const snapshot = await window.__snapshotMockPair();
+        return { record, index: JSON.parse(snapshot.target['.filenally']['index.json'].content),
+          indexText: snapshot.target['.filenally']['index.json'].content };
+      });
+      assert.equal(result.index.schemaVersion, schemaVersion);
+      assert.equal(result.index.versions.length, 2);
+      assert.equal(result.index.versions[1].id, result.record.id);
+      if (schemaVersion === 2) {
+        assert.equal(result.index.cleanup, null);
+        assert.equal(result.indexText, JSON.stringify(result.index));
+      }
+    });
+  }
+
+  add('version maintenance restore backup uses the owning writer without self-deadlock', async ({ page }) => {
+    await mountVersion(page);
+    const result = await page.evaluate(async () => {
+      const store = window.FileNallyTest.VersionStore, root = window.__mockPair.target;
+      return store.restore(await store.prepareRestore(root, window.__versionRecord), {
+        side: 'target', direction: 'unidirectional', runId: 'restore-1',
+      });
+    });
+    assert.ok(result.backup);
+    const snapshot = await snapshotMockPair(page);
+    assert.equal(snapshot.target['report.txt'].content, 'old');
+    assert.equal(snapshot.target['.filenally'].versions[result.backup.id]['report.txt'].content, 'current');
+  });
+
+  add('version maintenance rejects a second concurrent public capture', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')]);
+    const statuses = await page.evaluate(async () => {
+      window.__mockPair.target.entries.get('.filenally').entries.get('index.json').writeDelay = 30;
+      const options = { action: { path: 'report.txt', fromSide: 'source', toSide: 'target' },
+        handles: { target: window.__mockPair.target }, runId: 'capture-1', direction: 'unidirectional' };
+      return (await Promise.allSettled([
+        window.FileNallyTest.VersionStore.capture(options),
+        window.FileNallyTest.VersionStore.capture({ ...options, runId: 'capture-2' }),
+      ])).map(result => result.status);
+    });
+    assert.deepEqual(statuses, ['fulfilled', 'rejected']);
+  });
+
+  add('version maintenance writer rejects a generated duplicate ID before changing stored bytes', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')]);
+    const before = await snapshotMockPair(page);
+    const result = await page.evaluate(async () => {
+      const descriptor = Object.getOwnPropertyDescriptor(crypto, 'randomUUID');
+      Object.defineProperty(crypto, 'randomUUID', { configurable: true, value: () => 'saved-1' });
+      try {
+        await window.FileNallyTest.VersionStore.capture({
+          action: { path: 'report.txt', fromSide: 'source', toSide: 'target' },
+          handles: { target: window.__mockPair.target }, runId: 'capture-1', direction: 'unidirectional',
+        });
+        return { rejected: false };
+      } catch (error) { return { rejected: true, message: error.message }; }
+      finally {
+        if (descriptor) Object.defineProperty(crypto, 'randomUUID', descriptor);
+        else delete crypto.randomUUID;
+      }
+    });
+    assert.equal(result.rejected, true); assert.match(result.message, /Duplicate version IDs/);
+    assert.deepEqual(await snapshotMockPair(page), before);
+  });
+
+  add('version maintenance pending cleanup blocks capture before creating version bytes', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')], { schemaVersion: 2, cleanup: cleanupIntent() });
+    const before = await snapshotMockPair(page);
+    const result = await page.evaluate(async () => {
+      try {
+        await window.FileNallyTest.VersionStore.capture({
+          action: { path: 'report.txt', fromSide: 'source', toSide: 'target' },
+          handles: { target: window.__mockPair.target }, runId: 'capture-1', direction: 'unidirectional',
+        });
+        return { rejected: false };
+      } catch (error) { return { rejected: true, code: error.code, cleanup: error.cleanup }; }
+    });
+    assert.equal(result.rejected, true);
+    assert.equal(result.code, 'VERSION_CLEANUP_PENDING');
+    assert.deepEqual(result.cleanup, cleanupIntent());
+    assert.deepEqual(await snapshotMockPair(page), before);
+  });
+
+  for (const operation of ['list', 'read', 'prepareRestore', 'comparisonChoices', 'prepareComparison']) {
+    add(`version maintenance pending cleanup blocks ${operation} without writes`, async ({ page }) => {
+      await mountCleanup(page, [cleanupFixture('saved-1')], { schemaVersion: 2, cleanup: cleanupIntent() });
+      const before = await snapshotMockPair(page);
+      const result = await page.evaluate(async (operation) => {
+        const store = window.FileNallyTest.VersionStore, root = window.__mockPair.target;
+        const record = window.__cleanupRecords[0];
+        try {
+          if (operation === 'list') await store.list(root);
+          if (operation === 'read') await store.read(root, record);
+          if (operation === 'prepareRestore') await store.prepareRestore(root, record);
+          if (operation === 'comparisonChoices') await store.comparisonChoices(root, record);
+          if (operation === 'prepareComparison') await store.prepareComparison(root, record);
+          return { rejected: false };
+        } catch (error) { return { rejected: true, code: error.code, cleanup: error.cleanup }; }
+      }, operation);
+      assert.equal(result.rejected, true);
+      assert.equal(result.code, 'VERSION_CLEANUP_PENDING');
+      assert.deepEqual(result.cleanup, cleanupIntent());
+      assert.deepEqual(await snapshotMockPair(page), before);
+    });
+  }
+
+  add('version maintenance pending cleanup blocks a prepared restore before backup bytes', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')], { schemaVersion: 2 });
+    await page.evaluate(async () => {
+      window.__preparedRestore = await window.FileNallyTest.VersionStore
+        .prepareRestore(window.__mockPair.target, window.__cleanupRecords[0]);
+    });
+    await page.evaluate((cleanup) => {
+      const indexHandle = window.__mockPair.target.entries.get('.filenally').entries.get('index.json');
+      const index = JSON.parse(indexHandle.content); index.cleanup = cleanup;
+      indexHandle.content = JSON.stringify(index);
+    }, cleanupIntent());
+    const before = await snapshotMockPair(page);
+    const result = await page.evaluate(async () => {
+      try {
+        await window.FileNallyTest.VersionStore.restore(window.__preparedRestore, {
+          side: 'target', direction: 'unidirectional', runId: 'restore-1',
+        });
+        return { rejected: false };
+      } catch (error) { return { rejected: true, code: error.code }; }
+    });
+    assert.deepEqual(result, { rejected: true, code: 'VERSION_CLEANUP_PENDING' });
+    assert.deepEqual(await snapshotMockPair(page), before);
+  });
+
+  add('version maintenance missing destination ignores an unrelated pending store', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')], { schemaVersion: 2, cleanup: cleanupIntent() });
+    await page.evaluate(() => window.__deleteMockEntry('target', 'report.txt'));
+    const before = await snapshotMockPair(page);
+    const result = await page.evaluate(async () => window.FileNallyTest.VersionStore.capture({
+      action: { path: 'missing.txt', fromSide: 'source', toSide: 'target' },
+      handles: { target: window.__mockPair.target }, runId: 'capture-1', direction: 'unidirectional',
+    }));
+    assert.equal(result, null);
+    assert.deepEqual(await snapshotMockPair(page), before);
+  });
+
+  for (const mutation of ['index content', 'index handle', 'version root']) {
+    add(`version maintenance capture preserves destination and external ${mutation}`, async ({ page }) => {
+      await mountCleanup(page, [cleanupFixture('saved-1')]);
+      await page.locator('#dirOne').click();
+      await compare(page);
+      const result = await page.evaluate(async (mutation) => {
+        const root = window.__mockPair.target;
+        const versionRoot = root.entries.get('.filenally');
+        const originalIndex = versionRoot.entries.get('index.json');
+        const external = JSON.stringify({ schemaVersion: 1, versions: [{
+          ...window.__cleanupRecords[0], id: 'external-1', storedPath: 'versions/external-1/report.txt', runId: 'external',
+        }] });
+        window.__mockAfterClose = async (handle) => {
+          if (handle.name !== 'report.txt') return;
+          if (mutation === 'index content') originalIndex.content = external;
+          if (mutation === 'index handle') window.__setMockFile('target', '.filenally/index.json', { content: originalIndex.content });
+          if (mutation === 'version root') {
+            const oldRoot = root.entries.get('.filenally');
+            root.entries.delete('.filenally');
+            const replacement = await root.getDirectoryHandle('.filenally', { create: true });
+            const index = await replacement.getFileHandle('index.json', { create: true });
+            index.content = originalIndex.content;
+            window.__orphanedVersionRoot = oldRoot;
+          }
+          window.__mockAfterClose = null;
+        };
+        await window.FileNallyTest.executeCurrentPlan();
+        const currentRoot = root.entries.get('.filenally');
+        return { destination: root.entries.get('report.txt').content,
+          index: currentRoot?.entries.get('index.json')?.content || '', external };
+      }, mutation);
+      assert.equal(result.destination, 'target-current');
+      if (mutation === 'index content') assert.equal(result.index, result.external);
+      else assert.equal(JSON.parse(result.index).versions.length, 1);
+    });
+  }
+
+  add('version maintenance capture rejects an index that arrives after its absent snapshot', async ({ page }) => {
+    await mountPair(page, { source: {}, target: { 'report.txt': { content: 'current' } } });
+    await page.evaluate(() => window.__setMockFile('target', '.filenally/marker', { content: '' }));
+    const result = await page.evaluate(async () => {
+      const root = window.__mockPair.target, versionRoot = root.entries.get('.filenally');
+      const external = JSON.stringify({ schemaVersion: 1, versions: [] });
+      window.__mockAfterClose = async (handle) => {
+        if (handle.name !== 'report.txt') return;
+        const index = await versionRoot.getFileHandle('index.json', { create: true });
+        index.content = external; window.__mockAfterClose = null;
+      };
+      try {
+        await window.FileNallyTest.VersionStore.capture({
+          action: { path: 'report.txt', fromSide: 'source', toSide: 'target' }, handles: { target: root },
+          runId: 'capture-1', direction: 'unidirectional',
+        });
+        return { rejected: false };
+      } catch (error) {
+        return { rejected: true, destination: root.entries.get('report.txt').content,
+          index: versionRoot.entries.get('index.json').content, external };
+      }
+    });
+    assert.deepEqual(result, { rejected: true, destination: 'current', index: result.external, external: result.external });
+  });
+
+  add('version maintenance capture rejects a populated version root arriving during first initialization', async ({ page }) => {
+    await mountPair(page, { source: {}, target: { 'report.txt': { content: 'current' } } });
+    const result = await page.evaluate(async () => {
+      const root = window.__mockPair.target, getDirectoryHandle = root.getDirectoryHandle.bind(root);
+      const external = JSON.stringify({ schemaVersion: 1, versions: [] });
+      let injected = false;
+      root.getDirectoryHandle = async (name, options = {}) => {
+        if (name === '.filenally' && options.create && !injected) {
+          injected = true;
+          const directory = await getDirectoryHandle(name, options);
+          const index = await directory.getFileHandle('index.json', { create: true });
+          index.content = external;
+          return directory;
+        }
+        return getDirectoryHandle(name, options);
+      };
+      try {
+        await window.FileNallyTest.VersionStore.capture({
+          action: { path: 'report.txt', fromSide: 'source', toSide: 'target' }, handles: { target: root },
+          runId: 'capture-1', direction: 'unidirectional',
+        });
+        return { rejected: false };
+      } catch (error) {
+        const versionRoot = root.entries.get('.filenally');
+        return { rejected: true, destination: root.entries.get('report.txt').content,
+          index: versionRoot.entries.get('index.json').content,
+          versionsCreated: versionRoot.entries.has('versions'), external };
+      }
+    });
+    assert.deepEqual(result, { rejected: true, destination: 'current', index: result.external,
+      versionsCreated: false, external: result.external });
+  });
+
+  add('version maintenance capture rejects an index changed after close during readback', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')]);
+    const result = await page.evaluate(async () => {
+      const root = window.__mockPair.target;
+      window.__mockAfterClose = async (handle) => {
+        if (handle.name !== 'index.json') return;
+        const index = JSON.parse(handle.content);
+        index.versions.at(-1).runId = 'external';
+        handle.content = JSON.stringify(index);
+        window.__mockAfterClose = null;
+      };
+      try {
+        await window.FileNallyTest.VersionStore.capture({
+          action: { path: 'report.txt', fromSide: 'source', toSide: 'target' }, handles: { target: root },
+          runId: 'capture-1', direction: 'unidirectional',
+        });
+        return { rejected: false };
+      } catch (error) {
+        return { rejected: true, destination: root.entries.get('report.txt').content,
+          runId: JSON.parse(root.entries.get('.filenally').entries.get('index.json').content).versions.at(-1).runId };
+      }
+    });
+    assert.deepEqual(result, { rejected: true, destination: 'target-current', runId: 'external' });
+  });
+
+  add('version maintenance first capture initializes an empty v1 store', async ({ page }) => {
+    await mountPair(page, { source: {}, target: { 'report.txt': { content: 'current' } } });
+    const result = await page.evaluate(async () => {
+      const record = await window.FileNallyTest.VersionStore.capture({
+        action: { path: 'report.txt', fromSide: 'source', toSide: 'target' },
+        handles: { target: window.__mockPair.target }, runId: 'capture-1', direction: 'unidirectional',
+      });
+      const snapshot = await window.__snapshotMockPair();
+      return { record, index: JSON.parse(snapshot.target['.filenally']['index.json'].content) };
+    });
+    assert.equal(result.index.schemaVersion, 1);
+    assert.deepEqual(result.index.versions, [result.record]);
+  });
+
   for (const mutation of ['unsupported', 'corrupt', 'duplicate', 'forbidden', 'oversized', 'missing bytes', 'size mismatch', 'changed record', 'store collision', 'index collision', 'destination directory', 'parent file']) {
     add(`version reader rejects ${mutation} without writes`, async ({ page }) => {
       await mountVersion(page);
@@ -2178,6 +2556,10 @@ async function main() {
       if (['version write', 'index close'].includes(failure)) {
         assert.equal(result.backup, null);
         assert.equal(JSON.parse(snapshot.target['.filenally']['index.json'].content).versions.length, 1);
+      } else if (failure === 'record changed during backup') {
+        assert.equal(result.backup, null);
+        const versions = JSON.parse(snapshot.target['.filenally']['index.json'].content).versions;
+        assert.equal(versions.length, 2); assert.equal(versions[0].runId, 'changed');
       } else {
         assert.ok(result.backup);
         assert.equal(snapshot.target['.filenally'].versions[result.backup.id]['report.txt'].content, 'current');
@@ -3381,7 +3763,9 @@ async function main() {
         fromSide: 'source', toSide: 'target',
       };
       window.__setMockFile('target', '.filenally/index.json', {
-        content: JSON.stringify({ schemaVersion: 1, versions: Array(100000).fill(record) }),
+        content: JSON.stringify({ schemaVersion: 1, versions: Array.from({ length: 100000 }, (_, index) => ({
+          ...record, id: `v-${index}`, storedPath: `versions/v-${index}/r`,
+        })) }),
       });
     });
     await executeCurrentPlan(page);
