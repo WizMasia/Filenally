@@ -512,10 +512,13 @@ async function main() {
         const other = { ...selected, id: 'other-1', storedPath: `versions/other-1/${selected.originalPath}` };
         if (counterpart === 'other-path') { other.originalPath = 'other.txt'; other.storedPath = 'versions/other-1/other.txt'; }
         if (counterpart === 'changed-record') { other.runId = 'changed'; }
+        const indexedOther = counterpart === 'changed-record' ? { ...other, runId: selected.runId } : other;
         if (counterpart === 'wrong-root') {
-          window.__setMockFile('source', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [other] }) });
+          window.__setMockFile('source', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [indexedOther] }) });
+          window.__setMockFile('source', `.filenally/${indexedOther.storedPath}`, { content: 'other' });
         } else {
-          window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [selected, other] }) });
+          window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [selected, indexedOther] }) });
+          window.__setMockFile('target', `.filenally/${indexedOther.storedPath}`, { content: 'other' });
         }
         const before = await window.__snapshotMockPair();
         const callsBefore = window.__getPermissionCalls();
@@ -526,7 +529,8 @@ async function main() {
           return { message: error.message, before, after: await window.__snapshotMockPair(), callsBefore, callsAfter: window.__getPermissionCalls() };
         }
       }, counterpart);
-      assert.notEqual(result.message, 'accepted');
+      if (counterpart === 'changed-record' || counterpart === 'wrong-root') assert.equal(result.message, 'Selected version record changed');
+      else assert.notEqual(result.message, 'accepted');
       assert.deepEqual(result.after, result.before);
       assert.deepEqual(result.callsAfter, result.callsBefore);
     });
@@ -544,15 +548,285 @@ async function main() {
         await new Promise((resolve) => setTimeout(resolve, 20));
         return original(...args);
       };
+      const before = await window.__snapshotMockPair();
+      const callsBefore = window.__getPermissionCalls();
       const pending = window.FileNallyTest.VersionStore.comparisonChoices(root, window.__versionRecord, { isCancelled: () => cancelled });
       await new Promise((resolve) => setTimeout(resolve, 0));
       cancelled = true;
-      try { await pending; return { name: '', calls }; }
-      catch (error) { return { name: error.name, message: error.message, calls }; }
+      try { await pending; return { name: '', calls, before, after: await window.__snapshotMockPair(), callsBefore, callsAfter: window.__getPermissionCalls() }; }
+      catch (error) { return { name: error.name, message: error.message, calls, before, after: await window.__snapshotMockPair(), callsBefore, callsAfter: window.__getPermissionCalls() }; }
     });
     assert.equal(result.name, 'AbortError');
     assert.equal(result.message, 'Comparison stopped');
     assert.equal(result.calls, 1);
+    assert.deepEqual(result.after, result.before);
+    assert.deepEqual(result.callsAfter, result.callsBefore);
+  });
+
+  add('version comparison store historical snapshots stay on the owning root', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(() => {
+      const selected = window.__versionRecord;
+      const counterpart = { ...selected, id: 'other-root', storedPath: `versions/other-root/${selected.originalPath}` };
+      window.__setMockFile('source', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [counterpart] }) });
+      window.__setMockFile('source', `.filenally/${counterpart.storedPath}`, { content: 'bad', lastModified: 100 });
+      window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [selected, counterpart] }) });
+      window.__setMockFile('target', `.filenally/${counterpart.storedPath}`, { content: 'yes', lastModified: 100 });
+    });
+    const before = await snapshotMockPair(page);
+    const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+    const result = await page.evaluate(async () => {
+      const snapshot = await window.FileNallyTest.VersionStore.prepareComparison(window.__mockPair.target,
+        window.__versionRecord, { ...window.__versionRecord, id: 'other-root', storedPath: `versions/other-root/${window.__versionRecord.originalPath}` });
+      return { text: await snapshot.right.file.text(), path: snapshot.path };
+    });
+    assert.deepEqual(result, { text: 'yes', path: 'report.txt' });
+    assert.deepEqual(await snapshotMockPair(page), before);
+    assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+  });
+
+  for (const fixture of ['missing store', 'missing index', 'unsupported schema', 'invalid JSON', 'duplicate IDs']) {
+    add(`version comparison store rejects ${fixture}`, async ({ page }) => {
+      if (fixture === 'missing store') await mountPair(page, { source: {}, target: { 'report.txt': { content: 'current' } } });
+      else await mountVersion(page);
+      await page.evaluate((fixture) => {
+        const root = window.__mockPair.target;
+        if (fixture === 'missing index') window.__deleteMockEntry('target', '.filenally/index.json');
+        if (fixture === 'unsupported schema') window.__setMockFile('target', '.filenally/index.json', { content: '{"schemaVersion":2,"versions":[]}' });
+        if (fixture === 'invalid JSON') window.__setMockFile('target', '.filenally/index.json', { content: '{' });
+        if (fixture === 'duplicate IDs') window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [window.__versionRecord, window.__versionRecord] }) });
+        if (fixture === 'missing store') void root;
+      }, fixture);
+      const before = await snapshotMockPair(page);
+      const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+      const result = await page.evaluate(async () => {
+        try { await window.FileNallyTest.VersionStore.comparisonChoices(window.__mockPair.target, window.__versionRecord); return ''; }
+        catch (error) { return error.message; }
+      });
+      if (fixture === 'missing store') assert.equal(result, 'Invalid selected version');
+      if (fixture === 'missing index') assert.equal(result, 'Selected version record changed');
+      if (fixture === 'unsupported schema') assert.equal(result, 'Unsupported version index');
+      if (fixture === 'duplicate IDs') assert.equal(result, 'Duplicate version IDs');
+      if (fixture === 'invalid JSON') assert.match(result, /JSON|token|end/i);
+      assert.deepEqual(await snapshotMockPair(page), before);
+      assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+    });
+  }
+
+  for (const unsafePath of ['.FILENALLY/index.json', 'nested/.Trash/x', 'nested/../report.txt', 'nested\\report.txt', 'nested\0report.txt']) {
+    add(`version comparison store rejects unsafe path ${JSON.stringify(unsafePath)}`, async ({ page }) => {
+      await mountVersion(page, { path: unsafePath });
+      const before = await snapshotMockPair(page);
+      const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+      const result = await page.evaluate(async () => {
+        try { await window.FileNallyTest.VersionStore.prepareComparison(window.__mockPair.target, window.__versionRecord); return ''; }
+        catch (error) { return error.message; }
+      });
+      assert.match(result, /Unsafe/);
+      assert.deepEqual(await snapshotMockPair(page), before);
+      assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+    });
+  }
+
+  for (const failure of ['missing stored file', 'stored size changed', 'stored directory', 'denied getFile']) {
+    add(`version comparison store rejects ${failure}`, async ({ page }) => {
+      await mountVersion(page);
+      await page.evaluate((failure) => {
+        const record = window.__versionRecord;
+        const path = `.filenally/${record.storedPath}`;
+        if (failure === 'missing stored file') window.__deleteMockEntry('target', path);
+        if (failure === 'stored size changed') window.__setMockFile('target', path, { content: 'larger', lastModified: 100 });
+        if (failure === 'stored directory') {
+          window.__deleteMockEntry('target', path);
+          const parts = path.split('/');
+          const name = parts.pop();
+          let directory = window.__mockPair.target;
+          for (const part of parts) directory = directory.entries.get(part);
+          directory.entries.set(name, { kind: 'directory', name, entries: new Map(), isSameEntry: async function (other) { return this === other; } });
+        }
+        if (failure === 'denied getFile') {
+          const parts = path.split('/');
+          const name = parts.pop();
+          let directory = window.__mockPair.target;
+          for (const part of parts) directory = directory.entries.get(part);
+          directory.entries.get(name).getFile = async () => { throw new DOMException('Denied stored read', 'NotAllowedError'); };
+        }
+      }, failure);
+      const before = await snapshotMockPair(page);
+      const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+      const result = await page.evaluate(async () => {
+        try { await window.FileNallyTest.VersionStore.prepareComparison(window.__mockPair.target, window.__versionRecord); return ''; }
+        catch (error) { return { name: error.name, message: error.message }; }
+      });
+      if (failure === 'stored size changed') assert.equal(result.message, 'Stored version size changed');
+      if (failure === 'denied getFile') assert.deepEqual(result, { name: 'NotAllowedError', message: 'Denied stored read' });
+      if (failure === 'missing stored file') assert.equal(result.name, 'NotFoundError');
+      if (failure === 'stored directory') assert.equal(result.name, 'TypeMismatchError');
+      assert.deepEqual(await snapshotMockPair(page), before);
+      assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+    });
+  }
+
+  for (const mutation of ['appears', 'disappears', 'replaced handle', 'size changes', 'type changes', 'mtime changes']) {
+    add(`version comparison store validates current ${mutation}`, async ({ page }) => {
+      await mountVersion(page, { missing: mutation === 'appears' });
+      const snapshotReady = await page.evaluate(async () => {
+        window.__comparisonSnapshot = await window.FileNallyTest.VersionStore.prepareComparison(window.__mockPair.target, window.__versionRecord);
+        return { rightHasFile: Boolean(window.__comparisonSnapshot.right.file) };
+      });
+      assert.equal(snapshotReady.rightHasFile, mutation !== 'appears');
+      await page.evaluate((mutation) => {
+        const root = window.__mockPair.target;
+        if (mutation === 'appears') window.__setMockFile('target', 'report.txt', { content: 'current', lastModified: 200 });
+        if (mutation === 'disappears') window.__deleteMockEntry('target', 'report.txt');
+        if (mutation === 'replaced handle') window.__setMockFile('target', 'report.txt', { content: 'current', lastModified: 200 });
+        if (mutation === 'size changes') root.entries.get('report.txt').content = 'different-size';
+        if (mutation === 'type changes') root.entries.get('report.txt').getFile = async () => new File([root.entries.get('report.txt').content], 'report.txt', { type: 'application/custom', lastModified: 200 });
+        if (mutation === 'mtime changes') root.entries.get('report.txt').lastModified = 201;
+      }, mutation);
+      const before = await snapshotMockPair(page);
+      const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+      const result = await page.evaluate(async () => {
+        try { await window.FileNallyTest.VersionStore.validateComparison(window.__comparisonSnapshot); return ''; }
+        catch (error) { return { name: error.name, message: error.message }; }
+      });
+      assert.equal(result.message, mutation === 'replaced handle' ? 'Comparison file identity changed' : 'Comparison file changed');
+      assert.deepEqual(await snapshotMockPair(page), before);
+      assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+    });
+  }
+
+  add('version comparison store validates current replacement identity', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(async () => { window.__comparisonSnapshot = await window.FileNallyTest.VersionStore.prepareComparison(window.__mockPair.target, window.__versionRecord); });
+    await page.evaluate(() => window.__setMockFile('target', 'report.txt', { content: 'current', lastModified: 200 }));
+    const before = await snapshotMockPair(page);
+    const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+    const result = await page.evaluate(async () => {
+      try { await window.FileNallyTest.VersionStore.validateComparison(window.__comparisonSnapshot); return ''; }
+      catch (error) { return error.message; }
+    });
+    assert.equal(result, 'Comparison file identity changed');
+    assert.deepEqual(await snapshotMockPair(page), before);
+    assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+  });
+
+  for (const mutation of ['disappears', 'replaced handle', 'size changes', 'type changes', 'mtime changes', 'read denied']) {
+    add(`version comparison store validates stored version ${mutation}`, async ({ page }) => {
+      await mountVersion(page);
+      await page.evaluate(async () => { window.__comparisonSnapshot = await window.FileNallyTest.VersionStore.prepareComparison(window.__mockPair.target, window.__versionRecord); });
+      await page.evaluate((mutation) => {
+        const root = window.__mockPair.target;
+        const path = `.filenally/${window.__versionRecord.storedPath}`;
+        const parts = path.split('/');
+        const name = parts.pop();
+        let directory = root;
+        for (const part of parts) directory = directory.entries.get(part);
+        const stored = directory.entries.get(name);
+        if (mutation === 'disappears') directory.entries.delete(name);
+        if (mutation === 'replaced handle') window.__setMockFile('target', path, { content: 'old', lastModified: 100 });
+        if (mutation === 'size changes') stored.content = 'changed-size';
+        if (mutation === 'type changes') stored.getFile = async () => new File([stored.content], 'report.txt', { type: 'application/custom', lastModified: stored.lastModified });
+        if (mutation === 'mtime changes') stored.lastModified = 101;
+        if (mutation === 'read denied') stored.getFile = async () => { throw new DOMException('Denied stored read', 'NotAllowedError'); };
+      }, mutation);
+      const before = await snapshotMockPair(page);
+      const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+      const result = await page.evaluate(async () => {
+        try { await window.FileNallyTest.VersionStore.validateComparison(window.__comparisonSnapshot); return ''; }
+        catch (error) { return { name: error.name, message: error.message }; }
+      });
+      if (mutation === 'disappears') assert.equal(result.name, 'NotFoundError');
+      else if (mutation === 'replaced handle') assert.equal(result.message, 'Comparison file identity changed');
+      else if (mutation === 'read denied') assert.deepEqual(result, { name: 'NotAllowedError', message: 'Denied stored read' });
+      else if (mutation === 'size changes') assert.equal(result.message, 'Stored version size changed');
+      else assert.equal(result.message, 'Comparison file changed');
+      assert.deepEqual(await snapshotMockPair(page), before);
+      assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+    });
+  }
+
+  add('version comparison store rejects a selected index record changed during analysis', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(async () => { window.__comparisonSnapshot = await window.FileNallyTest.VersionStore.prepareComparison(window.__mockPair.target, window.__versionRecord); });
+    await page.evaluate(() => {
+      window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [{ ...window.__versionRecord, runId: 'changed-in-index' }] }) });
+    });
+    const before = await snapshotMockPair(page);
+    const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+    const result = await page.evaluate(async () => {
+      try { await window.FileNallyTest.VersionStore.validateComparison(window.__comparisonSnapshot); return ''; }
+      catch (error) { return error.message; }
+    });
+    assert.equal(result, 'Selected version record changed');
+    assert.deepEqual(await snapshotMockPair(page), before);
+    assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
+  });
+
+  add('version comparison store cancellation stops during delayed index read before stored read', async ({ page }) => {
+    await mountVersion(page);
+    const result = await page.evaluate(async () => {
+      const root = window.__mockPair.target;
+      const index = root.entries.get('.filenally').entries.get('index.json');
+      const stored = root.entries.get('.filenally').entries.get('versions').entries.get('saved-1').entries.get('report.txt');
+      let cancelled = false, indexReads = 0, storedReads = 0;
+      const originalIndexGetFile = index.getFile.bind(index), originalStoredGetFile = stored.getFile.bind(stored);
+      index.getFile = async () => { indexReads += 1; await new Promise((resolve) => setTimeout(resolve, 20)); return originalIndexGetFile(); };
+      stored.getFile = async () => { storedReads += 1; return originalStoredGetFile(); };
+      const before = await window.__snapshotMockPair();
+      const callsBefore = window.__getPermissionCalls();
+      const pending = window.FileNallyTest.VersionStore.prepareComparison(root, window.__versionRecord, null, { isCancelled: () => cancelled });
+      await new Promise((resolve) => setTimeout(resolve, 0)); cancelled = true;
+      try { await pending; return { name: '', message: '', indexReads, storedReads, before, after: await window.__snapshotMockPair(), callsBefore, callsAfter: window.__getPermissionCalls() }; }
+      catch (error) { return { name: error.name, message: error.message, indexReads, storedReads, before, after: await window.__snapshotMockPair(), callsBefore, callsAfter: window.__getPermissionCalls() }; }
+    });
+    assert.equal(result.name, 'AbortError');
+    assert.equal(result.message, 'Comparison stopped');
+    assert.equal(result.indexReads, 1);
+    assert.equal(result.storedReads, 0);
+    assert.deepEqual(result.after, result.before);
+    assert.deepEqual(result.callsAfter, result.callsBefore);
+  });
+
+  add('version comparison store cancellation stops during delayed current getFile', async ({ page }) => {
+    await mountVersion(page);
+    const result = await page.evaluate(async () => {
+      const root = window.__mockPair.target;
+      const current = root.entries.get('report.txt');
+      const original = current.getFile.bind(current);
+      let cancelled = false, reads = 0;
+      current.getFile = async () => { reads += 1; await new Promise((resolve) => setTimeout(resolve, 20)); return original(); };
+      const before = await window.__snapshotMockPair();
+      const callsBefore = window.__getPermissionCalls();
+      const pending = window.FileNallyTest.VersionStore.prepareComparison(root, window.__versionRecord, null, { isCancelled: () => cancelled });
+      await new Promise((resolve) => setTimeout(resolve, 5)); cancelled = true;
+      try { await pending; return { name: '', message: '', reads, before, after: await window.__snapshotMockPair(), callsBefore, callsAfter: window.__getPermissionCalls() }; }
+      catch (error) { return { name: error.name, message: error.message, reads, before, after: await window.__snapshotMockPair(), callsBefore, callsAfter: window.__getPermissionCalls() }; }
+    });
+    assert.equal(result.name, 'AbortError');
+    assert.equal(result.message, 'Comparison stopped');
+    assert.equal(result.reads, 1);
+    assert.deepEqual(result.after, result.before);
+    assert.deepEqual(result.callsAfter, result.callsBefore);
+  });
+
+  add('version comparison store keeps pinned bytes across an unobservable same-metadata edit', async ({ page }) => {
+    await mountVersion(page);
+    await page.evaluate(async () => { window.__comparisonSnapshot = await window.FileNallyTest.VersionStore.prepareComparison(window.__mockPair.target, window.__versionRecord); });
+    await page.evaluate(() => {
+      const current = window.__mockPair.target.entries.get('report.txt');
+      current.content = 'currenX';
+      current.lastModified = 200;
+    });
+    const before = await snapshotMockPair(page);
+    const callsBefore = await page.evaluate(() => window.__getPermissionCalls());
+    const result = await page.evaluate(async () => {
+      await window.FileNallyTest.VersionStore.validateComparison(window.__comparisonSnapshot);
+      return await window.__comparisonSnapshot.right.file.text();
+    });
+    assert.equal(result, 'current');
+    assert.deepEqual(await snapshotMockPair(page), before);
+    assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), callsBefore);
   });
 
   for (const mutation of ['unsupported', 'corrupt', 'duplicate', 'forbidden', 'oversized', 'missing bytes', 'size mismatch', 'changed record', 'store collision', 'index collision', 'destination directory', 'parent file']) {
