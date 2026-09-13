@@ -1716,6 +1716,7 @@
         const select = async (row, action, trigger) => {
             const owner = session;
             if (!owner || !current(owner) || owner.reading || owner.writing || restoreDialog.open) return;
+            const returnFocus = document.activeElement === trigger;
             owner.reading = true; owner.message = t('versionsLoading'); controls();
             $('#versionStatus').textContent = owner.message;
             try {
@@ -1738,6 +1739,7 @@
                     owner.reading = false;
                     $('#versionStatus').textContent = [owner.message, ...owner.errors].filter(Boolean).join('\n');
                     controls();
+                    if (returnFocus && !restoreDialog.open && trigger.isConnected && document.activeElement === document.body) trigger.focus();
                 }
             }
         };

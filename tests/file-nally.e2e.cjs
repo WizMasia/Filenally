@@ -288,7 +288,40 @@ async function main() {
     assert.equal(await page.locator('#btnVersionRefresh').isEnabled(), true);
   });
 
-  add('version manager close discards delayed preparation and restores keyboard focus', async ({ page }) => {
+  for (const action of ['download', 'restore']) {
+    for (const moveFocus of [false, true]) {
+      add(`version manager keyboard ${action === 'download' ? 'download' : 'failed preparation'} ${moveFocus ? 'preserves intentional focus elsewhere' : 'returns focus to its trigger'}`, async ({ page }) => {
+        await mountVersion(page);
+        await page.evaluate(action => {
+          const root = window.__mockPair.target;
+          const file = action === 'download'
+            ? root.entries.get('.filenally').entries.get('versions').entries.get('saved-1').entries.get('report.txt')
+            : root.entries.get('report.txt');
+          const getFile = file.getFile.bind(file);
+          file.getFile = async () => {
+            await new Promise(resolve => { window.__releaseKeyboardRead = resolve; });
+            if (action === 'restore') throw new DOMException('Current file is unreadable', 'NotAllowedError');
+            return getFile();
+          };
+        }, action);
+        await page.locator('#btnVersions').click();
+        const trigger = page.locator(`[data-version-action="${action}"]`).first();
+        await trigger.focus();
+        const download = action === 'download' ? page.waitForEvent('download') : null;
+        await page.keyboard.press('Enter');
+        await page.waitForFunction(() => typeof window.__releaseKeyboardRead === 'function');
+        if (moveFocus) await page.locator('#btnCloseVersions').focus();
+        await page.evaluate(() => window.__releaseKeyboardRead());
+        if (download) await download;
+        await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
+        assert.equal(await page.locator('#restoreDialog').isVisible(), false);
+        assert.equal(await page.evaluate(({ action, moveFocus }) => document.activeElement === document.querySelector(moveFocus ? '#btnCloseVersions' : `[data-version-action="${action}"]`), { action, moveFocus }), true);
+        if (action === 'restore') assert.match(await page.locator('#versionStatus').innerText(), /Current file is unreadable/);
+      });
+    }
+  }
+
+  add('version manager close and reopen discard delayed preparation and preserve keyboard focus', async ({ page }) => {
     await mountVersion(page);
     await page.evaluate(() => {
       const file = window.__mockPair.target.entries.get('report.txt');
@@ -300,10 +333,13 @@ async function main() {
     await page.locator('[data-version-action="restore"]').first().click();
     await page.waitForFunction(() => typeof window.__releaseVersionRead === 'function');
     await page.keyboard.press('Escape');
+    await page.waitForFunction(() => document.activeElement.id === 'btnVersions');
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
     await page.evaluate(() => window.__releaseVersionRead());
     await page.waitForTimeout(30);
     assert.equal(await page.locator('#restoreDialog').isVisible(), false);
-    assert.equal(await page.evaluate(() => document.activeElement.id), 'btnVersions');
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'btnCloseVersions');
     assert.deepEqual(await snapshotMockPair(page), before);
   });
 
