@@ -1068,6 +1068,68 @@ async function main() {
     assert.equal(snapshot.target['.filenally'].versions[index.versions[0].id]['late.txt'].content, 'appeared');
   });
 
+  add('capture rejects version index over size limit after append', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    await mountPair(page, {
+      source: { 'report.txt': { content: 'new', lastModified: 200 } },
+      target: { 'report.txt': { content: 'old', lastModified: 100 } },
+    });
+    await compare(page);
+    await page.evaluate(() => {
+      const limit = 5 * 1024 * 1024;
+      const record = {
+        id: 'existing', capturedAt: '2026-09-13T00:00:00.000Z',
+        originalPath: 'report.txt', storedPath: 'versions/existing/report.txt',
+        size: 3, type: '', lastModified: 100, reason: 'before-overwrite',
+        runId: 'run', direction: 'unidirectional', fromSide: 'source', toSide: 'target',
+      };
+      const base = JSON.stringify({ schemaVersion: 1, versions: [record] }, null, 2);
+      record.type = 'x'.repeat(limit - new Blob([base]).size - 64);
+      const text = JSON.stringify({ schemaVersion: 1, versions: [record] }, null, 2);
+      if (new Blob([text]).size >= limit) throw new Error('Fixture must begin below the size limit');
+      window.__setMockFile('target', '.filenally/index.json', { content: text });
+    });
+    await executeCurrentPlan(page);
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().phase), 'error');
+    assert.equal(await page.evaluate(() => window.__getMockFile('target', 'report.txt').content), 'old');
+    assert.match(await page.locator('#syncStatus').innerText(), /Version index exceeds 5MB/);
+  });
+
+  add('capture rejects version index over record limit after append', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    await mountPair(page, {
+      source: { 'report.txt': { content: 'new', lastModified: 200 } },
+      target: { 'report.txt': { content: 'old', lastModified: 100 } },
+    });
+    await compare(page);
+    await page.evaluate(() => {
+      const NativeBlob = window.Blob;
+      class ZeroSizeBlob extends NativeBlob { get size() { return 0; } }
+      class ZeroSizeFile extends ZeroSizeBlob {
+        constructor(parts, name, options = {}) {
+          super(parts, options);
+          this.name = name;
+          this.lastModified = Number(options.lastModified || Date.now());
+        }
+      }
+      window.Blob = ZeroSizeBlob;
+      window.File = ZeroSizeFile;
+      const record = {
+        id: 'v', capturedAt: '2026-09-13T00:00:00.000Z',
+        originalPath: 'r', storedPath: 'versions/v/r', size: 0,
+        lastModified: 0, reason: 'before-overwrite', direction: 'unidirectional',
+        fromSide: 'source', toSide: 'target',
+      };
+      window.__setMockFile('target', '.filenally/index.json', {
+        content: JSON.stringify({ schemaVersion: 1, versions: Array(100000).fill(record) }),
+      });
+    });
+    await executeCurrentPlan(page);
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().phase), 'error');
+    assert.equal(await page.evaluate(() => window.__getMockFile('target', 'report.txt').content), 'old');
+    assert.match(await page.locator('#syncStatus').innerText(), /Version index has too many records/);
+  });
+
   add('verified deletion moves the remaining file into versioned trash', async ({ page }) => {
     await mountPair(page, {
       source: { 'nested': { type: 'directory', entries: { 'gone.txt': { content: 'keepable', lastModified: 100 } } } },

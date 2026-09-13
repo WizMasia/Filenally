@@ -203,7 +203,9 @@
             });
             if (!record) throw new Error('Could not create version record');
             index.versions.push(record);
-            await writeFile(filenally, 'index.json', JSON.stringify(index, null, 2));
+            const indexText = JSON.stringify(index, null, 2);
+            parseIndexText(indexText);
+            await writeFile(filenally, 'index.json', indexText);
             return Object.freeze(record);
         };
         return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText });
