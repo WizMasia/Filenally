@@ -479,7 +479,7 @@ async function main() {
         }
       };
       visit(window.__mockPair.source); visit(window.__mockPair.target);
-      const ids = ['btnVersionRefresh', 'btnVersionPrevious', 'btnVersionNext', 'btnConfirmRestore'];
+      const ids = ['btnVersionRefresh', 'btnVersionPrevious', 'btnVersionNext'];
       for (const id of ids) document.querySelector(`#${id}`).dispatchEvent(new MouseEvent('click', { bubbles: true }));
       for (const action of ['download', 'restore']) {
         document.querySelector(`[data-version-action="${action}"]`).dispatchEvent(new MouseEvent('click', { bubbles: true }));
@@ -493,6 +493,33 @@ async function main() {
     for (const selector of ['#btnVersionRefresh', '[data-version-action="download"]', '[data-version-action="restore"]', '#btnConfirmRestore']) {
       assert.equal(await page.locator(selector).first().isDisabled(), true);
     }
+    await page.locator('#btnCloseComparison').click();
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version comparison Confirm guard blocks a prepared restore while the child opens', async ({ page }) => {
+    await mountVersion(page);
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => document.querySelector('[data-version-action="restore"]'));
+    await page.locator('[data-version-action="restore"]').first().click();
+    await page.locator('#restoreDialog').waitFor({ state: 'visible' });
+    assert.match(await page.locator('#restoreSummary').innerText(), /saved-1/);
+    await page.evaluate(() => {
+      const restore = document.querySelector('#restoreDialog');
+      restore.close();
+      document.querySelector('[data-version-action="compare"]').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      restore.showModal();
+      document.querySelector('#btnConfirmRestore').dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    });
+    await page.locator('#comparisonDialog').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => !document.querySelector('#comparisonTarget').disabled);
+    assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), []);
+    assert.deepEqual(await page.evaluate(() => window.__comparisonMutationAttempts), []);
+    assert.equal(await page.locator('#restoreDialog').evaluate((dialog) => dialog.open), true);
+    await page.evaluate(() => document.querySelector('#restoreDialog').close());
     await page.locator('#btnCloseComparison').click();
     await page.locator('#btnCloseVersions').click();
     await assertComparisonReadOnly(page, files, state);
@@ -1606,12 +1633,15 @@ async function main() {
   add('version comparison engine distinguishes empty, inserted, deleted, metadata-only and same-metadata changes', async ({ page }) => {
     const result = await page.evaluate(async () => {
       const analyze = window.FileNallyTest.VersionComparison.analyze;
+      const changedLeft = new File(['left'], 'a', { lastModified: 7 });
+      const changedRight = new File(['rift'], 'b', { lastModified: 7 });
       return {
         empty: await analyze(new File([], 'a'), new File([], 'b')),
         insert: await analyze(new File([], 'a'), new File(['line'], 'b')),
         remove: await analyze(new File(['line'], 'a'), new File([], 'b')),
         metadata: await analyze(new File(['same'], 'a', { lastModified: 1 }), new File(['same'], 'b', { lastModified: 2 })),
-        changed: await analyze(new File(['left'], 'a', { lastModified: 7 }), new File(['right'], 'b', { lastModified: 7 })),
+        changedMetadata: [changedLeft.size, changedRight.size, changedLeft.lastModified, changedRight.lastModified],
+        changed: await analyze(changedLeft, changedRight),
         missing: await analyze(new File([], 'a'), null),
       };
     });
@@ -1623,7 +1653,9 @@ async function main() {
       [['remove', 1, null, 'line']]);
     assert.deepEqual([result.remove.added, result.remove.removed], [0, 1]);
     assert.deepEqual([result.metadata.kind, result.metadata.equal], ['identical', true]);
-    assert.deepEqual([result.changed.kind, result.changed.equal, result.changed.added, result.changed.removed], ['text', false, 1, 1]);
+    assert.deepEqual(result.changedMetadata, [4, 4, 7, 7]);
+    assert.equal(result.changed.equal, false);
+    assert.deepEqual([result.changed.kind, result.changed.added, result.changed.removed], ['text', 1, 1]);
     assert.deepEqual([result.missing.kind, result.missing.equal, result.missing.hashes.right.status], ['missing', null, 'missing']);
   });
 
