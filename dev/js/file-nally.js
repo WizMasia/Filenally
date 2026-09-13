@@ -67,9 +67,8 @@
     const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
     const normalizeExcludes = (value) => {
         const values = Array.isArray(value) ? value : String(value || '').split(',');
-        const normalized = values.map((item) => String(item).trim()).filter(Boolean);
-        normalized.push(...RESERVED_EXCLUDES);
-        return [...new Set(normalized)].slice(0, 100);
+        const normalized = values.map((item) => String(item).trim()).filter((item) => item && !RESERVED_EXCLUDES.includes(item));
+        return [...new Set(normalized)].slice(0, 100 - RESERVED_EXCLUDES.length).concat(RESERVED_EXCLUDES);
     };
     const format = (template, values = {}) => Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), template);
     const safeMessage = (error) => error instanceof Error || error instanceof DOMException ? error.message : String(error || 'Unknown error');

@@ -355,6 +355,16 @@ async function main() {
     assert.match(result[1], /exceeds 5MB/);
   });
 
+  add('reserved exclusions remain inside the normalized 100-entry cap', async ({ page }) => {
+    const excludes = await page.evaluate(() => window.FileNallyTest.StateStore.sanitize({
+      schemaVersion: 2,
+      config: { excludeDirs: Array.from({ length: 100 }, (_, index) => `custom-${index}`) },
+    }).config.excludeDirs);
+    assert.equal(excludes.length, 100);
+    assert.equal(excludes.includes('.trash'), true);
+    assert.equal(excludes.includes('.filenally'), true);
+  });
+
   add('version index accepts schema v1 and reconstructs allowlisted records', async ({ page }) => {
     const parsed = await page.evaluate(() => window.FileNallyTest.VersionStore.parseIndexText(JSON.stringify({
       schemaVersion: 1,
