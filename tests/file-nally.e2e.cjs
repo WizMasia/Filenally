@@ -472,6 +472,27 @@ async function main() {
     assert.match(result.message, /Version index has too many records/);
   });
 
+  add('an over-limit version index is rejected by the parser', async ({ page }) => {
+    const message = await page.evaluate(() => {
+      const record = {
+        id: 'v', capturedAt: '2026-09-13T00:00:00.000Z',
+        originalPath: 'a', storedPath: 'versions/v/a',
+        size: 0, type: '', lastModified: 0, reason: 'before-overwrite',
+        runId: 'r', direction: 'bidirectional', fromSide: 'source', toSide: 'target',
+      };
+      try {
+        window.FileNallyTest.VersionStore.parseIndexText(JSON.stringify({
+          schemaVersion: 1,
+          versions: Array.from({ length: 100001 }, () => record),
+        }));
+        return 'accepted';
+      } catch (error) {
+        return error.message;
+      }
+    });
+    assert.notEqual(message, 'accepted');
+  });
+
   add('directory path exceptions do not bypass configuration or entry key protection', async ({ page }) => {
     const messages = await page.evaluate(() => {
       const results = [];
@@ -1128,6 +1149,76 @@ async function main() {
     assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().phase), 'error');
     assert.equal(await page.evaluate(() => window.__getMockFile('target', 'report.txt').content), 'old');
     assert.match(await page.locator('#syncStatus').innerText(), /Version index has too many records/);
+  });
+
+  for (const failure of [
+    { name: 'report.txt', operation: 'write', label: 'version bytes' },
+    { name: 'index.json', operation: 'write', label: 'index write' },
+    { name: 'index.json', operation: 'close', label: 'index close' },
+  ]) {
+    add(`a ${failure.label} failure leaves the destination unchanged`, async ({ page }) => {
+      await page.locator('#dirOne').click();
+      await mountPair(page, {
+        source: { 'report.txt': { content: 'new', lastModified: 200 } },
+        target: { 'report.txt': { content: 'old', lastModified: 100 } },
+      });
+      await compare(page);
+      await page.evaluate((rule) => window.__setMockFailure(rule), failure);
+      await executeCurrentPlan(page);
+      const snapshot = await snapshotMockPair(page);
+      assert.equal(snapshot.target['report.txt'].content, 'old');
+      assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().phase), 'error');
+    });
+  }
+
+  for (const fixture of [
+    { label: 'malformed', index: { content: '{bad json' } },
+    { label: 'unsupported', index: { content: '{"schemaVersion":2,"versions":[]}' } },
+    { label: 'oversized', index: { contentSize: (5 * 1024 * 1024) + 1 } },
+  ]) {
+    add(`a ${fixture.label} damaged version index is never reset`, async ({ page }) => {
+      await page.locator('#dirOne').click();
+      await mountPair(page, {
+        source: { 'report.txt': { content: 'new', lastModified: 200 } },
+        target: {
+          'report.txt': { content: 'old', lastModified: 100 },
+          '.filenally': { type: 'directory', entries: {
+            'index.json': fixture.index,
+          } },
+        },
+      });
+      const before = await page.evaluate(() => window.__getMockFile('target', '.filenally/index.json'));
+      await compare(page);
+      await executeCurrentPlan(page);
+      const snapshot = await snapshotMockPair(page);
+      const after = await page.evaluate(() => window.__getMockFile('target', '.filenally/index.json'));
+      assert.equal(snapshot.target['report.txt'].content, 'old');
+      assert.deepEqual(after, before);
+      assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().phase), 'error');
+    });
+  }
+
+  add('destination write failure retains the indexed version and log reference', async ({ page }) => {
+    await page.locator('#dirOne').click();
+    await mountPair(page, {
+      source: { 'report.txt': { content: 'new', lastModified: 200 } },
+      target: { 'report.txt': { content: 'old', lastModified: 100 } },
+    });
+    await compare(page);
+    await page.evaluate(() => window.__setMockFailure({
+      operation: 'write', name: 'report.txt', occurrence: 2,
+    }));
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    const index = JSON.parse(snapshot.target['.filenally']['index.json'].content);
+    assert.equal(snapshot.target['report.txt'].content, 'old');
+    assert.equal(snapshot.target['.filenally'].versions[index.versions[0].id]['report.txt'].content, 'old');
+    const run = await page.evaluate(async () => {
+      const id = JSON.parse(localStorage.getItem('smart_sync_state')).globalHistory[0].logId;
+      return window.FileNallyTest.RunLogStore.get(id);
+    });
+    assert.equal(run.entries[0].status, 'failed');
+    assert.equal(run.entries[0].versionId, index.versions[0].id);
   });
 
   add('verified deletion moves the remaining file into versioned trash', async ({ page }) => {

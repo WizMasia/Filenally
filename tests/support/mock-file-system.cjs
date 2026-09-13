@@ -10,6 +10,14 @@ async function installMockFileSystem(page) {
     });
 
     let clock = 1700000000000;
+    window.__mockFailure = null;
+    window.__setMockFailure = (rule) => { window.__mockFailure = { ...rule, seen: 0 }; };
+    const shouldFail = (operation, name) => {
+      const rule = window.__mockFailure;
+      if (!rule || rule.operation !== operation || (rule.name && rule.name !== name)) return false;
+      rule.seen += 1;
+      return rule.seen === (rule.occurrence || 1);
+    };
 
     class MockFileHandle {
       constructor(name, options = {}) {
@@ -54,6 +62,7 @@ async function installMockFileSystem(page) {
         let nextContent = this.content;
         return {
           write: async (value) => {
+            if (shouldFail('write', this.name)) throw new DOMException('Injected write failure', 'NotAllowedError');
             if (this.writeDelay) await new Promise((resolve) => setTimeout(resolve, this.writeDelay));
             if (value instanceof Blob) nextContent = await value.text();
             else if (typeof value === 'string') nextContent = value;
@@ -61,6 +70,7 @@ async function installMockFileSystem(page) {
             else nextContent = String(value ?? '');
           },
           close: async () => {
+            if (shouldFail('close', this.name)) throw new DOMException('Injected close failure', 'NotAllowedError');
             this.content = nextContent;
             this.lastModified = ++clock;
           },
