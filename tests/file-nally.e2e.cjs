@@ -95,6 +95,35 @@ async function downloadText(download) {
   return fs.readFile(filePath, 'utf8');
 }
 
+async function planRename(page, { control = '#dirBoth', owner = 'target', nativeMove = false } = {}) {
+  await page.locator(control).click();
+  await mountPair(page, {
+    source: { 'original.txt': { content: 'same', lastModified: 100 } },
+    target: { 'original.txt': { content: 'same', lastModified: 100 } },
+  });
+  await compare(page);
+  await executeCurrentPlan(page);
+  await page.evaluate(({ owner, nativeMove }) => {
+    const changedSide = owner === 'target' ? 'source' : 'target';
+    window.__deleteMockEntry(changedSide, 'original.txt');
+    window.__setMockFile(changedSide, 'renamed.txt', { content: 'same' });
+    if (nativeMove) {
+      const root = window.__mockPair[owner];
+      const original = root.entries.get('original.txt');
+      original.move = async (directory, name) => {
+        root.entries.delete(original.name);
+        original.name = name;
+        directory.entries.set(name, original);
+      };
+    }
+  }, { owner, nativeMove });
+  await compare(page);
+  const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+  assert.equal(actions.length, 1);
+  assert.equal(actions[0].type, 'rename');
+  assert.equal(actions[0].toSide, owner);
+}
+
 async function main() {
   const { server, url, devUrl } = await startServer();
   const browser = await chromium.launch({ channel: 'chrome', headless: true });
@@ -355,14 +384,24 @@ async function main() {
     assert.match(result[1], /exceeds 5MB/);
   });
 
-  add('reserved exclusions remain inside the normalized 100-entry cap', async ({ page }) => {
-    const excludes = await page.evaluate(() => window.FileNallyTest.StateStore.sanitize({
-      schemaVersion: 2,
-      config: { excludeDirs: Array.from({ length: 100 }, (_, index) => `custom-${index}`) },
-    }).config.excludeDirs);
-    assert.equal(excludes.length, 100);
-    assert.equal(excludes.includes('.trash'), true);
-    assert.equal(excludes.includes('.filenally'), true);
+  add('reserved exclusions preserve all 100 user exclusions across save and scan', async ({ page }) => {
+    const custom = Array.from({ length: 100 }, (_, index) => `custom-${index}`);
+    await page.locator('#excludeDirs').fill([...custom, '.trash', '.filenally', 'overflow'].join(','));
+    await page.reload();
+    const excludes = await page.evaluate(() => JSON.parse(localStorage.getItem('smart_sync_state')).config.excludeDirs);
+    assert.deepEqual(excludes, [...custom, '.trash', '.filenally']);
+    await mountPair(page, {
+      source: {
+        ...Object.fromEntries([...custom, '.trash', '.filenally'].map((name) => [name, {
+          type: 'directory', entries: { 'hidden.txt': { content: name } },
+        }])),
+        'visible.txt': { content: 'visible' },
+      },
+      target: {},
+    });
+    await compare(page);
+    const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+    assert.deepEqual(actions.map((action) => action.path), ['visible.txt']);
   });
 
   add('version index accepts schema v1 and reconstructs allowlisted records', async ({ page }) => {
@@ -1089,6 +1128,107 @@ async function main() {
     assert.equal(snapshot.target['.filenally'].versions[index.versions[0].id]['late.txt'].content, 'appeared');
   });
 
+  for (const nativeMove of [false, true]) {
+    for (const scenario of [
+      { control: '#dirBoth', owner: 'target', direction: 'bidirectional' },
+      { control: '#dirOne', owner: 'target', direction: 'unidirectional' },
+      { control: '#dirReverse', owner: 'source', direction: 'reverse' },
+    ]) {
+      add(`late rename destination is versioned: ${scenario.direction}, ${nativeMove ? 'native' : 'fallback'}`, async ({ page }) => {
+        await planRename(page, { ...scenario, nativeMove });
+        await page.evaluate((owner) => window.__setMockFile(owner, 'renamed.txt', { content: 'appeared' }), scenario.owner);
+        await executeCurrentPlan(page);
+        const snapshot = await snapshotMockPair(page);
+        const root = snapshot[scenario.owner];
+        assert.ok(root['.filenally'], 'rename overwrite must capture the late destination');
+        const index = JSON.parse(root['.filenally']['index.json'].content);
+        assert.equal(index.versions.length, 1);
+        const version = index.versions[0];
+        assert.equal(root['.filenally'].versions[version.id]['renamed.txt'].content, 'appeared');
+        assert.equal(root['renamed.txt'].content, 'same');
+        assert.equal(root['original.txt'], undefined);
+        assert.equal(version.originalPath, 'renamed.txt');
+        assert.equal(version.direction, scenario.direction);
+        assert.equal(version.toSide, scenario.owner);
+        assert.equal(version.fromSide, scenario.owner === 'target' ? 'source' : 'target');
+        assert.equal(snapshot[version.fromSide]['.filenally'], undefined);
+        const run = await page.evaluate(async () => {
+          const state = JSON.parse(localStorage.getItem('smart_sync_state'));
+          return window.FileNallyTest.RunLogStore.get(state.globalHistory[0].logId);
+        });
+        assert.equal(run.status, 'success');
+        assert.equal(version.runId, run.id);
+        assert.equal(run.entries[0].versionId, version.id);
+        assert.equal(run.entries[0].versionPath, version.storedPath);
+      });
+    }
+
+    add(`rename without destination creates no version: ${nativeMove ? 'native' : 'fallback'}`, async ({ page }) => {
+      await planRename(page, { nativeMove });
+      await executeCurrentPlan(page);
+      const snapshot = await snapshotMockPair(page);
+      assert.equal(snapshot.target['renamed.txt'].content, 'same');
+      assert.equal(snapshot.target['original.txt'], undefined);
+      assert.equal(snapshot.target['.filenally'], undefined);
+    });
+
+    add(`rename capture failure stops native or fallback mutation: ${nativeMove ? 'native' : 'fallback'}`, async ({ page }) => {
+      await planRename(page, { nativeMove });
+      await page.evaluate(async () => {
+        await window.__mockPair.source.getDirectoryHandle('created', { create: true });
+        window.__setMockFile('source', 'zzz.txt', { content: 'later' });
+      });
+      await compare(page);
+      await page.evaluate(() => {
+        window.__setMockFile('target', 'renamed.txt', { content: 'appeared' });
+        window.__setMockFailure({ operation: 'close', name: 'index.json' });
+      });
+      await executeCurrentPlan(page);
+      const snapshot = await snapshotMockPair(page);
+      assert.equal(snapshot.target['renamed.txt'].content, 'appeared');
+      assert.equal(snapshot.target['original.txt'].content, 'same');
+      assert.deepEqual(snapshot.target.created, {});
+      assert.equal(snapshot.target['zzz.txt'], undefined);
+      const result = await page.evaluate(async () => {
+        const state = JSON.parse(localStorage.getItem('smart_sync_state'));
+        return {
+          run: await window.FileNallyTest.RunLogStore.get(state.globalHistory[0].logId),
+          checkpoint: state.profiles[state.activeProfileId].lastCheckpoint,
+        };
+      });
+      assert.deepEqual(result.run.entries.map((entry) => entry.status), ['success', 'failed', 'not-run']);
+      assert.match(result.run.entries[1].error, /Injected close failure/);
+      assert.equal(result.run.entries[1].versionId, '');
+      assert.equal(result.run.entries[1].versionPath, '');
+      assert.equal(result.checkpoint.completed, 1);
+      assert.equal(result.checkpoint.total, 3);
+      assert.equal(result.checkpoint.planId, result.run.id);
+    });
+  }
+
+  add('rename write failure retains its captured version and original file', async ({ page }) => {
+    await planRename(page);
+    await page.evaluate(() => {
+      window.__setMockFile('target', 'renamed.txt', { content: 'appeared' });
+      window.__setMockFailure({ operation: 'write', name: 'renamed.txt', occurrence: 2 });
+    });
+    await executeCurrentPlan(page);
+    const snapshot = await snapshotMockPair(page);
+    assert.equal(snapshot.target['renamed.txt'].content, 'appeared');
+    assert.equal(snapshot.target['original.txt'].content, 'same');
+    const index = JSON.parse(snapshot.target['.filenally']['index.json'].content);
+    const version = index.versions[0];
+    assert.equal(snapshot.target['.filenally'].versions[version.id]['renamed.txt'].content, 'appeared');
+    const run = await page.evaluate(async () => {
+      const state = JSON.parse(localStorage.getItem('smart_sync_state'));
+      return window.FileNallyTest.RunLogStore.get(state.globalHistory[0].logId);
+    });
+    assert.equal(run.status, 'failed');
+    assert.match(run.entries[0].error, /Injected write failure/);
+    assert.equal(run.entries[0].versionId, version.id);
+    assert.equal(run.entries[0].versionPath, version.storedPath);
+  });
+
   add('capture rejects version index over size limit after append', async ({ page }) => {
     await page.locator('#dirOne').click();
     await mountPair(page, {
@@ -1238,15 +1378,28 @@ async function main() {
   });
 
   add('legacy run entries normalize missing version fields', async ({ page }) => {
-    const normalized = await page.evaluate(async () => {
+    await page.evaluate(async () => {
       const run = {
         id: 'legacy-run', entries: [{
           sequence: 1, action: 'copy', path: 'a.txt', status: 'success',
         }],
       };
-      await window.FileNallyTest.RunLogStore.put(run);
-      return window.FileNallyTest.RunLogStore.get('legacy-run');
+      await new Promise((resolve, reject) => {
+        const request = indexedDB.open('file-nally-handles', 2);
+        request.onerror = () => reject(request.error);
+        request.onsuccess = () => {
+          const db = request.result;
+          const transaction = db.transaction('runLogs', 'readwrite');
+          transaction.objectStore('runLogs').put(run);
+          transaction.oncomplete = () => { db.close(); resolve(); };
+          transaction.onerror = () => { db.close(); reject(transaction.error); };
+        };
+      });
     });
+    await page.reload();
+    assert.equal(await page.evaluate(() => window.FileNallyTest.RunLogStore.peek('legacy-run')), null);
+    const normalized = await page.evaluate(() => window.FileNallyTest.RunLogStore.get('legacy-run'));
+    assert.equal(normalized.entries[0].path, 'a.txt');
     assert.equal(normalized.entries[0].versionId, '');
     assert.equal(normalized.entries[0].versionPath, '');
   });
