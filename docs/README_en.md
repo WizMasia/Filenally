@@ -1,6 +1,6 @@
 # File-nally
 
-**Beta v0.13.0** · [한국어 메인 설명서](../README.md)
+**Beta v0.14.0** · [한국어 메인 설명서](../README.md)
 
 File-nally is a self-contained browser application for comparing and synchronizing two local folders. The distributable runtime—HTML, CSS, and JavaScript—lives in the generated [file-nally.html](../file-nally.html), so end users do not need a server, build process, or Node.js installation.
 

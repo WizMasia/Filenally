@@ -2239,7 +2239,7 @@ async function main() {
       background: getComputedStyle(document.body).backgroundColor,
       errors: window.__testUnhandledErrors || [],
     }));
-    assert.equal(result.version, 'Beta v0.13.0');
+    assert.equal(result.version, 'Beta v0.14.0');
     assert.equal(result.background, 'rgb(244, 246, 250)');
     assert.deepEqual(result.errors, []);
   });
