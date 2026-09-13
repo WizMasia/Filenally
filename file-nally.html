@@ -1027,6 +1027,352 @@
             if (fresh.text !== text) throw new Error('Version index write was not verified');
             return fresh;
         };
+        const summarizeUsage = (records) => {
+            const paths = new Map();
+            let bytes = 0n;
+            for (const record of records) {
+                if (!Number.isSafeInteger(record.size) || record.size < 0) throw new Error('Invalid version size');
+                const size = BigInt(record.size);
+                bytes += size;
+                const value = paths.get(record.originalPath)
+                    || { path: record.originalPath, count: 0, bytes: 0n };
+                value.count += 1;
+                value.bytes += size;
+                paths.set(value.path, value);
+            }
+            const values = [...paths.values()]
+                .sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0)
+                .map((value) => Object.freeze({ ...value, bytes: value.bytes.toString() }));
+            return Object.freeze({
+                count: records.length,
+                pathCount: paths.size,
+                bytes: bytes.toString(),
+                paths: Object.freeze(values),
+            });
+        };
+        const freezeCleanup = (cleanup) => cleanup && Object.freeze({ ...cleanup,
+            remainingIds: Object.freeze([...cleanup.remainingIds]) });
+        const readRawIndexSnapshot = async (root, check = () => {}) => {
+            check();
+            let versionRoot;
+            try { versionRoot = await root.getDirectoryHandle('.filenally'); }
+            catch (error) {
+                check();
+                if (error?.name === 'NotFoundError') return { root, versionRoot: null,
+                    indexHandle: null, indexFile: null, text: null };
+                throw error;
+            }
+            check();
+            const indexHandle = await getExistingFile(versionRoot, 'index.json', check);
+            check();
+            if (!indexHandle) return { root, versionRoot, indexHandle: null, indexFile: null, text: null };
+            const indexFile = await indexHandle.getFile();
+            check();
+            const text = await indexFile.text();
+            check();
+            return { root, versionRoot, indexHandle, indexFile, text };
+        };
+        const validateRawIndexSnapshot = async (snapshot, check = () => {}) => {
+            const fresh = await readRawIndexSnapshot(snapshot.root, check);
+            await sameSnapshotHandle(snapshot.versionRoot, fresh.versionRoot, false, check);
+            await sameSnapshotHandle(snapshot.indexHandle, fresh.indexHandle, false, check);
+            if (snapshot.text !== fresh.text) throw new Error('Version index changed');
+            return fresh;
+        };
+        const inspectUsage = async (root, {
+            scan = true, isCancelled = () => false, onProgress = () => {},
+        } = {}) => {
+            const report = {
+                indexStatus: 'error', indexError: null, registered: null, cleanup: null,
+                observed: null, inspection: 'not-run', readAt: nowIso(), visited: 0,
+                errors: [], errorCount: 0,
+            };
+            const recordError = (path, error) => {
+                report.errorCount += 1;
+                if (report.errors.length < 100) report.errors.push({ path, message: safeMessage(error) });
+            };
+            const observed = {
+                count: 0, bytes: 0n, indexBytes: 0n,
+                registeredCount: 0, registeredBytes: 0n,
+                unregisteredCount: 0, unregisteredBytes: 0n,
+                otherCount: 0, otherBytes: 0n, missingIds: [], mismatchedIds: [], unknownCount: 0,
+            };
+            const publicObserved = () => ({
+                count: observed.count,
+                bytes: observed.bytes.toString(),
+                indexBytes: observed.indexBytes.toString(),
+                registeredCount: observed.registeredCount,
+                registeredBytes: observed.registeredBytes === null ? null : observed.registeredBytes.toString(),
+                unregisteredCount: observed.unregisteredCount,
+                unregisteredBytes: observed.unregisteredBytes === null ? null : observed.unregisteredBytes.toString(),
+                otherCount: observed.otherCount,
+                otherBytes: observed.otherBytes.toString(),
+                missingIds: Object.freeze([...observed.missingIds]),
+                mismatchedIds: Object.freeze([...observed.mismatchedIds]),
+                unknownCount: observed.unknownCount,
+            });
+            const finish = () => {
+                if (scan) {
+                    if (report.indexStatus !== 'valid') {
+                        observed.registeredCount = null;
+                        observed.registeredBytes = null;
+                        observed.unregisteredCount = null;
+                        observed.unregisteredBytes = null;
+                    }
+                    report.observed = Object.freeze(publicObserved());
+                }
+                report.errors = Object.freeze(report.errors.map(Object.freeze));
+                return Object.freeze(report);
+            };
+            const check = () => {
+                let cancelled;
+                try { cancelled = isCancelled(); }
+                catch (error) {
+                    const callbackError = new Error(safeMessage(error));
+                    callbackError.code = 'VERSION_USAGE_CALLBACK';
+                    throw callbackError;
+                }
+                if (cancelled) {
+                    const error = new Error('Version usage inspection cancelled');
+                    error.code = 'VERSION_USAGE_CANCELLED';
+                    throw error;
+                }
+            };
+            const applyStop = (error) => {
+                if (error?.code === 'VERSION_USAGE_CANCELLED') report.inspection = 'cancelled';
+                else {
+                    recordError('', error);
+                    report.inspection = 'partial';
+                }
+            };
+            try { check(); }
+            catch (error) {
+                report.indexError = safeMessage(error);
+                applyStop(error);
+                return finish();
+            }
+
+            let snapshot = null;
+            let rawSnapshot = null;
+            let index = null;
+            let initialReadIncomplete = false;
+            try {
+                snapshot = await readIndexSnapshot(root, check);
+                rawSnapshot = snapshot;
+                index = snapshot.index;
+                report.indexStatus = snapshot.indexHandle ? 'valid' : 'missing';
+                try { report.registered = summarizeUsage(index.versions); }
+                catch (error) {
+                    index = null;
+                    report.indexStatus = 'error';
+                    report.indexError = safeMessage(error);
+                }
+            } catch (error) {
+                if (['VERSION_USAGE_CANCELLED', 'VERSION_USAGE_CALLBACK'].includes(error?.code)) {
+                    report.indexError = safeMessage(error);
+                    applyStop(error);
+                    return finish();
+                }
+                report.indexError = safeMessage(error);
+                try {
+                    rawSnapshot = await readRawIndexSnapshot(root, check);
+                    try {
+                        parseIndexText(rawSnapshot.text);
+                        initialReadIncomplete = true;
+                        recordError('index.json', error);
+                    }
+                    catch { /* A stable malformed index can still have a complete physical scan. */ }
+                } catch (rawError) {
+                    if (['VERSION_USAGE_CANCELLED', 'VERSION_USAGE_CALLBACK'].includes(rawError?.code)) {
+                        applyStop(rawError);
+                        return finish();
+                    }
+                    initialReadIncomplete = true;
+                    recordError('.filenally', error);
+                    try {
+                        const versionRoot = await root.getDirectoryHandle('.filenally');
+                        check();
+                        rawSnapshot = { root, versionRoot, indexHandle: null,
+                            indexFile: null, text: null, unverifiable: true };
+                    } catch (rootError) {
+                        if (['VERSION_USAGE_CANCELLED', 'VERSION_USAGE_CALLBACK'].includes(rootError?.code)) {
+                            applyStop(rootError);
+                            return finish();
+                        }
+                    }
+                }
+            }
+            report.cleanup = freezeCleanup(index?.cleanup || null);
+            if (!scan) return finish();
+            report.inspection = initialReadIncomplete ? 'partial' : 'complete';
+
+            const classificationIndex = report.indexStatus === 'valid' ? index : null;
+            if (!classificationIndex) {
+                observed.registeredCount = null;
+                observed.registeredBytes = null;
+                observed.unregisteredCount = null;
+                observed.unregisteredBytes = null;
+            }
+            const registeredPaths = new Map((classificationIndex?.versions || [])
+                .map((record) => [record.storedPath, record]));
+            const present = new Set();
+            const mismatchedIds = new Set();
+            const frames = [];
+            const closeIterator = async (frame) => {
+                try { await frame.iterator.return?.(); }
+                catch (error) {
+                    recordError(frame.path, error);
+                    if (report.inspection !== 'cancelled') report.inspection = 'partial';
+                }
+            };
+            const closeFrames = async () => {
+                while (frames.length) await closeIterator(frames.pop());
+            };
+            if (rawSnapshot?.versionRoot) {
+                try {
+                    frames.push({ directory: rawSnapshot.versionRoot,
+                        iterator: rawSnapshot.versionRoot.values()[Symbol.asyncIterator](), path: '', depth: 0 });
+                } catch (error) {
+                    recordError('', error);
+                    report.inspection = 'partial';
+                }
+            } else if (!rawSnapshot) {
+                report.inspection = 'partial';
+            }
+
+            let stopped = false;
+            while (frames.length && !stopped) {
+                const frame = frames.at(-1);
+                try { check(); }
+                catch (error) { applyStop(error); stopped = true; break; }
+                let next;
+                try {
+                    next = await frame.iterator.next();
+                    check();
+                } catch (error) {
+                    if (['VERSION_USAGE_CANCELLED', 'VERSION_USAGE_CALLBACK'].includes(error?.code)) {
+                        applyStop(error);
+                        stopped = true;
+                        break;
+                    }
+                    recordError(frame.path, error);
+                    report.inspection = 'partial';
+                    frames.pop();
+                    await closeIterator(frame);
+                    continue;
+                }
+                if (next.done) { frames.pop(); continue; }
+                if (report.visited >= 100000) {
+                    recordError(frame.path, new Error('Version usage entry limit 100000 reached'));
+                    report.inspection = 'partial';
+                    stopped = true;
+                    break;
+                }
+                const entry = next.value;
+                const path = frame.path ? `${frame.path}/${entry.name}` : entry.name;
+                report.visited += 1;
+                if (frame.depth + 1 > 256) {
+                    recordError(frame.path, new Error('Version usage depth limit 256 reached'));
+                    report.inspection = 'partial';
+                    stopped = true;
+                    break;
+                }
+                if (path.length > 8192) {
+                    recordError(frame.path, new Error('Version usage path limit 8192 reached'));
+                    report.inspection = 'partial';
+                    stopped = true;
+                    break;
+                }
+                if (entry.kind === 'directory') {
+                    const record = registeredPaths.get(path);
+                    if (record) { present.add(record.id); mismatchedIds.add(record.id); }
+                    try {
+                        frames.push({ directory: entry, iterator: entry.values()[Symbol.asyncIterator](),
+                            path, depth: frame.depth + 1 });
+                    } catch (error) {
+                        recordError(path, error);
+                        report.inspection = 'partial';
+                    }
+                } else if (entry.kind === 'file') {
+                    let file;
+                    try {
+                        check();
+                        file = await entry.getFile();
+                        check();
+                    } catch (error) {
+                        if (['VERSION_USAGE_CANCELLED', 'VERSION_USAGE_CALLBACK'].includes(error?.code)) {
+                            applyStop(error);
+                            stopped = true;
+                            break;
+                        }
+                        recordError(path, error);
+                        report.inspection = 'partial';
+                    }
+                    if (file && (!Number.isSafeInteger(file.size) || file.size < 0)) {
+                        recordError(path, new Error('Invalid observed file size'));
+                        report.inspection = 'partial';
+                        file = null;
+                    }
+                    if (file) {
+                        const size = BigInt(file.size);
+                        observed.count += 1;
+                        observed.bytes += size;
+                        if (path === 'index.json') observed.indexBytes += size;
+                        else if (classificationIndex && registeredPaths.has(path)) {
+                            const record = registeredPaths.get(path);
+                            present.add(record.id);
+                            observed.registeredCount += 1;
+                            observed.registeredBytes += size;
+                            if (file.size !== record.size) mismatchedIds.add(record.id);
+                        } else if (classificationIndex && path.startsWith('versions/')) {
+                            observed.unregisteredCount += 1;
+                            observed.unregisteredBytes += size;
+                        } else if (path.startsWith('versions/')) observed.unknownCount += 1;
+                        else {
+                            observed.otherCount += 1;
+                            observed.otherBytes += size;
+                        }
+                    }
+                }
+                if (report.visited % 128 === 0) {
+                    try { await onProgress({ visited: report.visited }); }
+                    catch (error) {
+                        recordError('', error);
+                        report.inspection = 'partial';
+                        stopped = true;
+                        break;
+                    }
+                    await new Promise((resolve) => setTimeout(resolve, 0));
+                    try { check(); }
+                    catch (error) { applyStop(error); stopped = true; break; }
+                }
+            }
+            if (frames.length) await closeFrames();
+            observed.mismatchedIds = [...mismatchedIds]
+                .sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+
+            if (report.inspection !== 'cancelled') {
+                try {
+                    if (snapshot) await validateIndexSnapshot(snapshot, check);
+                    else if (rawSnapshot && !rawSnapshot.unverifiable) {
+                        await validateRawIndexSnapshot(rawSnapshot, check);
+                    }
+                } catch (error) {
+                    if (error?.code === 'VERSION_USAGE_CANCELLED') report.inspection = 'cancelled';
+                    else if (error?.code === 'VERSION_USAGE_CALLBACK') applyStop(error);
+                    else {
+                        recordError('index.json', error);
+                        report.inspection = 'stale';
+                    }
+                }
+            }
+            if (report.inspection === 'complete' && classificationIndex) {
+                observed.missingIds = classificationIndex.versions
+                    .filter((record) => !present.has(record.id)).map((record) => record.id)
+                    .sort((a, b) => a < b ? -1 : a > b ? 1 : 0);
+            }
+            return finish();
+        };
         const withVersionWriter = async (work) => {
             if (versionWriting) throw new Error('Version write already running');
             versionWriting = true;
@@ -1207,7 +1553,7 @@
             }
         };
         const restore = (prepared, options) => withVersionWriter(() => restoreOwned(prepared, options));
-        return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText, list, read, prepareRestore, restore,
+        return Object.freeze({ capture, cleanRecord, emptyIndex, parseIndexText, inspectUsage, list, read, prepareRestore, restore,
             comparisonChoices, prepareComparison, validateComparison });
     })();
 
