@@ -249,6 +249,16 @@
             </header>
             <p id="versionDirection" class="version-message"></p>
             <p id="versionStatus" class="version-message" role="status" aria-live="polite"></p>
+            <section id="versionUsage" aria-labelledby="versionUsageTitle">
+                <h3 id="versionUsageTitle" data-i18n="versionUsageTitle">등록된 버전 용량</h3>
+                <div id="versionUsageRoots"></div>
+            </section>
+            <div class="version-cleanup-toolbar">
+                <p id="versionCleanupSelection" role="status" aria-live="polite"></p>
+                <button id="btnSelectVersionPage" type="button" data-i18n="versionSelectPage">현재 페이지 선택</button>
+                <button id="btnClearVersionSelection" type="button" data-i18n="versionClearSelection">선택 해제</button>
+                <button id="btnPrepareCleanup" type="button" data-i18n="versionPrepareCleanup" disabled>선택 버전 정리</button>
+            </div>
             <div class="table-wrapper run-detail-table version-table"><table><thead><tr><th data-i18n="owningRoot">보관 폴더</th><th data-i18n="pathHead">항목명과 경로</th><th data-i18n="capturedAt">캡처 시각</th><th data-i18n="sizeHead">크기</th><th data-i18n="versionReason">보관 이유</th><th data-i18n="actionHead">작업</th></tr></thead><tbody id="versionBody"></tbody></table></div>
             <div class="run-detail-pagination">
                 <button id="btnVersionPrevious" class="button-ghost" type="button" data-i18n="previousPage">이전</button>
@@ -256,6 +266,22 @@
                 <button id="btnVersionNext" class="button-ghost" type="button" data-i18n="nextPage">다음</button>
             </div>
             <div class="run-detail-actions"><button id="btnVersionRefresh" class="button-secondary" type="button" data-i18n="versionRefresh">새로고침</button></div>
+        </div>
+    </dialog>
+    <dialog id="cleanupDialog" class="run-detail-dialog cleanup-dialog" aria-labelledby="cleanupTitle" aria-describedby="cleanupDescription">
+        <div class="run-detail-surface cleanup-surface">
+            <header class="run-detail-header"><div><h2 id="cleanupTitle"></h2><p id="cleanupDescription"></p></div></header>
+            <div class="cleanup-scroll" tabindex="0" role="region" aria-labelledby="cleanupTitle">
+                <div id="cleanupSummary"></div>
+                <ul id="cleanupRecords"></ul>
+                <div id="cleanupLastWarning" hidden><label><input id="cleanupLastAcknowledged" type="checkbox"><span data-i18n="cleanupLastAcknowledged">표시된 경로의 마지막 유효 버전을 영구 삭제하는 데 동의합니다.</span></label></div>
+            </div>
+            <p id="cleanupStatus" class="version-message" role="status" aria-live="polite"></p>
+            <div class="run-detail-actions">
+                <button id="btnCancelCleanup" type="button" class="button-ghost" data-i18n="cancelRestore">취소</button>
+                <button id="btnConfirmCleanup" type="button" data-i18n="cleanupConfirm" disabled>영구 삭제</button>
+                <button id="btnStopCleanup" type="button" data-i18n="cleanupStop" hidden>현재 항목 후 중지</button>
+            </div>
         </div>
     </dialog>
     <dialog id="restoreDialog" class="run-detail-dialog restore-dialog" aria-labelledby="restoreTitle" aria-describedby="restoreDescription">

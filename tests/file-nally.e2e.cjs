@@ -977,6 +977,567 @@ async function main() {
     });
   }
 
+  add('version storage UI usage and cancelled preview preserve files permissions settings and plan', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+    await compare(page);
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => document.querySelectorAll('#versionBody tr').length === 2);
+    assert.equal(await page.locator('#versionUsage').count(), 1);
+    assert.match(await page.locator('[data-usage-side="target"]').innerText(), /2.*6 B/);
+    await page.locator('[data-cleanup-id="saved-1"][data-cleanup-side="target"]').check();
+    await page.locator('#btnPrepareCleanup').click();
+    await page.locator('#cleanupDialog').waitFor({ state: 'visible' });
+    await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+    assert.equal(await page.locator('#cleanupRecords li').count(), 1);
+    assert.match(await page.locator('#cleanupSummary').innerText(), /1.*3 B/);
+    await page.locator('#btnCancelCleanup').click();
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'btnPrepareCleanup');
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  for (const direction of ['#dirBoth', '#dirOne', '#dirReverse']) {
+    for (const swapped of [false, true]) {
+      add(`version storage UI confirmed cleanup keeps physical ownership ${direction} swapped ${swapped}`, async ({ page }) => {
+        await page.locator(direction).click();
+        await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+        await page.evaluate(() => { window.__mockPair.source.name = 'same-name'; window.__mockPair.target.name = 'same-name'; });
+        if (swapped) await page.locator('#btnSwapFolders').click();
+        await compare(page);
+        const state = (await comparisonState(page)).storage;
+        const before = await snapshotMockPair(page);
+        const side = swapped ? 'source' : 'target';
+        await page.locator('#btnVersions').click();
+        await page.locator(`[data-cleanup-id="saved-1"][data-cleanup-side="${side}"]`).check();
+        await page.locator('#btnPrepareCleanup').click();
+        await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+        assert.match(await page.locator('#cleanupSummary').innerText(), /same-name/);
+        assert.match(await page.locator('#cleanupSummary').innerText(), /v0\.14/);
+        await page.locator('#btnConfirmCleanup').click();
+        await page.waitForFunction(() => /확인된 완료 1|Confirmed completed 1/.test(document.querySelector('#cleanupStatus').textContent), null, { timeout: 2000 });
+        const after = await snapshotMockPair(page);
+        assert.deepEqual(after.source, before.source);
+        assert.equal(after.target['report.txt'].content, 'target-current');
+        assert.equal(after.target['.filenally'].versions['saved-1']['report.txt'], undefined);
+        assert.equal(after.target['.filenally'].versions['saved-2']['report.txt'].content, 'old');
+        assert.equal(JSON.parse(after.target['.filenally']['index.json'].content).schemaVersion, 2);
+        assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+        assert.deepEqual((await comparisonState(page)).storage, state);
+        assert.match(await page.locator('#cleanupStatus').innerText(), /3 B/);
+        await page.locator('#btnCancelCleanup').click();
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'btnVersionRefresh');
+        assert.match(await page.locator('[data-usage-side="' + side + '"]').innerText(), /1.*3 B/);
+      });
+    }
+  }
+
+  add('version storage UI permission denial consumes preview without changing plan or files', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+    await compare(page);
+    const before = await snapshotMockPair(page), state = await comparisonState(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-cleanup-id="saved-1"]').check();
+    await page.locator('#btnPrepareCleanup').click();
+    await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+    await page.evaluate(() => window.__setMockPermission('target', { state: 'denied' }));
+    await page.locator('#btnConfirmCleanup').click();
+    await page.waitForFunction(() => /실패|failed/.test(document.querySelector('#cleanupStatus').textContent), null, { timeout: 2000 });
+    await page.locator('#btnConfirmCleanup').dispatchEvent('click');
+    assert.equal(await page.locator('#btnConfirmCleanup').isDisabled(), true);
+    assert.deepEqual(await snapshotMockPair(page), before);
+    assert.deepEqual((await comparisonState(page)).storage, state.storage);
+    assert.deepEqual((await comparisonState(page)).plan, state.plan);
+  });
+
+  add('version storage UI inspection labels observed categories literal errors and preserves plan', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+    await compare(page);
+    await page.evaluate(() => {
+      window.__deleteMockEntry('target', '.filenally/versions/saved-2/report.txt');
+      window.__setMockFile('target', '.filenally/versions/orphan.txt', { content: 'extra' });
+      window.__setMockFile('target', '.filenally/note.txt', { content: 'other' });
+      window.__setMockFile('target', '.filenally/bad.txt', { content: 'bad' });
+      window.__mockPair.target.entries.get('.filenally').entries.get('bad.txt').getFile = async () => { throw new Error('<img src=x onerror=alert(1)>'); };
+    });
+    await installComparisonMutationSpies(page);
+    const files = await snapshotMockPair(page), state = await comparisonState(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-inspect-side="target"]').click();
+    await page.locator('#cleanupDialog').waitFor({ state: 'visible', timeout: 2000 });
+    await page.waitForFunction(() => document.querySelector('#btnStopCleanup').hidden);
+    await page.locator('#btnCancelCleanup').click();
+    const usage = await page.locator('[data-usage-side="target"]').innerText();
+    assert.match(usage, /부분|Partial/); assert.match(usage, /미등록|Unregistered/);
+    // Partial traversal cannot establish absence; the store intentionally withholds missing IDs.
+    assert.match(usage, /누락 0|0 missing/); assert.match(usage, /<img src=x onerror=alert\(1\)>/);
+    assert.equal(await page.locator('#versionUsage img').count(), 0);
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, files, state);
+  });
+
+  add('version storage UI index-only recovery leaves pending files and other root operable', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')], { schemaVersion: 2,
+      cleanup: cleanupIntent({ remainingIds: ['saved-1', 'saved-2'] }) });
+    await page.evaluate(({ record, content }) => {
+      window.__deleteMockEntry('target', '.filenally/versions/saved-1/report.txt');
+      window.__setMockFile('source', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [record] }) });
+      window.__setMockFile('source', `.filenally/${record.storedPath}`, { content, lastModified: 100 });
+    }, cleanupFixture('other-1'));
+    await compare(page);
+    await installCleanupObservation(page);
+    const before = await snapshotMockPair(page), state = (await comparisonState(page)).storage;
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-recover-side="target"]').waitFor();
+    assert.equal(await page.locator('[data-cleanup-side="source"]').count(), 1);
+    assert.equal(await page.locator('[data-version-action="restore"]').isEnabled(), true);
+    assert.match(await page.locator('#versionStatus').innerText(), /requires recovery/i);
+    await page.locator('[data-recover-side="target"]').click();
+    await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+    assert.equal(await page.locator('#cleanupLastWarning').isVisible(), false);
+    assert.match(await page.locator('#cleanupSummary').innerText(), /1/);
+    assert.match(await page.locator('#cleanupSummary').innerText(), /작업 cleanup-1/);
+    await page.locator('#btnConfirmCleanup').click();
+    await page.waitForFunction(() => /복구 완료|recovery complete/.test(document.querySelector('#cleanupStatus').textContent), null, { timeout: 2000 });
+    const after = await snapshotMockPair(page);
+    assert.deepEqual(after.source, before.source);
+    assert.deepEqual(after.target['.filenally'].versions, before.target['.filenally'].versions);
+    assert.deepEqual(await page.evaluate(() => window.__cleanupRemovals), []);
+    const index = JSON.parse(after.target['.filenally']['index.json'].content);
+    assert.equal(index.cleanup, null); assert.deepEqual(index.versions.map(r => r.id), ['saved-2']);
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+    assert.deepEqual((await comparisonState(page)).storage, state);
+  });
+
+  add('version storage UI selection persists across 100 row pages rejects mixed roots and caps at 100', async ({ page }) => {
+    await mountCleanup(page, Array.from({ length: 102 }, (_, i) => cleanupFixture(`saved-${String(i).padStart(3, '0')}`, `path-${i}.txt`)));
+    await page.evaluate(({ record, content }) => {
+      window.__setMockFile('source', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions: [record] }) });
+      window.__setMockFile('source', `.filenally/${record.storedPath}`, { content, lastModified: 100 });
+    }, cleanupFixture('source-1', 'source.txt', 'old', '2026-09-12T00:00:00.000Z'));
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-cleanup-id="saved-000"]').check();
+    await page.locator('#btnVersionNext').click();
+    assert.equal(await page.locator('[data-cleanup-id]').count(), 3);
+    await page.locator('#btnSelectVersionPage').click();
+    assert.match(await page.locator('#versionCleanupSelection').innerText(), /3\/100.*9 B/);
+    await page.locator('[data-cleanup-side="source"]').evaluate(input => { input.checked = true; input.dispatchEvent(new Event('change')); });
+    assert.equal(await page.locator('[data-cleanup-side="source"]').isChecked(), false);
+    assert.equal(await page.locator('[data-cleanup-side="source"]').isDisabled(), true);
+    await page.locator('#btnVersionPrevious').click();
+    assert.equal(await page.locator('[data-cleanup-id="saved-000"]').isChecked(), true);
+    await page.locator('#btnSelectVersionPage').click();
+    assert.match(await page.locator('#versionCleanupSelection').innerText(), /100\/100.*300 B/);
+    assert.equal(await page.locator('[data-cleanup-id="saved-098"]').isChecked(), false);
+    assert.equal(await page.locator('[data-cleanup-id="saved-099"]').isChecked(), false);
+    await page.locator('[data-cleanup-id="saved-000"]').uncheck();
+    assert.match(await page.locator('#versionCleanupSelection').innerText(), /99\/100/);
+    assert.equal(await page.locator('[data-usage-side="target"] .version-usage-paths li').count(), 100);
+    await page.locator('[data-usage-page-side="target"][data-page-delta="1"]').click();
+    assert.equal(await page.locator('[data-usage-side="target"] .version-usage-paths li').count(), 2);
+    assert.deepEqual(await page.evaluate(() => ({ side: document.activeElement.dataset.usagePageSide, delta: document.activeElement.dataset.pageDelta })), { side: 'target', delta: '-1' });
+    assert.equal(await page.locator('#versionBody tr').count(), 100);
+    await page.locator('#btnVersionRefresh').click();
+    await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
+    assert.match(await page.locator('#versionCleanupSelection').innerText(), /0\/100.*0 B/);
+    assert.equal(await page.locator('[data-usage-side="target"] .version-usage-paths li').count(), 100);
+  });
+
+  for (const lang of ['ko', 'en']) {
+    add(`version storage UI ${lang} unknown summary and last valid version acknowledgment are explicit`, async ({ page }) => {
+      await page.locator(lang === 'ko' ? '#btnLangKo' : '#btnLangEn').click();
+      await mountCleanup(page, [cleanupFixture('saved-1', '<b>long-path</b>.txt'), cleanupFixture('saved-2', '<b>long-path</b>.txt')]);
+      await page.evaluate(() => {
+        window.__setMockFile('source', '.filenally/index.json', { content: '{' });
+        window.__deleteMockEntry('target', '.filenally/versions/saved-2/<b>long-path</b>.txt');
+      });
+      await page.locator('#btnVersions').click();
+      await page.waitForFunction(() => document.querySelectorAll('#versionBody tr').length === 2);
+      assert.match(await page.locator('#versionUsageTitle').innerText(), lang === 'ko' ? /등록된 버전 용량/ : /Registered version usage/);
+      assert.match(await page.locator('[data-usage-side="source"]').innerText(), lang === 'ko' ? /알 수 없음/ : /unknown/);
+      assert.equal(await page.locator('[data-usage-total]').count(), 0);
+      await page.locator('[data-cleanup-id="saved-1"]').check();
+      await page.locator('#btnPrepareCleanup').click();
+      await page.locator('#cleanupLastWarning').waitFor({ state: 'visible' });
+      assert.equal(await page.locator('#btnConfirmCleanup').isDisabled(), true);
+      assert.match(await page.locator('#cleanupSummary').innerText(), lang === 'ko' ? /누락·불일치/ : /missing or mismatched/);
+      assert.equal(await page.locator('#cleanupRecords b').count(), 0);
+      const calls = await page.evaluate(() => window.__getPermissionCalls());
+      await page.locator('#btnConfirmCleanup').dispatchEvent('click');
+      assert.deepEqual(await page.evaluate(() => window.__getPermissionCalls()), calls);
+      await page.locator('#cleanupLastAcknowledged').check();
+      assert.equal(await page.locator('#btnConfirmCleanup').isEnabled(), true);
+      await page.keyboard.press('Escape');
+      assert.equal(await page.locator('#cleanupDialog').isVisible(), false);
+      assert.equal(await page.evaluate(() => document.activeElement.id), 'btnPrepareCleanup');
+    });
+  }
+
+  for (const mode of ['preparation', 'inspection']) {
+    add(`version storage UI late ${mode} cannot alter replacement child locks or results`, async ({ page }) => {
+      await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+      await compare(page);
+      await installComparisonMutationSpies(page);
+      const before = await snapshotMockPair(page), state = await comparisonState(page);
+      await page.locator('#btnVersions').click();
+      await page.locator('[data-cleanup-id="saved-1"]').check();
+      await page.evaluate(mode => {
+        const folder = window.__mockPair.target.entries.get('.filenally');
+        if (mode === 'preparation') {
+          const file = folder.entries.get('versions').entries.get('saved-1').entries.get('report.txt'), read = file.getFile.bind(file);
+          let held = false;
+          file.getFile = async () => { if (!held) { held = true; await new Promise(resolve => window.__releaseOldRead = resolve); } return read(); };
+        } else {
+          const values = folder.values.bind(folder); let held = false;
+          folder.values = async function* () { if (!held) { held = true; await new Promise(resolve => window.__releaseOldRead = resolve); } yield* values(); };
+        }
+      }, mode);
+      await page.locator(mode === 'preparation' ? '#btnPrepareCleanup' : '[data-inspect-side="target"]').click();
+      await page.waitForFunction(() => !!window.__releaseOldRead);
+      await page.locator('#btnCancelCleanup').click();
+      await page.locator('#btnCloseVersions').click();
+      await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+      await page.locator('#btnVersions').click();
+      await page.locator('[data-cleanup-id="saved-2"]').check();
+      await page.locator('#btnPrepareCleanup').click();
+      await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+      await page.evaluate(() => window.__releaseOldRead());
+      await page.waitForTimeout(30);
+      assert.equal(await page.locator('#btnConfirmCleanup').isEnabled(), true);
+      assert.match(await page.locator('#cleanupRecords').innerText(), /saved-2/);
+      assert.doesNotMatch(await page.locator('#cleanupRecords').innerText(), /saved-1/);
+      assert.equal(await page.locator('#btnVersionRefresh').isDisabled(), true);
+      await page.locator('#btnCancelCleanup').click();
+      await page.locator('#btnCloseVersions').click();
+      await assertComparisonReadOnly(page, before, state);
+    });
+  }
+
+  add('version storage UI stop inspection reports cancelled observation without clearing plan', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+    await compare(page);
+    await installComparisonMutationSpies(page);
+    const before = await snapshotMockPair(page), state = await comparisonState(page);
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
+    await page.evaluate(() => {
+      const folder = window.__mockPair.target.entries.get('.filenally'), values = folder.values.bind(folder);
+      folder.values = async function* () { await new Promise(resolve => window.__releaseInspection = resolve); yield* values(); };
+    });
+    await page.locator('[data-inspect-side="target"]').click();
+    await page.waitForFunction(() => !!window.__releaseInspection);
+    await page.locator('#btnStopCleanup').click();
+    await page.evaluate(() => window.__releaseInspection());
+    await page.waitForFunction(() => document.querySelector('#btnStopCleanup').hidden);
+    assert.match(await page.locator('#cleanupStatus').innerText(), /검사 중지|cancelled/);
+    await page.locator('#btnCancelCleanup').click();
+    assert.match(await page.locator('[data-usage-side="target"]').innerText(), /검사 중지|cancelled/);
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, before, state);
+  });
+
+  add('version storage UI held permission blocks duplicates close Escape and competing operations', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+    await compare(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-cleanup-id="saved-1"]').check();
+    await page.locator('#btnPrepareCleanup').click();
+    await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+    await page.evaluate(() => {
+      window.__permissionCount = 0;
+      window.__mockPair.target.requestPermission = () => {
+        window.__permissionCount++;
+        return new Promise(resolve => window.__releasePermission = resolve);
+      };
+      document.querySelector('#btnConfirmCleanup').dispatchEvent(new Event('click'));
+      window.__permissionSynchronous = window.__permissionCount === 1;
+      document.querySelector('#btnConfirmCleanup').dispatchEvent(new Event('click'));
+    });
+    assert.equal(await page.evaluate(() => window.__permissionSynchronous), true);
+    await page.keyboard.press('Escape');
+    await page.locator('#btnCancelCleanup').dispatchEvent('click');
+    await page.locator('#btnCloseVersions').dispatchEvent('click');
+    await page.locator('#btnVersionRefresh').dispatchEvent('click');
+    for (const action of ['compare', 'restore']) await page.locator(`[data-version-action="${action}"]`).first().dispatchEvent('click');
+    await page.locator('#btnConfirmRestore').dispatchEvent('click');
+    await page.evaluate(() => { document.querySelector('#cleanupDialog').close(); document.querySelector('#versionDialog').close(); });
+    await page.waitForFunction(() => document.querySelector('#cleanupDialog').open && document.querySelector('#versionDialog').open);
+    await page.locator('#btnStopCleanup').evaluate(button => button.focus());
+    assert.equal(await page.evaluate(() => document.activeElement.id), 'btnStopCleanup');
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().versionBusy), true);
+    assert.equal(await page.locator('#comparisonDialog').isVisible(), false);
+    assert.equal(await page.locator('#restoreDialog').isVisible(), false);
+    assert.equal(await page.evaluate(() => window.__permissionCount), 1);
+    await page.evaluate(() => window.__releasePermission('granted'));
+    await page.waitForFunction(() => /확인된 완료 1|Confirmed completed 1/.test(document.querySelector('#cleanupStatus').textContent));
+    assert.equal(await page.evaluate(() => window.__permissionCount), 1);
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+  });
+
+  for (const failure of [false, true]) {
+    add(`version storage UI ${failure ? 'failed deletion reports recovery' : 'safe stop finishes one item'} and invalidates plan`, async ({ page }) => {
+      await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2'), cleanupFixture('saved-3')]);
+      await compare(page);
+      await installCleanupObservation(page);
+      const state = (await comparisonState(page)).storage;
+      await page.locator('#btnVersions').click();
+      await page.locator('[data-cleanup-id="saved-1"]').check();
+      await page.locator('[data-cleanup-id="saved-2"]').check();
+      await page.locator('#btnPrepareCleanup').click();
+      await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+      await page.evaluate(failure => {
+        window.__beforeCleanupRemove = async () => {
+          await new Promise(resolve => window.__releaseDeletion = resolve);
+          if (failure) throw new Error('<img src=x> blocked deletion');
+        };
+      }, failure);
+      await page.locator('#btnConfirmCleanup').click();
+      await page.waitForFunction(() => !!window.__releaseDeletion);
+      assert.equal(await page.locator('#btnCancelCleanup').isDisabled(), true);
+      if (!failure) await page.locator('#btnStopCleanup').click();
+      await page.evaluate(() => window.__releaseDeletion());
+      await page.waitForFunction(() => !document.querySelector('#btnCancelCleanup').disabled);
+      const result = await page.locator('#cleanupStatus').innerText();
+      assert.match(result, failure ? /실패|failed/ : /정리 중지|Cleanup stopped/);
+      assert.match(result, failure ? /saved-1/ : /3 B/);
+      if (failure) {
+        assert.match(result, /<img src=x> blocked deletion/);
+        assert.match(result, /복구 필요: 있음|Recovery required: Yes/);
+        assert.equal(await page.locator('#cleanupStatus img').count(), 0);
+      }
+      const after = await snapshotMockPair(page);
+      assert.equal(after.target['.filenally'].versions['saved-2']['report.txt'].content, 'old');
+      assert.equal(after.target['.filenally'].versions['saved-3']['report.txt'].content, 'old');
+      assert.equal(after.target['report.txt'].content, 'target-current');
+      assert.equal(await page.evaluate(() => window.__cleanupRemovals.length), 1);
+      assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+      assert.deepEqual((await comparisonState(page)).storage, state);
+    });
+  }
+
+  add('version storage UI large logical sums stay exact and inspection identifies mismatches', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+    await page.evaluate(() => {
+      const versions = window.__cleanupRecords.map((record, i) => ({ ...record, size: i === 0 ? Number.MAX_SAFE_INTEGER : 2 }));
+      window.__setMockFile('target', '.filenally/index.json', { content: JSON.stringify({ schemaVersion: 1, versions }) });
+    });
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
+    assert.match(await page.locator('[data-usage-side="target"]').innerText(), /9007199254740993 B/);
+    assert.match(await page.locator('[data-usage-total]').innerText(), /9007199254740993 B/);
+    assert.match(await page.locator('[data-usage-side="source"]').innerText(), /0.*0 B/);
+    await page.locator('#btnSelectVersionPage').click();
+    assert.match(await page.locator('#versionCleanupSelection').innerText(), /2\/100.*9007199254740993 B/);
+    await page.locator('[data-inspect-side="target"]').click();
+    await page.waitForFunction(() => document.querySelector('#btnStopCleanup').hidden);
+    await page.locator('#btnCancelCleanup').click();
+    assert.match(await page.locator('[data-usage-side="target"]').innerText(), /크기 불일치 2|2 size mismatches/);
+  });
+
+  add('version storage UI progress callback failure reports committed bytes and invalidates plan', async ({ page }) => {
+    await page.locator('#btnLangEn').click();
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2'), cleanupFixture('saved-3')]);
+    await compare(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-cleanup-id="saved-1"]').check();
+    await page.locator('[data-cleanup-id="saved-2"]').check();
+    await page.locator('#btnPrepareCleanup').click();
+    await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+    await page.evaluate(() => {
+      const status = document.querySelector('#cleanupStatus'), descriptor = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
+      Object.defineProperty(status, 'textContent', { configurable: true, get() { return descriptor.get.call(this); }, set(value) {
+        if (/^Operation .* · completed/.test(value)) { delete this.textContent; throw new Error('progress display failed'); }
+        descriptor.set.call(this, value);
+      } });
+    });
+    await page.locator('#btnConfirmCleanup').click();
+    await page.waitForFunction(() => /Cleanup failed/.test(document.querySelector('#cleanupStatus').textContent));
+    assert.match(await page.locator('#cleanupStatus').innerText(), /Confirmed completed 1 · 3 B/);
+    assert.match(await page.locator('#cleanupStatus').innerText(), /progress display failed/);
+    const after = await snapshotMockPair(page);
+    assert.equal(after.target['.filenally'].versions['saved-1']['report.txt'], undefined);
+    assert.equal(after.target['.filenally'].versions['saved-2']['report.txt'].content, 'old');
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+  });
+
+  add('version storage UI stale cleanup attempt clears plan even before deletion is accepted', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+    await compare(page);
+    const settings = (await comparisonState(page)).storage;
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-cleanup-id="saved-1"]').check();
+    await page.locator('#btnPrepareCleanup').click();
+    await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+    await page.evaluate(() => window.__mockPair.target.entries.get('.filenally').entries.get('index.json').content += ' ');
+    const before = await snapshotMockPair(page);
+    await page.locator('#btnConfirmCleanup').click();
+    await page.waitForFunction(() => /실패|failed/.test(document.querySelector('#cleanupStatus').textContent));
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+    assert.deepEqual(await snapshotMockPair(page), before);
+    assert.deepEqual((await comparisonState(page)).storage, settings);
+  });
+
+  add('version storage UI recovery writing has no stop and preserves pending files', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')], { schemaVersion: 2, cleanup: cleanupIntent() });
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-recover-side="target"]').click();
+    await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+    await page.evaluate(() => {
+      const file = window.__mockPair.target.entries.get('.filenally').entries.get('index.json'), write = file.createWritable.bind(file);
+      file.createWritable = async () => { await new Promise(resolve => window.__releaseRecovery = resolve); return write(); };
+    });
+    await page.locator('#btnConfirmCleanup').click();
+    await page.waitForFunction(() => !!window.__releaseRecovery);
+    assert.equal(await page.locator('#btnStopCleanup').isVisible(), false);
+    await page.locator('#btnStopCleanup').dispatchEvent('click');
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('#cleanupDialog').isVisible(), true);
+    assert.equal(await page.locator('#btnCancelCleanup').isDisabled(), true);
+    await page.evaluate(() => window.__releaseRecovery());
+    await page.waitForFunction(() => !document.querySelector('#btnCancelCleanup').disabled);
+    const after = await snapshotMockPair(page);
+    assert.equal(after.target['.filenally'].versions['saved-1']['report.txt'].content, 'old');
+    assert.equal(JSON.parse(after.target['.filenally']['index.json'].content).cleanup, null);
+  });
+
+  add('version storage UI unsupported identity leaves cleanup read-only with visible error', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+    await compare(page);
+    await page.evaluate(() => { window.__mockPair.target.entries.get('.filenally').isSameEntry = undefined; });
+    await installComparisonMutationSpies(page);
+    const before = await snapshotMockPair(page), state = await comparisonState(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-cleanup-id="saved-1"]').check();
+    await page.locator('#btnPrepareCleanup').click();
+    await page.waitForFunction(() => /실패|failed/.test(document.querySelector('#cleanupStatus').textContent));
+    assert.match(await page.locator('#cleanupStatus').innerText(), /identity|isSameEntry/i);
+    assert.equal(await page.locator('#btnConfirmCleanup').isDisabled(), true);
+    await page.locator('#btnConfirmCleanup').dispatchEvent('click');
+    await page.locator('#btnCancelCleanup').click();
+    await page.locator('#btnCloseVersions').click();
+    await assertComparisonReadOnly(page, before, state);
+  });
+
+  add('version storage UI replacement physical roots discard late old inspection', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')]);
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
+    await page.evaluate(() => {
+      const folder = window.__mockPair.target.entries.get('.filenally'), values = folder.values.bind(folder);
+      folder.values = async function* () { await new Promise(resolve => window.__releaseOldRoot = resolve); yield* values(); };
+    });
+    await page.locator('[data-inspect-side="target"]').click();
+    await page.waitForFunction(() => !!window.__releaseOldRoot);
+    await page.evaluate(() => document.querySelector('#versionDialog').close());
+    await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+    await mountCleanup(page, [cleanupFixture('replacement-1', 'replacement.txt', 'new root')]);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-cleanup-id="replacement-1"]').waitFor();
+    await page.evaluate(() => window.__releaseOldRoot());
+    await page.waitForTimeout(30);
+    assert.match(await page.locator('[data-usage-side="target"]').innerText(), /1.*8 B/);
+    assert.doesNotMatch(await page.locator('#versionBody').innerText(), /saved-1/);
+    assert.equal(await page.locator('#btnVersionRefresh').isEnabled(), true);
+    assert.equal(await page.locator('#cleanupDialog').isVisible(), false);
+  });
+
+  add('version storage UI comparison excludes programmatic maintenance requests', async ({ page }) => {
+    await mountVersion(page);
+    await openVersionComparison(page);
+    await page.locator('[data-inspect-side="target"]').dispatchEvent('click');
+    await page.locator('#btnSelectVersionPage').dispatchEvent('click');
+    await page.locator('#btnPrepareCleanup').dispatchEvent('click');
+    await page.locator('#btnConfirmCleanup').dispatchEvent('click');
+    assert.equal(await page.locator('#cleanupDialog').isVisible(), false);
+    assert.equal(await page.locator('#comparisonDialog').isVisible(), true);
+    await runVersionComparison(page);
+    assert.match(await page.locator('#comparisonStatus').innerText(), /다릅니다|different/);
+  });
+
+  add('version storage UI dismissing write result preserves the pending parent refresh lock', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1'), cleanupFixture('saved-2')]);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-cleanup-id="saved-1"]').check();
+    await page.locator('#btnPrepareCleanup').click();
+    await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+    await page.evaluate(() => {
+      const root = window.__mockPair.source, read = root.getDirectoryHandle.bind(root); let held = false;
+      root.getDirectoryHandle = async (...args) => {
+        if (!held) { held = true; await new Promise(resolve => window.__releaseRefresh = resolve); }
+        return read(...args);
+      };
+    });
+    await page.locator('#btnConfirmCleanup').click();
+    await page.waitForFunction(() => !!window.__releaseRefresh);
+    await page.locator('#btnCancelCleanup').click();
+    assert.equal(await page.locator('#btnVersionRefresh').isDisabled(), true);
+    await page.locator('[data-inspect-side="target"]').dispatchEvent('click');
+    assert.equal(await page.locator('#cleanupDialog').isVisible(), false);
+    await page.evaluate(() => window.__releaseRefresh());
+    await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
+    assert.match(await page.locator('[data-usage-side="target"]').innerText(), /1.*3 B/);
+  });
+
+  add('version storage UI recovery failure reports operation root and preserves files', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')], { schemaVersion: 2, cleanup: cleanupIntent() });
+    await compare(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-recover-side="target"]').click();
+    await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+    await page.evaluate(() => window.__setMockFailure({ operation: 'write', name: 'index.json' }));
+    const before = await snapshotMockPair(page);
+    await page.locator('#btnConfirmCleanup').click();
+    await page.waitForFunction(() => /실패|failed/.test(document.querySelector('#cleanupStatus').textContent));
+    const result = await page.locator('#cleanupStatus').innerText();
+    assert.match(result, /cleanup-1/); assert.match(result, /target/);
+    assert.deepEqual(await snapshotMockPair(page), before);
+    assert.equal(await page.evaluate(() => window.FileNallyTest.getModel().plan), null);
+  });
+
+  add('version storage UI acknowledged last deletion removes only the selected stored file', async ({ page }) => {
+    await mountCleanup(page, [cleanupFixture('saved-1')]);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-cleanup-id="saved-1"]').check();
+    await page.locator('#btnPrepareCleanup').click();
+    await page.locator('#cleanupLastWarning').waitFor({ state: 'visible' });
+    await page.locator('#cleanupLastAcknowledged').check();
+    await page.locator('#btnConfirmCleanup').click();
+    await page.waitForFunction(() => /확인된 완료 1|Confirmed completed 1/.test(document.querySelector('#cleanupStatus').textContent));
+    const after = await snapshotMockPair(page);
+    assert.equal(await page.locator('#cleanupLastWarning').isVisible(), false);
+    assert.deepEqual(after.target['.filenally'].versions['saved-1'], {});
+    assert.equal(after.target['report.txt'].content, 'target-current');
+    assert.deepEqual(JSON.parse(after.target['.filenally']['index.json'].content).versions, []);
+  });
+
+  add('version storage UI reopened scrolling manager shows its full heading', async ({ page }) => {
+    await page.setViewportSize({ width: 768, height: 1000 });
+    await page.locator('#btnLangEn').click();
+    await mountCleanup(page, Array.from({ length: 101 }, (_, i) => cleanupFixture(`saved-${i}`, `long-path-${i}.txt`)));
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
+    await page.locator('#versionDialog > .run-detail-surface').evaluate(el => { el.scrollTop = 200; });
+    await page.keyboard.press('Escape');
+    await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+    await page.locator('#btnVersions').click();
+    await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
+    assert.equal(await page.locator('#versionTitle').evaluate(el => el.getBoundingClientRect().top >= document.querySelector('#versionDialog').getBoundingClientRect().top), true);
+  });
+
+  add('version storage UI restore keeps its own confirm enabled and excludes maintenance', async ({ page }) => {
+    await mountVersion(page);
+    await page.locator('#btnVersions').click();
+    await page.locator('[data-version-action="restore"]').click();
+    await page.locator('#restoreDialog').waitFor({ state: 'visible' });
+    assert.equal(await page.locator('#btnConfirmRestore').isEnabled(), true);
+    await page.locator('[data-inspect-side="target"]').dispatchEvent('click');
+    await page.locator('#btnSelectVersionPage').dispatchEvent('click');
+    await page.locator('#btnPrepareCleanup').dispatchEvent('click');
+    assert.equal(await page.locator('#cleanupDialog').isVisible(), false);
+    await page.locator('#btnCancelRestore').click();
+  });
+
   add('version manager cancel is read-only and confirmed restore invalidates comparison', async ({ page }) => {
     await mountVersion(page);
     await compare(page);
@@ -6013,6 +6574,8 @@ async function main() {
     await fs.mkdir(path.join(ROOT, 'artifacts', 'visual'), { recursive: true });
     const comparisonVisualRoot = path.join(ROOT, 'artifacts', 'issue-12-version-comparison', 'visual');
     await fs.mkdir(comparisonVisualRoot, { recursive: true });
+    const storageVisualRoot = path.join(ROOT, 'artifacts', 'issue-12-version-storage-cleanup', 'visual');
+    await fs.mkdir(storageVisualRoot, { recursive: true });
     for (const viewport of [
       { name: 'mobile', width: 375, height: 900 },
       { name: 'tablet', width: 768, height: 1000 },
@@ -6111,6 +6674,48 @@ async function main() {
         }
         await page.screenshot({ path: path.join(comparisonVisualRoot, `${viewport.name}-${lang}-comparison-diff-scrolled.png`), fullPage: false });
         await page.locator('#btnCloseComparison').click();
+        await page.locator('#btnCloseVersions').click();
+        await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+        const storagePath = `reports/${'very-long-folder-'.repeat(4)}/${'보관된-보고서-'.repeat(4)}.txt`;
+        await mountCleanup(page, [cleanupFixture('saved-1', storagePath)]);
+        await page.evaluate(() => {
+          window.__mockPair.source.name = window.__mockPair.target.name = 'Same folder name';
+          window.__setMockFile('source', '.filenally/index.json', { content: '<img src=x> unreadable index with a very-long-error-description-for-wrapping' });
+        });
+        await page.locator('#btnVersions').click();
+        await page.waitForFunction(() => !document.querySelector('#btnVersionRefresh').disabled);
+        assert.equal(await page.locator('[data-usage-side]').count(), 2);
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${viewport.name} ${lang} storage has no document overflow`);
+        assert.equal(await page.locator('#versionDialog').evaluate(el => el.scrollWidth <= el.clientWidth), true, `${viewport.name} ${lang} storage has no horizontal clipping`);
+        await page.screenshot({ path: path.join(storageVisualRoot, `${viewport.name}-${lang}-usage.png`), fullPage: false });
+        await page.locator('[data-cleanup-id="saved-1"]').check();
+        await page.locator('#btnPrepareCleanup').click();
+        await page.locator('#cleanupLastWarning').waitFor({ state: 'visible' });
+        await page.locator('#cleanupLastAcknowledged').focus();
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'cleanupLastAcknowledged');
+        for (const selector of ['#cleanupTitle', '#btnCancelCleanup', '#btnConfirmCleanup']) {
+          assert.equal(await page.locator(selector).evaluate(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), true, `${viewport.name} ${lang} ${selector} is visible`);
+        }
+        assert.equal(await page.locator('#cleanupDialog').evaluate(el => el.scrollWidth <= el.clientWidth), true, `${viewport.name} ${lang} cleanup has no horizontal clipping`);
+        await page.screenshot({ path: path.join(storageVisualRoot, `${viewport.name}-${lang}-cleanup-last-warning.png`), fullPage: false });
+        await page.locator('#btnCancelCleanup').click();
+        await page.locator('#btnCloseVersions').click();
+        await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+        await mountCleanup(page, [cleanupFixture('saved-1', storagePath), cleanupFixture('saved-2', storagePath)],
+          { schemaVersion: 2, cleanup: cleanupIntent({ remainingIds: ['saved-1', 'saved-2'] }) });
+        await page.evaluate(filePath => window.__deleteMockEntry('target', `.filenally/versions/saved-1/${filePath}`), storagePath);
+        await page.locator('#btnVersions').click();
+        await page.locator('[data-recover-side="target"]').click();
+        await page.waitForFunction(() => !document.querySelector('#btnConfirmCleanup').disabled);
+        assert.equal(await page.locator('#cleanupLastWarning').isVisible(), false);
+        await page.locator('#btnConfirmCleanup').focus();
+        assert.equal(await page.evaluate(() => document.activeElement.id), 'btnConfirmCleanup');
+        for (const selector of ['#cleanupTitle', '#btnCancelCleanup', '#btnConfirmCleanup']) {
+          assert.equal(await page.locator(selector).evaluate(el => { const r = el.getBoundingClientRect(); return r.top >= 0 && r.bottom <= innerHeight; }), true, `${viewport.name} ${lang} recovery ${selector} is visible`);
+        }
+        assert.equal(await page.locator('#cleanupDialog').evaluate(el => el.scrollWidth <= el.clientWidth), true, `${viewport.name} ${lang} recovery has no horizontal clipping`);
+        await page.screenshot({ path: path.join(storageVisualRoot, `${viewport.name}-${lang}-recovery.png`), fullPage: false });
+        await page.locator('#btnCancelCleanup').click();
         await page.locator('#btnCloseVersions').click();
         await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
       }

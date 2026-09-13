@@ -22,6 +22,16 @@
 
     const TEXT = {
         ko: {
+            cleanupOperation: '작업 {id}', recoveryPrior: '이전 정리에서 확인된 완료 {count}개 · {bytes} B (논리 바이트)', recoveryCheck: '복구 필요 여부는 새로 읽은 폴더 요약에서 확인하세요.',
+            versionUsageTitle: '등록된 버전 용량', versionSelectPage: '현재 페이지 선택', versionClearSelection: '선택 해제', versionPrepareCleanup: '선택 버전 정리',
+            usageRegistered: '등록: {count}개 · {bytes} B · {pathCount}개 경로', usageUnknown: '등록 용량 알 수 없음', usageTotal: '두 폴더 등록 합계: {count}개 · {bytes} B', usagePath: '{path} · {count}개 · {bytes} B',
+            usageInspect: '실제 파일 검사', usageObserved: '관찰한 실제 파일 (논리 바이트)', usageCounts: '{label}: {count}개 · {bytes} B', usageAll: '전체 파일', usageSaved: '등록 파일', usageOrphan: '미등록 버전 파일', usageOther: '기타 파일', usageIndex: '인덱스', usageUnknownFiles: '확인 불가 {count}개', usageMissing: '누락 {missing}개 · 크기 불일치 {mismatched}개', usageErrors: '오류 {count}개 (상세 최대 100개)',
+            usageReadAt: '읽은 시각: {time}', usageNotRun: '실제 파일 미검사', usageComplete: '검사 완료', usagePartial: '부분 검사 · 전체 용량이 아닙니다', usageStale: '검사 중 변경됨 · 오래된 결과', usageCancelled: '검사 중지 · 부분 결과', usageProgress: '검사 중: {count}개 엔트리', usageStop: '검사 중지',
+            cleanupSelection: '선택 {count}/100개 · {bytes} B · {root}', cleanupOneRoot: '한 번에 한 폴더만 선택할 수 있습니다. 선택을 해제하여 폴더를 바꾸세요.', cleanupLimit: '최대 100개입니다. 추가 선택을 거부했습니다.', cleanupSelect: '정리 선택',
+            cleanupTitle: '버전 영구 삭제 확인', cleanupDescription: '선택한 보관 버전을 영구 삭제합니다. 중요한 버전은 먼저 별도로 백업하세요. 현재 원본·미선택 버전·미등록 파일은 보존합니다. 논리 바이트는 실제 확보 공간을 보장하지 않습니다.',
+            cleanupUpgrade: '확인하면 인덱스가 v2로 업그레이드됩니다. v0.14는 이 인덱스를 읽지 못하며, 거부 전에 미등록 캡처 파일을 남길 수 있습니다. 최신 버전만 사용하세요.',
+            cleanupLast: '유효한 잔여 복사본을 확인하지 못한 경로 (누락·불일치 복사본은 보존 증거가 아닙니다):', cleanupLastAcknowledged: '표시된 경로의 마지막 유효 버전을 영구 삭제하는 데 동의합니다.', cleanupConfirm: '영구 삭제', cleanupWriting: '정리 중입니다. 현재 항목이 끝날 때까지 기다려 주세요.', cleanupStop: '현재 항목 후 중지', cleanupStopping: '현재 항목을 마친 뒤 중지합니다.', cleanupProgress: '작업 {id} · 완료 {count}개 · {bytes} B (논리 바이트)', cleanupComplete: '정리 완료', cleanupStopped: '정리 중지', cleanupFailed: '정리 실패', cleanupResult: '{status} · 작업 {id} · {root}\n확인된 완료 {count}개 · {bytes} B (논리 바이트)\n실패 ID: {failed}\n복구 필요: {recovery}', cleanupRetryCompare: '동기화 전에 변경사항을 다시 비교하세요.',
+            recoveryTitle: '중단된 정리 인덱스 복구', recoveryDescription: '삭제를 재개하지 않습니다. 이미 없는 버전의 등록만 제거하고 남아 있는 대기 버전 파일과 등록은 보존합니다.', recoveryConfirm: '인덱스 복구', recoveryMissing: '누락 등록 제거: {count}개', recoveryPreserved: '대기 버전 보존: {count}개', recoveryWriting: '인덱스 복구 중입니다. 완료될 때까지 기다려 주세요.', recoveryResult: '인덱스 복구 완료 · 작업 {id} · {root}\n누락 등록 제거 {removed}개 · 대기 버전 보존 {preserved}개', maintenanceFailed: '작업 실패: {message}',
             versionsTitle: '버전 관리', versionsDescription: '현재 연결된 두 폴더의 캡처본입니다. 복원은 버전을 보관한 폴더의 원래 경로에 적용됩니다.', owningRoot: '보관 폴더', capturedAt: '캡처 시각', versionReason: '보관 이유', beforeOverwrite: '덮어쓰기 전', beforeRestore: '복원 전', versionDownload: '다운로드', versionRestore: '복원', versionCompare: '비교', versionRefresh: '새로고침', versionsEmpty: '보관된 버전이 없습니다.', versionsLoading: '버전을 읽는 중입니다.', versionFailed: '버전 작업 실패: {message}', restoreTitle: '버전 복원 확인', restoreDescription: '선택한 버전과 현재 파일을 확인한 뒤 복원을 실행하세요.', selectedVersion: '선택한 버전', currentFile: '현재 파일', restoreReplace: '현재 파일을 새 버전으로 먼저 보관한 뒤 선택한 버전으로 교체합니다.', restoreCreate: '현재 파일이 없습니다. 원래 경로에 새 파일을 만듭니다.', cancelRestore: '취소', confirmRestore: '이 버전 복원', restoreWriting: '복원 중입니다. 파일 쓰기가 끝날 때까지 기다려 주세요.', restoreDone: '복원이 완료되었습니다. 동기화 전에 변경사항을 다시 비교하세요.', restoreFailed: '복원 실패: {message}. 버전을 다시 선택하여 확인해 주세요.', retainedBackup: '보관된 백업: {id} · .filenally/{path}', versionDirection: '다음 동기화: {direction}. 수동 복원은 표시된 보관 폴더에만 적용됩니다.',
             comparisonTitle: '버전 비교', comparisonDescription: '선택한 버전을 왼쪽에 두고 읽기 전용으로 비교합니다. 동기화 방향은 변경되지 않습니다.', comparisonTarget: '오른쪽 비교 대상', comparisonLeft: '왼쪽', comparisonRight: '오른쪽', comparisonChoose: '비교 대상을 선택하세요', comparisonRun: '비교', comparisonAgain: '다시 비교', comparisonStop: '비교 중지', comparisonStopping: '비교 중지 중…', comparisonStopped: '비교를 중지했습니다.', comparisonReady: '대상을 확인한 뒤 비교를 실행하세요.', comparisonLoading: '비교 대상을 읽는 중…', comparisonWorking: '비교 중: {stage} ({done}/{total})', comparisonBytes: '바이트', comparisonText: '텍스트', comparisonHash: '지문', comparisonFailed: '비교 실패: {message}', comparisonIdentical: '바이트가 같습니다.', comparisonDifferent: '바이트가 다릅니다.', comparisonMissing: '현재 파일이 없어 비교하지 않았습니다.', comparisonLineEqual: '줄 내용은 같습니다. BOM·줄바꿈 형식 또는 위치가 다릅니다.', comparisonCounts: '왼쪽 → 오른쪽: 추가 {added}줄, 삭제 {removed}줄', comparisonSnapshot: '각 읽기 시점의 스냅샷입니다. 외부 변경을 원자적으로 잠그지 않으며 같은 크기·수정 시각의 후속 변경은 감지되지 않을 수 있습니다.', comparisonReadAt: '읽은 시각', comparisonType: 'MIME 유형', comparisonPresence: '파일 상태', comparisonPresent: '있음', comparisonAbsent: '없음', comparisonUnavailable: '정보 없음', comparisonFormat: 'BOM: {bom} · CRLF {crlf} · LF {lf} · CR {cr} · 마지막 줄바꿈: {final}', comparisonYes: '있음', comparisonNo: '없음', comparisonSize: '텍스트 크기 한도(파일당 512 KiB)를 초과했습니다.', comparisonEncoding: '유효한 UTF-8 텍스트가 아닙니다.', comparisonControl: '텍스트로 표시하지 않는 제어 문자가 있습니다.', comparisonLineCount: '파일당 5,000줄 한도를 초과했습니다.', comparisonLineLength: '한 줄 8,192 UTF-16 코드 단위 한도를 초과했습니다.', comparisonWorkLimit: '줄 차이 계산 한도(2,000,000셀)를 초과했습니다.', comparisonHashLarge: 'SHA-256 미계산: 파일당 16 MiB 한도 초과', comparisonHashUnavailable: 'SHA-256 미계산: Web Crypto를 사용할 수 없습니다.', comparisonHashMissing: 'SHA-256 미계산: 파일 없음', comparisonLegend: '왼쪽 줄 / 오른쪽 줄 · − 삭제 · + 추가 · = 문맥', comparisonGap: '문맥 {count}줄 생략: 왼쪽 {left}, 오른쪽 {right}',
             desc: '두 로컬 폴더를 비교한 뒤 변경 계획을 검토하고 안전하게 동기화합니다.', controlTitle: '동기화 제어', selectSource: '원본 폴더 선택', selectTarget: '대상 폴더 선택', notSelected: '선택되지 않음', languageLabel: '언어', progressLabel: '작업 진행률', workspaceLabel: '폴더 비교 결과', activityLabel: '동기화 기록',
@@ -42,6 +52,16 @@
             detailsHead: '상세', details: '상세 보기', runDetailTitle: '실행 상세', runDetailDescription: '실행 중 처리한 모든 작업과 결과입니다.', close: '닫기', loadingDetails: '상세 기록을 불러오는 중입니다.', detailsUnavailable: '상세 기록을 찾을 수 없습니다.', durationHead: '소요 시간', sequenceHead: '순서', actionHead: '작업', versionIdHead: '버전 ID', versionPathHead: '버전 경로', errorHead: '오류', previousPage: '이전', nextPage: '다음', downloadCsv: 'CSV 다운로드', downloadRunJson: 'JSON 다운로드', entrySuccess: '성공', entryFailed: '실패', entryNotRun: '미실행', actionCopy: '복사', actionRename: '이름 변경', actionTrash: '휴지통 이동', actionBaseline: '기준 저장', actionCreateDirectory: '폴더 생성', actionBaselineDirectory: '폴더 기준 저장', actionTrashDirectory: '폴더 휴지통 이동', actionUnknown: '기타',
         },
         en: {
+            cleanupOperation: 'Operation {id}', recoveryPrior: 'Previously confirmed cleanup: {count} · {bytes} B (logical bytes)', recoveryCheck: 'Check the refreshed folder summary to determine whether recovery is still required.',
+            versionUsageTitle: 'Registered version usage', versionSelectPage: 'Select current page', versionClearSelection: 'Clear selection', versionPrepareCleanup: 'Clean up selected versions',
+            usageRegistered: 'Registered: {count} · {bytes} B · {pathCount} paths', usageUnknown: 'Registered usage unknown', usageTotal: 'Both folders registered total: {count} · {bytes} B', usagePath: '{path} · {count} · {bytes} B',
+            usageInspect: 'Inspect physical files', usageObserved: 'Observed physical files (logical bytes)', usageCounts: '{label}: {count} · {bytes} B', usageAll: 'All files', usageSaved: 'Registered files', usageOrphan: 'Unregistered version files', usageOther: 'Other files', usageIndex: 'Index', usageUnknownFiles: '{count} unknown files', usageMissing: '{missing} missing · {mismatched} size mismatches', usageErrors: '{count} errors (at most 100 details)',
+            usageReadAt: 'Read at: {time}', usageNotRun: 'Physical files not inspected', usageComplete: 'Inspection complete', usagePartial: 'Partial inspection · not a total', usageStale: 'Changed during inspection · stale result', usageCancelled: 'Inspection cancelled · partial result', usageProgress: 'Inspecting: {count} entries', usageStop: 'Stop inspection',
+            cleanupSelection: 'Selected {count}/100 · {bytes} B · {root}', cleanupOneRoot: 'Select one folder per operation. Clear the selection to change folders.', cleanupLimit: 'Maximum 100 versions. Additional selection refused.', cleanupSelect: 'Select for cleanup',
+            cleanupTitle: 'Confirm permanent version deletion', cleanupDescription: 'Permanently delete the selected saved versions. Back up important versions separately first. Current originals, unselected versions and unregistered files are preserved. Logical bytes do not guarantee reclaimed disk space.',
+            cleanupUpgrade: 'Confirmation upgrades the index to v2. v0.14 cannot read this index and may leave an unregistered capture file before rejecting it. Use the current version only.',
+            cleanupLast: 'Paths with no verified retained copy (missing or mismatched copies do not prove preservation):', cleanupLastAcknowledged: 'I acknowledge permanent deletion of the last valid versions for the listed paths.', cleanupConfirm: 'Delete permanently', cleanupWriting: 'Cleaning up. Please wait for the current item to finish.', cleanupStop: 'Stop after current item', cleanupStopping: 'Stopping after the current item finishes.', cleanupProgress: 'Operation {id} · completed {count} · {bytes} B (logical bytes)', cleanupComplete: 'Cleanup complete', cleanupStopped: 'Cleanup stopped', cleanupFailed: 'Cleanup failed', cleanupResult: '{status} · operation {id} · {root}\nConfirmed completed {count} · {bytes} B (logical bytes)\nFailed ID: {failed}\nRecovery required: {recovery}', cleanupRetryCompare: 'Compare changes again before synchronizing.',
+            recoveryTitle: 'Recover interrupted cleanup index', recoveryDescription: 'Does not resume deletion. Remove registrations for already missing versions; preserve remaining pending version files and registrations.', recoveryConfirm: 'Recover index', recoveryMissing: 'Missing registrations to remove: {count}', recoveryPreserved: 'Pending versions to preserve: {count}', recoveryWriting: 'Recovering the index. Please wait until complete.', recoveryResult: 'Index recovery complete · operation {id} · {root}\nRemoved missing registrations: {removed} · preserved pending versions: {preserved}', maintenanceFailed: 'Operation failed: {message}',
             versionsTitle: 'Version manager', versionsDescription: 'Captured files in both connected folders. Restore applies to the original path in the folder that stores the version.', owningRoot: 'Owning folder', capturedAt: 'Captured', versionReason: 'Reason', beforeOverwrite: 'Before overwrite', beforeRestore: 'Before restore', versionDownload: 'Download', versionRestore: 'Restore', versionCompare: 'Compare', versionRefresh: 'Refresh', versionsEmpty: 'No saved versions.', versionsLoading: 'Reading versions.', versionFailed: 'Version operation failed: {message}', restoreTitle: 'Confirm version restore', restoreDescription: 'Review the selected version and current file before restoring.', selectedVersion: 'Selected version', currentFile: 'Current file', restoreReplace: 'Save the current file as a new version first, then replace it with the selected version.', restoreCreate: 'The current file is missing. Create a new file at the original path.', cancelRestore: 'Cancel', confirmRestore: 'Restore this version', restoreWriting: 'Restoring. Please wait until the file write finishes.', restoreDone: 'Restore complete. Compare changes again before synchronizing.', restoreFailed: 'Restore failed: {message}. Select the version again for a fresh confirmation.', retainedBackup: 'Retained backup: {id} · .filenally/{path}', versionDirection: 'Next synchronization: {direction}. Manual restore affects only the displayed owning folder.',
             comparisonTitle: 'Version comparison', comparisonDescription: 'Read-only comparison with the selected version on the left. Sync direction is unchanged.', comparisonTarget: 'Right-hand counterpart', comparisonLeft: 'Left', comparisonRight: 'Right', comparisonChoose: 'Choose a counterpart', comparisonRun: 'Compare', comparisonAgain: 'Compare again', comparisonStop: 'Stop comparison', comparisonStopping: 'Stopping comparison…', comparisonStopped: 'Comparison stopped.', comparisonReady: 'Check the counterpart, then start comparison.', comparisonLoading: 'Reading comparison choices…', comparisonWorking: 'Comparing: {stage} ({done}/{total})', comparisonBytes: 'Bytes', comparisonText: 'Text', comparisonHash: 'Fingerprints', comparisonFailed: 'Comparison failed: {message}', comparisonIdentical: 'Bytes are identical.', comparisonDifferent: 'Bytes are different.', comparisonMissing: 'Current file is missing; not compared.', comparisonLineEqual: 'Line content is equal; BOM or line-ending format/positions differ.', comparisonCounts: 'Left → right: {added} added, {removed} removed', comparisonSnapshot: 'Snapshots at their read times, not an atomic lock. Later edits retaining size and mtime may be undetected.', comparisonReadAt: 'Read time', comparisonType: 'MIME type', comparisonPresence: 'File presence', comparisonPresent: 'Present', comparisonAbsent: 'Missing', comparisonUnavailable: 'Unavailable', comparisonFormat: 'BOM: {bom} · CRLF {crlf} · LF {lf} · CR {cr} · Final newline: {final}', comparisonYes: 'Yes', comparisonNo: 'No', comparisonSize: 'Text exceeds the 512 KiB per-file limit.', comparisonEncoding: 'Not valid UTF-8 text.', comparisonControl: 'Contains control characters not displayed as text.', comparisonLineCount: 'Exceeds 5,000 lines per file.', comparisonLineLength: 'Exceeds 8,192 UTF-16 code units per line.', comparisonWorkLimit: 'Exceeds the 2,000,000-cell line-diff limit.', comparisonHashLarge: 'SHA-256 not computed: exceeds 16 MiB per file', comparisonHashUnavailable: 'SHA-256 not computed: Web Crypto unavailable.', comparisonHashMissing: 'SHA-256 not computed: file missing', comparisonLegend: 'Left line / right line · − removed · + added · = context', comparisonGap: '{count} context lines omitted: left {left}, right {right}',
             desc: 'Compare two local folders, review the change plan, and synchronize them safely.', controlTitle: 'Synchronization controls', selectSource: 'Select source folder', selectTarget: 'Select target folder', notSelected: 'Not selected', languageLabel: 'Language', progressLabel: 'Operation progress', workspaceLabel: 'Folder comparison results', activityLabel: 'Synchronization activity',
@@ -2618,9 +2638,13 @@
         const dialog = $('#versionDialog');
         const restoreDialog = $('#restoreDialog');
         const comparisonDialog = $('#comparisonDialog');
+        const cleanupDialog = $('#cleanupDialog');
         let session = null;
         const current = (owner) => session === owner && dialog.open && owner.roots.source === model.source && owner.roots.target === model.target;
         const comparisonCurrent = (owner, child) => current(owner) && owner.comparison === child && comparisonDialog.open;
+        const maintenanceCurrent = (owner, child) => current(owner) && owner.maintenance === child;
+        const hasVersionChild = owner => Boolean(owner.comparison || owner.maintenance || restoreDialog.open);
+        const clearCleanupSelection = owner => { owner.cleanupSelection.side = null; owner.cleanupSelection.records.clear(); };
         const rootLabel = (owner, side) => `${t(side === 'source' ? 'sourceTitle' : 'targetTitle')} · ${owner.names[side]}`;
         const directionLabel = (owner) => t(owner.direction === 'unidirectional' ? 'directionOne' : owner.direction === 'reverse' ? 'directionReverse' : 'directionBoth');
         const node = (tag, text, className) => {
@@ -2633,14 +2657,31 @@
             const owner = session;
             if (!owner) return;
             const busy = owner.reading || owner.writing;
-            const childOpen = Boolean(owner.comparison);
+            const childOpen = hasVersionChild(owner);
             $('#btnVersionRefresh').disabled = busy || restoreDialog.open || childOpen;
             $('#btnVersionPrevious').disabled = busy || childOpen || owner.page === 0;
             $('#btnVersionNext').disabled = busy || childOpen || (owner.page + 1) * 100 >= owner.rows.length;
             $('#btnCloseVersions').disabled = owner.writing;
-            $('#btnConfirmRestore').disabled = owner.writing || childOpen || !owner.selection;
+            $('#btnConfirmRestore').disabled = owner.writing || Boolean(owner.comparison || owner.maintenance) || !owner.selection;
             $('#btnCancelRestore').disabled = owner.writing;
             dialog.querySelectorAll('[data-version-action]').forEach(button => { button.disabled = busy || childOpen; });
+            const selected = owner.cleanupSelection;
+            $('#versionCleanupSelection').textContent = [t('cleanupSelection', { count: selected.records.size,
+                bytes: [...selected.records.values()].reduce((sum, record) => sum + BigInt(record.size), 0n).toString(),
+                root: selected.side ? rootLabel(owner, selected.side) : '—' }), selected.side ? t('cleanupOneRoot') : '', owner.selectionMessage].filter(Boolean).join('\n');
+            $('#btnPrepareCleanup').disabled = busy || childOpen || !selected.records.size;
+            $('#btnSelectVersionPage').disabled = busy || childOpen || !owner.rows.length;
+            $('#btnClearVersionSelection').disabled = busy || childOpen || !selected.records.size;
+            dialog.querySelectorAll('[data-cleanup-id]').forEach(input => {
+                const other = selected.side && selected.side !== input.dataset.cleanupSide;
+                input.checked = selected.side === input.dataset.cleanupSide && selected.records.has(input.dataset.cleanupId);
+                input.disabled = busy || childOpen || Boolean(other);
+                input.title = other ? t('cleanupOneRoot') : '';
+                input.setAttribute('aria-describedby', 'versionCleanupSelection');
+            });
+            dialog.querySelectorAll('[data-inspect-side], [data-recover-side], [data-usage-page-side]').forEach(button => {
+                button.disabled = busy || childOpen || button.dataset.boundary === 'true';
+            });
             renderControls();
         };
         const render = () => {
@@ -2659,6 +2700,11 @@
                     td.append(content); tr.append(td);
                 });
                 const actions = node('td', ''); actions.dataset.label = t('actionHead');
+                const checkbox = document.createElement('input'); checkbox.type = 'checkbox';
+                checkbox.dataset.cleanupId = row.record.id; checkbox.dataset.cleanupSide = row.side;
+                checkbox.setAttribute('aria-label', `${t('cleanupSelect')} · ${rootLabel(owner, row.side)} · ${row.record.originalPath} · ${new Date(row.record.capturedAt).toLocaleString(language())} · ${row.record.id}`);
+                checkbox.addEventListener('change', () => changeCleanupSelection(owner, row, checkbox.checked));
+                actions.append(checkbox);
                 const buttons = node('div', '', 'version-row-actions');
                 for (const action of ['compare', 'download', 'restore']) {
                     const labels = { compare: 'versionCompare', download: 'versionDownload', restore: 'versionRestore' };
@@ -2674,15 +2720,19 @@
             $('#versionStatus').textContent = [owner.message, ...owner.errors, !owner.rows.length && !owner.reading ? t('versionsEmpty') : ''].filter(Boolean).join('\n');
             controls();
         };
-        const refresh = async (keepMessage = false) => {
+        const refresh = async (keepMessage = false, displayChild = null) => {
             const owner = session;
-            if (!owner || owner.reading || owner.writing || owner.comparison || restoreDialog.open) return;
+            if (!owner || !current(owner) || owner.reading || owner.writing ||
+                (hasVersionChild(owner) && !(displayChild && owner.maintenance === displayChild && displayChild.result))) return;
             owner.reading = true;
+            clearCleanupSelection(owner); owner.selectionMessage = ''; owner.usage.clear(); owner.usagePages.clear();
+            renderUsage(owner);
             if (!keepMessage) owner.message = t('versionsLoading');
             render();
             try {
                 const sides = ['source', 'target'];
                 const results = await Promise.allSettled(sides.map(side => VersionStore.list(owner.roots[side])));
+                const usage = await Promise.allSettled(sides.map(side => VersionStore.inspectUsage(owner.roots[side], { scan: false, isCancelled: () => !current(owner) })));
                 if (!current(owner)) return;
                 owner.rows = []; owner.errors = []; owner.page = 0;
                 results.forEach((result, i) => {
@@ -2690,10 +2740,244 @@
                     if (result.status === 'fulfilled') owner.rows.push(...result.value.map(record => ({ side, root: owner.roots[side], record })));
                     else owner.errors.push(`${rootLabel(owner, side)}: ${safeMessage(result.reason)}`);
                 });
+                usage.forEach((result, i) => owner.usage.set(sides[i], result.status === 'fulfilled' ? result.value : { registered: null, indexError: safeMessage(result.reason), inspection: 'not-run', errors: [] }));
+                renderUsage(owner);
                 owner.rows.sort((a, b) => Date.parse(b.record.capturedAt) - Date.parse(a.record.capturedAt) || a.side.localeCompare(b.side) || a.record.id.localeCompare(b.record.id));
                 if (!keepMessage) owner.message = '';
             } finally {
                 if (current(owner)) { owner.reading = false; render(); }
+            }
+        };
+        const renderUsage = owner => {
+            if (!current(owner)) return;
+            const container = $('#versionUsageRoots'); container.replaceChildren();
+            for (const side of ['source', 'target']) {
+                const usage = owner.usage.get(side), card = node('section', '', 'version-usage-root'); card.dataset.usageSide = side;
+                card.append(node('h4', rootLabel(owner, side)));
+                card.append(node('p', usage?.registered ? t('usageRegistered', usage.registered) : t('usageUnknown')));
+                if (usage?.indexError) card.append(node('p', usage.indexError));
+                if (usage?.readAt) card.append(node('p', t('usageReadAt', { time: new Date(usage.readAt).toLocaleString(language()) })));
+                const states = { 'not-run': 'usageNotRun', complete: 'usageComplete', partial: 'usagePartial', stale: 'usageStale', cancelled: 'usageCancelled' };
+                card.append(node('p', t(states[usage?.inspection || 'not-run'])));
+                if (usage?.observed) {
+                    const observed = usage.observed;
+                    card.append(node('h5', t('usageObserved')));
+                    for (const [label, count, bytes] of [['usageAll', observed.count, observed.bytes], ['usageSaved', observed.registeredCount, observed.registeredBytes], ['usageOrphan', observed.unregisteredCount, observed.unregisteredBytes], ['usageOther', observed.otherCount, observed.otherBytes]]) {
+                        card.append(node('p', t('usageCounts', { label: t(label), count: count ?? t('comparisonUnavailable'), bytes: bytes ?? t('comparisonUnavailable') })));
+                    }
+                    card.append(node('p', `${t('usageIndex')}: ${observed.indexBytes} B`), node('p', t('usageUnknownFiles', { count: observed.unknownCount })),
+                        node('p', t('usageMissing', { missing: observed.missingIds.length, mismatched: observed.mismatchedIds.length })));
+                }
+                if (usage?.errorCount) {
+                    card.append(node('p', t('usageErrors', { count: usage.errorCount })));
+                    for (const error of usage.errors) card.append(node('p', `${error.path}: ${error.message}`));
+                }
+                const inspect = node('button', t('usageInspect'), 'button-ghost'); inspect.type = 'button'; inspect.dataset.inspectSide = side;
+                inspect.addEventListener('click', () => inspectRoot(owner, side, inspect)); card.append(inspect);
+                if (usage?.cleanup) {
+                    const recovery = node('button', t('recoveryTitle'), 'button-ghost'); recovery.type = 'button'; recovery.dataset.recoverSide = side;
+                    recovery.addEventListener('click', () => prepareMaintenance(owner, 'recovery', side, recovery)); card.append(recovery);
+                }
+                const paths = usage?.registered?.paths || [], page = owner.usagePages.get(side) || 0;
+                const list = node('ul', '', 'version-usage-paths');
+                for (const path of paths.slice(page * 100, (page + 1) * 100)) list.append(node('li', t('usagePath', path)));
+                card.append(list);
+                if (paths.length) {
+                    const pager = node('div', '', 'run-detail-pagination');
+                    for (const delta of [-1, 1]) {
+                        const button = node('button', t(delta < 0 ? 'previousPage' : 'nextPage'), 'button-ghost'); button.type = 'button';
+                        button.dataset.usagePageSide = side; button.dataset.pageDelta = String(delta);
+                        button.dataset.boundary = String(page + delta < 0 || (page + delta) * 100 >= paths.length);
+                        button.setAttribute('aria-label', `${button.textContent} · ${rootLabel(owner, side)}`);
+                        button.addEventListener('click', () => {
+                            if (!current(owner) || owner.reading || owner.writing || hasVersionChild(owner) || button.dataset.boundary === 'true') return;
+                            const returnFocus = document.activeElement === button;
+                            owner.usagePages.set(side, page + delta); renderUsage(owner); controls();
+                            if (returnFocus) {
+                                const replacement = dialog.querySelector(`[data-usage-page-side="${side}"][data-page-delta="${delta}"]`);
+                                (replacement.disabled ? dialog.querySelector(`[data-usage-page-side="${side}"][data-page-delta="${-delta}"]`) : replacement).focus();
+                            }
+                        });
+                        pager.append(button);
+                        if (delta < 0) pager.append(node('span', `${page + 1} / ${Math.ceil(paths.length / 100)}`));
+                    }
+                    card.append(pager);
+                }
+                container.append(card);
+            }
+            const summaries = ['source', 'target'].map(side => owner.usage.get(side)?.registered);
+            if (summaries.every(Boolean)) {
+                const total = node('p', t('usageTotal', { count: summaries[0].count + summaries[1].count,
+                    bytes: (BigInt(summaries[0].bytes) + BigInt(summaries[1].bytes)).toString() })); total.dataset.usageTotal = ''; container.append(total);
+            }
+        };
+        const changeCleanupSelection = (owner, row, checked) => {
+            if (!current(owner) || owner.reading || owner.writing || hasVersionChild(owner)) { controls(); return; }
+            const selected = owner.cleanupSelection;
+            owner.selectionMessage = '';
+            if (checked) {
+                if (selected.side && selected.side !== row.side) owner.selectionMessage = t('cleanupOneRoot');
+                else if (!selected.records.has(row.record.id) && selected.records.size >= 100) owner.selectionMessage = t('cleanupLimit');
+                else { selected.side = row.side; selected.records.set(row.record.id, row.record); }
+            } else if (selected.side === row.side) {
+                selected.records.delete(row.record.id); if (!selected.records.size) selected.side = null;
+            }
+            controls();
+        };
+        const maintenanceControls = (owner, child) => {
+            if (!maintenanceCurrent(owner, child)) return;
+            $('#cleanupLastWarning').hidden = !(child.mode === 'cleanup' && child.prepared?.summary.lastPaths.length);
+            $('#btnConfirmCleanup').disabled = child.reading || child.writing || !child.prepared ||
+                (child.mode === 'cleanup' && child.prepared.summary.lastPaths.length > 0 && !$('#cleanupLastAcknowledged').checked);
+            $('#btnConfirmCleanup').hidden = child.mode === 'inspection' || Boolean(child.result);
+            $('#btnCancelCleanup').disabled = child.writing;
+            $('#btnCancelCleanup').textContent = t(child.result ? 'close' : 'cancelRestore');
+            $('#btnStopCleanup').hidden = !(child.mode === 'inspection' && child.reading || child.mode === 'cleanup' && child.writing);
+            $('#btnStopCleanup').disabled = child.stopRequested;
+            $('#btnStopCleanup').textContent = t(child.mode === 'inspection' ? 'usageStop' : 'cleanupStop');
+            $('#cleanupLastAcknowledged').disabled = child.reading || child.writing || !child.prepared;
+            controls();
+        };
+        const newMaintenance = (owner, mode, side, trigger) => {
+            if (!current(owner) || owner.reading || owner.writing || hasVersionChild(owner)) return null;
+            const child = { mode, token: {}, reading: true, writing: false, stopRequested: false, prepared: null, trigger, result: null, root: owner.roots[side], side };
+            owner.maintenance = child; owner.reading = true;
+            $('#cleanupTitle').textContent = t(mode === 'cleanup' ? 'cleanupTitle' : mode === 'recovery' ? 'recoveryTitle' : 'usageInspect');
+            $('#cleanupDescription').textContent = t(mode === 'cleanup' ? 'cleanupDescription' : mode === 'recovery' ? 'recoveryDescription' : 'usageObserved');
+            $('#cleanupSummary').replaceChildren(node('p', rootLabel(owner, side)));
+            $('#cleanupRecords').replaceChildren(); $('#cleanupLastWarning').hidden = true; $('#cleanupLastAcknowledged').checked = false;
+            $('#cleanupStatus').textContent = t('versionsLoading');
+            $('#btnConfirmCleanup').textContent = t(mode === 'recovery' ? 'recoveryConfirm' : 'cleanupConfirm');
+            cleanupDialog.showModal(); $('.cleanup-scroll').scrollTop = 0;
+            maintenanceControls(owner, child); $('#btnCancelCleanup').focus();
+            return child;
+        };
+        const closeMaintenance = (returnFocus = true) => {
+            const owner = session, child = owner?.maintenance;
+            if (!child || child.writing) return;
+            child.stopRequested = true; child.token = null; child.prepared = null;
+            owner.maintenance = null;
+            if (child.reading) owner.reading = false;
+            if (cleanupDialog.open) cleanupDialog.close();
+            controls();
+            if (returnFocus && current(owner)) (child.trigger?.isConnected && !child.trigger.disabled ? child.trigger : $(owner.reading ? '#btnCloseVersions' : '#btnVersionRefresh')).focus();
+        };
+        const prepareMaintenance = async (owner, mode, side, trigger) => {
+            const selected = owner.cleanupSelection;
+            if (mode === 'cleanup' && (selected.side !== side || selected.records.size < 1 || selected.records.size > 100)) return;
+            const child = newMaintenance(owner, mode, side, trigger); if (!child) return;
+            const token = child.token, isCancelled = () => !maintenanceCurrent(owner, child) || child.token !== token;
+            try {
+                const prepared = mode === 'cleanup'
+                    ? await VersionStore.prepareCleanup(child.root, [...selected.records.values()], { isCancelled })
+                    : await VersionStore.prepareCleanupRecovery(child.root, { isCancelled });
+                if (isCancelled()) return;
+                child.prepared = prepared;
+                const summary = prepared.summary, container = $('#cleanupSummary');
+                if (mode === 'cleanup') {
+                    container.append(node('p', t('cleanupSelection', { count: summary.count, bytes: summary.bytes, root: rootLabel(owner, side) })));
+                    if (summary.upgradesIndex) container.append(node('p', t('cleanupUpgrade')));
+                    for (const record of summary.records) $('#cleanupRecords').append(node('li', `${record.originalPath} · ${new Date(record.capturedAt).toLocaleString(language())} · ${record.id} · ${record.size} B`));
+                    if (summary.lastPaths.length) {
+                        container.append(node('p', t('cleanupLast')));
+                        const paths = node('ul', ''); for (const path of summary.lastPaths) paths.append(node('li', path)); container.append(paths);
+                        $('#cleanupLastWarning').hidden = false;
+                    }
+                } else {
+                    container.append(node('p', t('cleanupOperation', { id: summary.operationId })),
+                        node('p', t('recoveryPrior', { count: summary.completedCount, bytes: summary.completedBytes })),
+                        node('p', t('recoveryMissing', { count: summary.missingRecords.length })), node('p', t('recoveryPreserved', { count: summary.preservedRecords.length })));
+                    for (const [key, label] of [['missingRecords', 'recoveryMissing'], ['preservedRecords', 'recoveryPreserved']]) {
+                        for (const record of summary[key]) $('#cleanupRecords').append(node('li', `${t(label, { count: 1 })} · ${record.originalPath} · ${record.id} · ${record.size} B`));
+                    }
+                }
+                $('#cleanupStatus').textContent = '';
+            } catch (error) {
+                if (!isCancelled()) $('#cleanupStatus').textContent = t('maintenanceFailed', { message: safeMessage(error) });
+            } finally {
+                if (!isCancelled()) { child.reading = false; owner.reading = false; maintenanceControls(owner, child); }
+            }
+        };
+        const inspectRoot = async (owner, side, trigger) => {
+            const child = newMaintenance(owner, 'inspection', side, trigger); if (!child) return;
+            const token = child.token;
+            const isCancelled = () => child.stopRequested || !maintenanceCurrent(owner, child) || child.token !== token;
+            let lastProgress = 0;
+            try {
+                const usage = await VersionStore.inspectUsage(child.root, { scan: true, isCancelled, onProgress: ({ visited }) => {
+                    if (isCancelled() || performance.now() - lastProgress < 150) return;
+                    lastProgress = performance.now(); $('#cleanupStatus').textContent = t('usageProgress', { count: visited });
+                } });
+                if (!maintenanceCurrent(owner, child) || child.token !== token) return;
+                owner.usage.set(side, usage); owner.usagePages.set(side, 0); renderUsage(owner);
+                child.result = usage;
+                const keys = { complete: 'usageComplete', partial: 'usagePartial', stale: 'usageStale', cancelled: 'usageCancelled', 'not-run': 'usageNotRun' };
+                $('#cleanupStatus').textContent = t(keys[usage.inspection]);
+            } catch (error) {
+                if (maintenanceCurrent(owner, child) && child.token === token) {
+                    child.result = { error: safeMessage(error) };
+                    $('#cleanupStatus').textContent = t('maintenanceFailed', { message: safeMessage(error) });
+                }
+            } finally {
+                if (maintenanceCurrent(owner, child) && child.token === token) {
+                    child.reading = false; owner.reading = false; maintenanceControls(owner, child);
+                }
+            }
+        };
+        const confirmMaintenance = async () => {
+            const owner = session, child = owner?.maintenance;
+            if (!child || !maintenanceCurrent(owner, child) || !cleanupDialog.open || child.mode === 'inspection' || child.reading || child.writing || owner.reading || owner.writing || owner.comparison || restoreDialog.open || !child.prepared) return;
+            const acknowledge = $('#cleanupLastAcknowledged').checked;
+            if (child.mode === 'cleanup' && child.prepared.summary.lastPaths.length && !acknowledge) return;
+            const token = child.token, prepared = child.prepared;
+            let attempted = false, message = '';
+            const active = () => maintenanceCurrent(owner, child) && child.token === token;
+            const progressMessage = result => t('cleanupProgress', { id: result.operationId, count: result.completedIds.length, bytes: result.completedBytes });
+            const resultMessage = result => t('cleanupResult', { status: t({ complete: 'cleanupComplete', stopped: 'cleanupStopped', failed: 'cleanupFailed' }[result.status]),
+                id: result.operationId, root: rootLabel(owner, child.side), count: result.completedIds.length, bytes: result.completedBytes,
+                failed: result.failedId || '—', recovery: t(result.recoveryRequired ? 'comparisonYes' : 'comparisonNo') }) + (result.error ? `\n${result.error}` : '');
+            try {
+                // Invoke in the user's confirmation click, before yielding or validating again.
+                const permission = child.root.requestPermission({ mode: 'readwrite' });
+                child.writing = true; owner.writing = true; maintenanceControls(owner, child);
+                $('#cleanupStatus').textContent = t(child.mode === 'cleanup' ? 'cleanupWriting' : 'recoveryWriting');
+                const granted = await permission;
+                if (!active()) return;
+                if (granted !== 'granted') throw new Error(t('permissionDenied'));
+                attempted = true;
+                if (child.mode === 'cleanup') {
+                    const result = await VersionStore.cleanup(prepared, { acknowledgeLastVersions: acknowledge,
+                        isCancelled: () => !active() || child.stopRequested,
+                        onProgress: result => { if (active()) $('#cleanupStatus').textContent = progressMessage(result); } });
+                    message = resultMessage(result);
+                } else {
+                    const result = await VersionStore.recoverCleanup(prepared);
+                    message = t('recoveryResult', { id: result.operationId, root: rootLabel(owner, child.side), removed: result.removedIds.length, preserved: result.preservedIds.length });
+                    message += `\n${t('recoveryPrior', { count: prepared.summary.completedCount, bytes: prepared.summary.completedBytes })}`;
+                }
+            } catch (error) {
+                message = error.cleanupResult ? resultMessage(error.cleanupResult) : t('maintenanceFailed', { message: safeMessage(error) });
+                if (child.mode === 'recovery') message += `\n${t('cleanupOperation', { id: prepared.summary.operationId })} · ${rootLabel(owner, child.side)}\n${t('recoveryPrior', { count: prepared.summary.completedCount, bytes: prepared.summary.completedBytes })}\n${t('recoveryCheck')}`;
+            } finally {
+                child.prepared = null; child.token = null; child.writing = false;
+                if (attempted) {
+                    model.sourceFiles = new Map(); model.targetFiles = new Map();
+                    model.sourceDirectories = new Set(); model.targetDirectories = new Set();
+                    Controller.invalidatePlan(); elements.progress.dataset.visible = 'false';
+                    message += `\n${t('cleanupRetryCompare')}`;
+                }
+                if (session === owner && owner.maintenance === child) {
+                    owner.writing = false; child.result = { message };
+                    if (attempted) {
+                        owner.rows = []; owner.usage.clear(); owner.usagePages.clear(); clearCleanupSelection(owner);
+                        owner.message = message;
+                    }
+                    $('#cleanupStatus').textContent = message;
+                    addLog(message); setStatus(message, 'info', 'info');
+                    maintenanceControls(owner, child);
+                    if (attempted) await refresh(true, child);
+                    if (maintenanceCurrent(owner, child)) { maintenanceControls(owner, child); $('#btnCancelCleanup').focus(); }
+                }
             }
         };
         const summary = (owner, row, prepared) => {
@@ -2807,7 +3091,7 @@
             comparisonControls(owner, child);
         };
         const openComparison = async (owner, row, trigger) => {
-            if (!current(owner) || owner.reading || owner.writing || owner.comparison || restoreDialog.open) return;
+            if (!current(owner) || owner.reading || owner.writing || hasVersionChild(owner)) return;
             const child = { row, trigger, choices: [], choicePage: 0, counterpart: null,
                 result: null, metadata: null, resultPage: 0, generation: 1, run: null,
                 message: t('comparisonLoading'), attempted: false };
@@ -2834,7 +3118,7 @@
         const startComparison = async () => {
             const owner = session, child = owner?.comparison;
             if (!child || !comparisonCurrent(owner, child) || child.run || owner.reading || owner.writing
-                || restoreDialog.open || child.counterpart === undefined) return;
+                || owner.maintenance || restoreDialog.open || child.counterpart === undefined) return;
             const run = { cancelled: false, generation: ++child.generation };
             const focusWasStart = document.activeElement === $('#btnRunComparison');
             child.run = run; child.attempted = true; clearComparisonOutput(owner, child);
@@ -2904,7 +3188,7 @@
         };
         const select = async (row, action, trigger) => {
             const owner = session;
-            if (!owner || !current(owner) || owner.reading || owner.writing || owner.comparison || restoreDialog.open) return;
+            if (!owner || !current(owner) || owner.reading || owner.writing || hasVersionChild(owner)) return;
             if (action === 'compare') { await openComparison(owner, row, trigger); return; }
             const returnFocus = document.activeElement === trigger;
             owner.reading = true; owner.message = t('versionsLoading'); controls();
@@ -2935,7 +3219,7 @@
         };
         const confirm = async () => {
             const owner = session;
-            if (!owner || !current(owner) || owner.comparison || !owner.selection || owner.writing || !restoreDialog.open) return;
+            if (!owner || !current(owner) || owner.comparison || owner.maintenance || !owner.selection || owner.writing || !restoreDialog.open) return;
             const { row, prepared } = owner.selection;
             owner.writing = true; controls();
             $('#restoreStatus').textContent = t('restoreWriting');
@@ -2966,20 +3250,44 @@
         const close = () => {
             if (!session || session.writing) return;
             closeComparison(false);
+            closeMaintenance(false);
             if (restoreDialog.open) restoreDialog.close();
             dialog.close();
         };
         const open = () => {
             if (operationBlocked() || !model.source || !model.target || !model.profile || !model.trustedProfile) return;
-            session = { roots: { source: model.source, target: model.target }, names: { source: model.source.name, target: model.target.name }, direction: model.state.config.direction, rows: [], errors: [], page: 0, reading: false, writing: false, selection: null, comparison: null, message: '' };
+            session = { roots: { source: model.source, target: model.target }, names: { source: model.source.name, target: model.target.name }, direction: model.state.config.direction, rows: [], errors: [], page: 0, reading: false, writing: false, selection: null, comparison: null, maintenance: null, cleanupSelection: { side: null, records: new Map() }, usage: new Map(), usagePages: new Map(), message: '' };
             model.versionBusy = true;
             dialog.showModal(); $('#btnCloseVersions').focus(); refresh();
         };
         $('#btnVersions').addEventListener('click', open);
         $('#btnCloseVersions').addEventListener('click', close);
         $('#btnVersionRefresh').addEventListener('click', () => refresh());
-        $('#btnVersionPrevious').addEventListener('click', () => { if (session && !session.reading && !session.comparison && session.page > 0) { session.page--; render(); } });
-        $('#btnVersionNext').addEventListener('click', () => { if (session && !session.reading && !session.comparison && (session.page + 1) * 100 < session.rows.length) { session.page++; render(); } });
+        $('#btnVersionPrevious').addEventListener('click', () => { if (session && current(session) && !session.reading && !session.writing && !hasVersionChild(session) && session.page > 0) { session.page--; render(); } });
+        $('#btnVersionNext').addEventListener('click', () => { if (session && current(session) && !session.reading && !session.writing && !hasVersionChild(session) && (session.page + 1) * 100 < session.rows.length) { session.page++; render(); } });
+        $('#btnPrepareCleanup').addEventListener('click', event => { if (session) prepareMaintenance(session, 'cleanup', session.cleanupSelection.side, event.currentTarget); });
+        $('#btnClearVersionSelection').addEventListener('click', () => {
+            if (!session || !current(session) || session.reading || session.writing || hasVersionChild(session)) return;
+            clearCleanupSelection(session); session.selectionMessage = ''; controls();
+        });
+        $('#btnSelectVersionPage').addEventListener('click', () => {
+            const owner = session;
+            if (!owner || !current(owner) || owner.reading || owner.writing || hasVersionChild(owner)) return;
+            const visible = owner.rows.slice(owner.page * 100, (owner.page + 1) * 100);
+            const side = owner.cleanupSelection.side || visible[0]?.side;
+            for (const row of visible) if (row.side === side) changeCleanupSelection(owner, row, true);
+        });
+        $('#cleanupLastAcknowledged').addEventListener('change', () => { if (session?.maintenance) maintenanceControls(session, session.maintenance); });
+        $('#btnCancelCleanup').addEventListener('click', () => closeMaintenance());
+        $('#btnConfirmCleanup').addEventListener('click', confirmMaintenance);
+        $('#btnStopCleanup').addEventListener('click', () => {
+            const owner = session, child = owner?.maintenance;
+            if (!child || !maintenanceCurrent(owner, child) || child.stopRequested ||
+                !(child.mode === 'cleanup' && child.writing || child.mode === 'inspection' && child.reading)) return;
+            child.stopRequested = true;
+            $('#cleanupStatus').textContent = t(child.mode === 'inspection' ? 'usageCancelled' : 'cleanupStopping');
+            maintenanceControls(owner, child);
+        });
         $('#btnConfirmRestore').addEventListener('click', confirm);
         $('#btnCancelRestore').addEventListener('click', () => { if (!session?.writing) restoreDialog.close(); });
         $('#btnRunComparison').addEventListener('click', startComparison);
@@ -3021,16 +3329,29 @@
         dialog.addEventListener('cancel', event => { if (session?.writing) event.preventDefault(); });
         comparisonDialog.addEventListener('cancel', event => { event.preventDefault(); closeComparison(); });
         comparisonDialog.addEventListener('close', () => { if (!comparisonDialog.open) closeComparison(); });
+        cleanupDialog.addEventListener('cancel', event => { event.preventDefault(); closeMaintenance(); });
+        cleanupDialog.addEventListener('close', () => {
+            if (cleanupDialog.open) return;
+            if (session?.maintenance?.writing) { cleanupDialog.showModal(); return; }
+            closeMaintenance();
+        });
         restoreDialog.addEventListener('cancel', event => { if (session?.writing) event.preventDefault(); });
         restoreDialog.addEventListener('close', () => {
             if (!session) return;
-            if (session.writing) { restoreDialog.showModal(); return; }
+            if (session.writing) { if (!session.maintenance) restoreDialog.showModal(); return; }
             session.selection = null; controls();
             if (session.trigger?.isConnected && !session.reading) session.trigger.focus();
         });
         dialog.addEventListener('close', () => {
-            if (session?.writing) { dialog.showModal(); return; }
+            if (session?.writing) {
+                dialog.showModal();
+                const activeDialog = session.maintenance ? cleanupDialog : restoreDialog;
+                if (activeDialog.open) activeDialog.close();
+                activeDialog.showModal();
+                return;
+            }
             closeComparison(false);
+            closeMaintenance(false);
             session = null; model.versionBusy = false; renderControls(); $('#btnVersions').focus();
         });
         return Object.freeze({ open });

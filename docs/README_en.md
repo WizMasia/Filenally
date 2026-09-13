@@ -10,7 +10,7 @@ File-nally is a self-contained browser application for comparing and synchronizi
 - Safe synchronization of folder structure, including empty folders
 - A reviewable file-by-file plan before anything is written
 - Four explicit conflict policies: latest, source wins, skip, and preserve both
-- Versioned `.trash/<run timestamp>/...` isolation instead of permanent deletion
+- Synchronization deletions use versioned `.trash/<run timestamp>/...` isolation instead of permanent deletion
 - JSON schema v2 settings, folder-pair manifests, and synchronization history
 - Safe stop after the current file operation finishes
 - Per-folder-pair identity checks that reject same or nested directories
@@ -104,7 +104,7 @@ Before overwriting an existing destination file, File-nally captures it. Capture
 .filenally/versions/<capture-id>/<original relative path>
 ```
 
-Capture metadata is stored in schema v1 `.filenally/index.json`. `.filenally` is always excluded from synchronization, regardless of the visible exclusion list. If capture or index writing fails, File-nally does not perform that overwrite and stops the synchronization run.
+Capture metadata is stored in `.filenally/index.json`. New indexes and ordinary v1 writes use schema v1; explicitly confirmed manual cleanup upgrades the index to v2, which subsequent writes preserve. `.filenally` is always excluded from synchronization, regardless of the visible exclusion list. If capture or index writing fails, File-nally does not perform that overwrite and stops the synchronization run.
 
 After connecting both folders, open **Version manager** to see captures from both roots, newest first, in pages of 100. Each entry shows its owning folder's current Source/Target side and name, original path, capture time, size, reason, and version ID. An unreadable index produces a folder-specific error while the healthy folder's entries remain available. **Refresh** rereads both folders; **Download** saves the exact file bytes with the original filename.
 
@@ -120,9 +120,25 @@ Restoration always targets the folder that physically stores the version. Swappi
 
 Changes to the version or current file after preparation invalidate confirmation, including byte changes with identical size and modified time. Select the version again to retry with a fresh confirmation. If restoration fails after a backup was committed, its retained ID and `.filenally/versions/...` path appear in the manager status and live log. Folder selection/swapping, profile connection, settings import, comparison, and synchronization are locked while the manager is open.
 
-Version indexes remain schema v1 with the additive `before-restore` reason. Older builds reject these new records and safely block overwrites, so use the updated app after restoring. Settings remain schema v2. Freshness checks do not provide an atomic lock against external programs editing at the final write boundary.
+The `before-restore` reason and v2 indexes after cleanup may be incompatible with older builds. In particular, v0.14 cannot read a v2 index and may leave an unregistered capture file before rejecting an overwrite. Use the updated app with cleaned folders. Settings remain schema v2.
 
-Storage usage/manual cleanup and automatic expiry are not yet available. Creation date, author, owner, ACL, and similar metadata are unavailable.
+### Version usage inspection and manual cleanup
+
+**Registered version usage** shows each connected physical folder's indexed version count, original-path count, and exact decimal logical-byte sum. Path summaries page at 100 per folder independently of the version list. A combined total appears only when both registered summaries can be read. Index errors are unknown, distinct from zero registrations when no index exists. Opening the manager does not traverse physical files or request permission.
+
+**Inspect physical files** observes files under `.filenally`: all files, registered files, unregistered version files, other files, index bytes, missing/size-mismatched records, read time, and errors. Without a valid index, registered/unregistered classification is unknown. Registered totals and physical observations can differ; neither measures allocated disk space or guarantees reclaimed space. Inspection does not hash file contents. Traversal is capped at 100,000 entries per root, relative depth 256, 8,192 UTF-16 code units per relative path, and 100 error details, yielding to the browser every 128 entries. Limits, errors, stopping, or changes during inspection produce explicit partial/cancelled/stale results. Zero in a partial result does not establish total absence; missing records are determined only after a complete traversal. Index limits remain 5 MiB and 100,000 records.
+
+Select **1–100 registered versions in one physical folder** and choose **Clean up selected versions** to review a frozen confirmation list. Selection persists across list pages but clears on refresh, close, or folder change. **Select current page** selects only that page's entries in the chosen folder; additions beyond 100 are refused. Source/Target labels and actual handles distinguish even equally named folders. Historical metadata and any of the three synchronization directions never redirect deletion.
+
+Cleanup is **permanent deletion**. Back up important versions separately before confirming. Current originals, the other folder, `.trash`, unselected versions, and unregistered files are preserved. Parent directories are never recursively removed, so empty capture directories can remain. Paths without a verified retained registered copy require a last-version warning and separate acknowledgment. Missing or size-mismatched retained files do not prove preservation. Preparation, inspection, Cancel, and Escape change no files, indexes, settings, or existing sync plan. Only the confirmation click requests write permission for the selected root; denial discards the preparation but preserves the existing plan.
+
+While cleanup writes, duplicate confirmation and Close/Escape are blocked. **Stop after current item** waits for the current file deletion and its index commit. The dialog and live log report the operation ID, physical folder, confirmed completed count and logical bytes, failed ID/error, and recovery requirement. Any attempted store cleanup/recovery invocation clears the old plan and scans on success, failure, or stop, requiring a fresh comparison before synchronization. Direction, manifests, and checkpoints are preserved.
+
+A pending cleanup blocks that root's ordinary version reads and capture-backed overwrites. The other root's entries and non-overwriting new-file copies remain available. **Recover interrupted cleanup index** uses a separate confirmation to remove only registrations for already missing versions and preserve remaining pending files and registrations. It does not resume deletion and cannot be stopped once writing starts. Select and confirm a fresh cleanup afterward if needed.
+
+Capture, restore, cleanup, and recovery share a writer lock within this app instance. Other tabs/programs are not atomically locked. Cleanup/recovery refuse writes when required handles lack `isSameEntry`; inspection remains available. Identity, metadata, and selected-byte checks still cannot guarantee historical inode identity: native `isSameEntry` compares locators. Recreating the same path with identical observable values, or an external change after the final check, may be undetectable.
+
+Automatic retention and expiry remain deferred; manual cleanup does not complete the follow-up retention work in #12. Creation date, author, owner, ACL, and similar metadata are unavailable.
 
 ## JSON settings and folder profiles
 
