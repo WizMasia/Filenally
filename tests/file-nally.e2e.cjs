@@ -419,6 +419,59 @@ async function main() {
     assert.deepEqual(results.map((value) => value === 'accepted'), [false, false, false, false]);
   });
 
+  add('version index rejects capture id traversal', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const text = JSON.stringify({
+        schemaVersion: 1,
+        versions: [{
+          id: '../..',
+          capturedAt: '2026-09-13T00:00:00.000Z',
+          originalPath: 'escape/file',
+          storedPath: 'versions/../../escape/file',
+          size: 4,
+          lastModified: 100,
+          reason: 'before-overwrite',
+          direction: 'unidirectional',
+          fromSide: 'source',
+          toSide: 'target',
+        }],
+      });
+      try { window.FileNallyTest.VersionStore.parseIndexText(text); return 'accepted'; }
+      catch (error) { return error.message; }
+    });
+    assert.notEqual(result, 'accepted');
+  });
+
+  add('version index rejects forbidden keys inside state-shaped paths', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const text = '{"schemaVersion":1,"versions":[],"profiles":{"pair":{"directoryManifest":{"constructor":{}}}}}';
+      try { window.FileNallyTest.VersionStore.parseIndexText(text); return 'accepted'; }
+      catch (error) { return error.message; }
+    });
+    assert.match(result, /Forbidden JSON key/);
+  });
+
+  add('version index rejects text over 5 MiB', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const text = `{"padding":"${'x'.repeat((5 * 1024 * 1024) + 1)}"}`;
+      try { window.FileNallyTest.VersionStore.parseIndexText(text); return 'accepted'; }
+      catch (error) { return error.message; }
+    });
+    assert.match(result, /Version index exceeds 5MB/);
+  });
+
+  add('version index rejects more than 100000 records before record validation', async ({ page }) => {
+    const result = await page.evaluate(() => {
+      const text = JSON.stringify({ schemaVersion: 1, versions: Array(100001).fill(null) });
+      let message;
+      try { window.FileNallyTest.VersionStore.parseIndexText(text); message = 'accepted'; }
+      catch (error) { message = error.message; }
+      return { bytes: text.length, message };
+    });
+    assert.ok(result.bytes < 5 * 1024 * 1024);
+    assert.match(result.message, /Version index has too many records/);
+  });
+
   add('directory path exceptions do not bypass configuration or entry key protection', async ({ page }) => {
     const messages = await page.evaluate(() => {
       const results = [];

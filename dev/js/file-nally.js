@@ -78,14 +78,14 @@
         return parts;
     };
 
-    const rejectForbidden = (value, seen = new Set(), location = []) => {
+    const rejectForbidden = (value, allowDirectoryPaths = false, seen = new Set(), location = []) => {
         if (!value || typeof value !== 'object' || seen.has(value)) return;
         seen.add(value);
         // Only directory-manifest keys are filesystem paths; their values remain checked.
-        const directoryPaths = location.length === 3 && location[0] === 'profiles' && location[2] === 'directoryManifest';
+        const directoryPaths = allowDirectoryPaths && location.length === 3 && location[0] === 'profiles' && location[2] === 'directoryManifest';
         for (const key of Object.keys(value)) {
             if (!directoryPaths && FORBIDDEN_KEYS.has(key)) throw new Error(`Forbidden JSON key: ${key}`);
-            rejectForbidden(value[key], seen, [...location, key]);
+            rejectForbidden(value[key], allowDirectoryPaths, seen, [...location, key]);
         }
         seen.delete(value);
     };
@@ -105,6 +105,7 @@
                 || !['source', 'target'].includes(value.fromSide)
                 || !['source', 'target'].includes(value.toSide)
                 || value.fromSide === value.toSide) return null;
+            if (safeSegments(value.id).length !== 1) return null;
             safeSegments(value.originalPath);
             const expectedStoredPath = ['versions', value.id, ...safeSegments(value.originalPath)].join('/');
             if (value.storedPath !== expectedStoredPath) return null;
@@ -236,7 +237,7 @@
         };
 
         const sanitizeV2 = (raw) => {
-            rejectForbidden(raw);
+            rejectForbidden(raw, true);
             const state = createDefault();
             state.config = cleanConfig(raw.config);
             state.globalHistory = cleanHistory(raw.globalHistory, MAX_GLOBAL_HISTORY);
@@ -266,7 +267,7 @@
         };
 
         const migrate = (raw) => {
-            rejectForbidden(raw);
+            rejectForbidden(raw, true);
             if (raw?.schemaVersion === STATE_VERSION) return sanitizeV2(raw);
             const state = createDefault();
             state.config = cleanConfig(raw?.config);
