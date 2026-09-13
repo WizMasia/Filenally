@@ -3,7 +3,7 @@
 Date: 2026-09-13
 Parent: GitHub #12, third delivery slice
 Baseline: local main `d0bbdac`, version manager and confirmed restore
-Status: scope approved in conversation; detailed specification awaiting user review
+Status: detailed specification approved by the user on 2026-09-13
 
 ## Scope and selected approach
 
