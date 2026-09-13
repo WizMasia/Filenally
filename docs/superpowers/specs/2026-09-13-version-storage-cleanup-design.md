@@ -234,3 +234,5 @@ v2의 최상위 필드는 `schemaVersion: 2`, `versions`, `cleanup`이다. `vers
 - API 근거: [WHATWG File System Standard — removeEntry](https://fs.spec.whatwg.org/#api-filesystemdirectoryhandle-removeentry). 비재귀 제거를 사용하며 삭제 결과와 부재를 별도로 확인한다. 여러 파일 제거와 인덱스 변경을 한 번에 확정하는 API로 취급하지 않는다.
 
 인덱스·파일 재검증과 앱 내부 잠금은 독립된 다른 탭, 구버전 앱, 외부 편집기를 파일시스템 수준에서 잠그지 못한다. 동일 보관함에 대한 동시 쓰기를 지원한다고 주장하지 않는다. 최종 재검증과 실제 삭제 사이의 외부 변경 경쟁, 브라우저·운영체제 저장 실패, 손상된 인덱스 전체의 자동 복원은 보장 밖이다. 수동 정리 확인에는 영구 삭제와 별도 백업 필요성을 명시한다.
+
+구현 시 확인한 플랫폼 한계: 표준 `isSameEntry()`는 루트·경로·종류로 이루어진 locator의 동일성을 비교한다. 따라서 같은 경로에서 삭제·재생성된 항목의 과거 객체 정체성을 보장하는 inode 잠금으로 해석하지 않는다. 네이티브 동일성 검사와 관찰 가능한 인덱스 내용·파일 메타데이터·선택 파일 바이트 검증을 모두 유지하되, 이 관찰값까지 동일한 교체는 감지한다고 주장하지 않는다. [WHATWG isSameEntry](https://fs.spec.whatwg.org/#api-filesystemhandle-issameentry).
