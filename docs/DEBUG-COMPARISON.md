@@ -1,6 +1,6 @@
-# 변경사항 비교 진단 — v0.15.1-debug.1
+# 변경사항 비교 진단 — v0.15.1
 
-특정 폴더에서 변경사항 비교가 실패할 때 오류 위치와 파일명 특성을 확인하는 진단 프리릴리즈입니다. 파일명 특이점이 발견되어도 오류 원인으로 확정하지 않습니다.
+특정 폴더에서 변경사항 비교가 실패할 때 오류 위치와 파일명 특성을 확인하는 진단 기능입니다. 파일명 특이점이 발견되어도 오류 원인으로 확정하지 않습니다.
 
 1. 이 릴리즈의 `file-nally.html`을 Chrome 또는 Edge에서 엽니다.
 2. 문제가 발생한 원본·대상 폴더와 기존 비교 설정을 선택합니다.
@@ -25,7 +25,7 @@
 
 ## English
 
-Open the prerelease HTML, select the affected folders, and run **Compare changes**. On failure, use **Download diagnostic JSON** in the live log panel. Synchronization is not required. The report identifies the side, relative path, failing scan/content/rename-detection operation, error and browser information, and filename Unicode/length observations. Filename observations are not a root-cause verdict. File contents are excluded, but names and error stacks are included. A new comparison clears the previous diagnostic.
+Open the release HTML, select the affected folders, and run **Compare changes**. On failure, use **Download diagnostic JSON** in the live log panel. Synchronization is not required. The report identifies the side, relative path, failing scan/content/rename-detection operation, error and browser information, and filename Unicode/length observations. Filename observations are not a root-cause verdict. File contents are excluded, but names and error stacks are included. A new comparison clears the previous diagnostic.
 
 ## 파일명 복구 안내 (이슈 #16)
 

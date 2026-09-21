@@ -1,7 +1,7 @@
 (() => {
     'use strict';
 
-    const DEBUG_VERSION = '0.15.1-debug.1';
+    const DEBUG_VERSION = '0.15.1';
     const STORAGE_KEY = 'smart_sync_state';
     const SHOW_CHANGED_ONLY_KEY = 'file_nally_show_changed_only';
     const STATE_VERSION = 2;
