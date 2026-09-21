@@ -96,7 +96,7 @@ async function main() {
         try { await fs.stat(`${drive}\\`); continue; }
         catch (error) { if (error.code !== 'ENOENT') continue; }
         try {
-          execFileSync('subst.exe', [drive, path.join(root, ...parents)]);
+          execFileSync('subst.exe', [drive, path.join(root, ...parents.slice(0, -1))]);
           aliasDrive = drive;
           break;
         } catch { /* Try another free drive without replacing mappings. */ }
@@ -104,10 +104,10 @@ async function main() {
       if (aliasDrive) {
         await page.evaluate(() => { delete window.probe; });
         for (const type of ['dragEnter', 'dragOver', 'drop']) {
-          await cdp.send('Input.dispatchDragEvent', { type, x: 100, y: 100, data: { items: [], files: [`${aliasDrive}\\`], dragOperationsMask: 1 } });
+          await cdp.send('Input.dispatchDragEvent', { type, x: 100, y: 100, data: { items: [], files: [path.join(`${aliasDrive}\\`, parents.at(-1))], dragOperationsMask: 1 } });
         }
         await page.waitForFunction(() => window.probe !== undefined, null, { timeout: 15000 });
-        aliasProbe = { method: 'subst to deep parent', aliasLeafPathLength: 3 + encoded.length, result: await page.evaluate(() => window.probe) };
+        aliasProbe = { method: 'subst to parent, select child folder', aliasLeafPathLength: 3 + parents.at(-1).length + 1 + encoded.length, result: await page.evaluate(() => window.probe) };
       } else aliasProbe = { error: 'No available drive alias' };
     }
     const report = {
