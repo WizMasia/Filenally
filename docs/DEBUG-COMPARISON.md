@@ -1,4 +1,4 @@
-# 변경사항 비교 진단 — v0.15.1
+# 변경사항 비교 진단 — v0.15.2
 
 특정 폴더에서 변경사항 비교가 실패할 때 오류 위치와 파일명 특성을 확인하는 진단 기능입니다. 파일명 특이점이 발견되어도 오류 원인으로 확정하지 않습니다.
 
@@ -90,4 +90,4 @@ Windows 10.0.26100 / Chrome 152.0.7977.83에서 `LongPathsEnabled=1`인 상태�
    subst X: /D
    ```
 
-명령 구문: [Microsoft `subst` 문서](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/subst). 웹 앱이 드라이브 연결 명령을 직접 실행하거나 불투명한 파일 핸들에 Windows 경로 접두부를 붙일 수는 없습니다. 현재 앱의 자동 복구 수정 또는 해결 릴리즈는 아니며, 이슈 #18은 사용자 환경 검증 전까지 열어 둡니다.
+명령 구문: [Microsoft `subst` 문서](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/subst). 웹 앱이 드라이브 연결 명령을 직접 실행하거나 불투명한 파일 핸들에 Windows 경로 접두부를 붙일 수는 없습니다. v0.15.2는 재현 결과와 우회 절차를 정리한 릴리즈이며 앱의 자동 복구 수정은 포함하지 않습니다. 사용자 요청에 따라 이슈 #18은 임시 종결합니다. 실제 사용자 환경 검증은 보류 상태이며 같은 문제가 발생하면 새 이슈에서 이어갑니다.
