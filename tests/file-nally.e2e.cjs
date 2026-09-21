@@ -4850,7 +4850,7 @@ async function main() {
       background: getComputedStyle(document.body).backgroundColor,
       errors: window.__testUnhandledErrors || [],
     }));
-    assert.equal(result.version, 'Beta v0.15.2');
+    assert.equal(result.version, 'Beta v0.15.3');
     assert.equal(result.background, 'rgb(244, 246, 250)');
     assert.deepEqual(result.errors, []);
   });
@@ -6479,6 +6479,68 @@ async function main() {
     assert.equal(await starBtn.getAttribute('data-bookmarked'), 'true');
     const bookmarkCount = await page.locator('#bookmarkChips .chip-bookmark').count();
     assert.equal(bookmarkCount, 1);
+  });
+
+  for (const variant of [{ lang: 'ko', development: false }, { lang: 'en', development: true }]) {
+    add(`recent folder removal persists without changing folders or bookmarks (${variant.lang})`, async ({ page, devUrl }) => {
+      if (variant.development) await page.goto(devUrl);
+      await page.locator(variant.lang === 'ko' ? '#btnLangKo' : '#btnLangEn').click();
+      await mountPair(page, { sourceName: 'saved-source', targetName: 'saved-target' });
+      await page.locator('#btnBookmark').click();
+      await mountPair(page, {
+        sourceName: 'active-source', targetName: 'active-target',
+        source: { 'keep.txt': { content: 'keep source' } },
+        target: { 'keep.txt': { content: 'keep target' } },
+      });
+      await compare(page);
+      const before = await page.evaluate(() => ({
+        state: window.FileNallyTest.StateStore.load(), model: window.FileNallyTest.getModel(),
+      }));
+      const files = await snapshotMockPair(page);
+      const label = variant.lang === 'ko' ? '최근 목록에서 삭제: active-source ⇄ active-target' : 'Remove from recent folders: active-source ⇄ active-target';
+      const remove = page.getByRole('button', { name: label, exact: true });
+      assert.equal(await remove.count(), 1, 'recent folders expose an accessible removal button');
+      await remove.focus();
+      await page.keyboard.press('Enter');
+      assert.equal(await remove.count(), 0);
+      assert.equal(await page.evaluate(() => document.activeElement === document.querySelector('#recentChips .chip-remove')), true, 'focus moves to the next removal button');
+      const expected = { ...before.state, recentFolders: before.state.recentFolders.filter(r => r.profileId !== before.model.profileId) };
+      assert.deepEqual(await page.evaluate(() => window.FileNallyTest.StateStore.load()), expected);
+      assert.deepEqual(await page.evaluate(() => window.FileNallyTest.getModel()), before.model, 'removal does not select or invalidate the current folder pair');
+      assert.deepEqual(await snapshotMockPair(page), files);
+      assert.equal(await page.locator('#bookmarkChips .chip-bookmark').count(), 1);
+      await page.reload();
+      await page.waitForFunction(() => window.FileNallyTest && !window.FileNallyTest.getModel().profileConnectionPending);
+      assert.equal(await remove.count(), 0);
+      assert.deepEqual(await page.evaluate(() => window.FileNallyTest.StateStore.load().recentFolders), expected.recentFolders);
+      assert.equal(await page.locator('#bookmarkChips .chip-bookmark').count(), 1);
+      // Remove the remaining visible entries, including the final chip.
+      const remaining = page.locator('#recentChips .chip-remove');
+      while (await remaining.count()) {
+        await remaining.last().click();
+        assert.equal(await page.evaluate(() => document.activeElement === (document.querySelector('#recentChips .recent-chip:last-child .chip-remove') || document.querySelector('#btnSrc'))), true, 'focus moves to the previous entry or source picker');
+      }
+      assert.equal(await page.locator('#recentChips button').count(), 0);
+      await page.reload();
+      assert.equal(await page.locator('#recentChips button').count(), 0);
+      assert.equal(await page.locator('#bookmarkChips .chip-bookmark').count(), 1);
+    });
+  }
+
+  add('recent folder removal is blocked during a version operation', async ({ page }) => {
+    await mountPair(page, { source: {}, target: {} });
+    const remove = page.locator('#recentChips .chip-remove');
+    assert.equal(await remove.count(), 1, 'recent folders expose a removal button');
+    const before = await page.evaluate(() => window.FileNallyTest.StateStore.load().recentFolders);
+    await page.locator('#btnVersions').click();
+    assert.equal(await remove.isDisabled(), true);
+    await remove.dispatchEvent('click');
+    assert.deepEqual(await page.evaluate(() => window.FileNallyTest.StateStore.load().recentFolders), before);
+    await page.locator('#btnCloseVersions').click();
+    await page.waitForFunction(() => !window.FileNallyTest.getModel().versionBusy);
+    assert.equal(await remove.isEnabled(), true);
+    await remove.click();
+    assert.equal(await remove.count(), 0);
   });
 
   add('permission gate requests only prompt handles and requires both grants', async ({ page }) => {

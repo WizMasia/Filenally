@@ -1,6 +1,6 @@
 # File-nally
 
-**Beta v0.15.2** · [한국어 메인 설명서](../README.md)
+**Beta v0.15.3** · [한국어 메인 설명서](../README.md)
 
 Comparison diagnostics and filename recovery guidance: [Usage guide](DEBUG-COMPARISON.md)
 
@@ -18,6 +18,7 @@ File-nally is a self-contained browser application for comparing and synchronizi
 - Per-folder-pair identity checks that reject same or nested directories
 - Responsive Korean and English interface
 
+- Remove individual recent entries with the × button. Removal persists after reload and preserves files, bookmarks, and the currently selected folders.
 - Recent folders history and bookmarks (up to 5) — reuse saved directory handles. Selecting an item requests renewed permission when needed, and comparison is enabled only after both folders have read/write access.
 - File rename detection — plan a rename only when deleted and added files have identical content and form one unambiguous candidate. It uses an atomic move when supported and otherwise falls back to copy plus removal. Different or ambiguous candidates keep the copy plus `.trash` preservation path.
 - Reverse synchronization (Target → Source) and a glassmorphic segmented toggle UI — three direction options: `Source ⇄ Target`, `Source → Target`, `Target → Source`.

@@ -1,7 +1,7 @@
 (() => {
     'use strict';
 
-    const DEBUG_VERSION = '0.15.2';
+    const DEBUG_VERSION = '0.15.3';
     const STORAGE_KEY = 'smart_sync_state';
     const SHOW_CHANGED_ONLY_KEY = 'file_nally_show_changed_only';
     const STATE_VERSION = 2;
@@ -58,7 +58,7 @@
             importDone: 'JSON 데이터를 복원했습니다.', importFailed: 'JSON을 복원하지 못했습니다: {message}', exportDone: 'JSON 백업을 생성했습니다.', defaultDone: '기본 JSON을 생성했습니다.', historyCleared: '동기화 이력을 초기화했습니다.', confirmClear: '현재 프로필과 전체 동기화 이력을 초기화할까요?',
             statusUnchanged: '변경 없음', statusBaseline: '기준 저장', statusCopyOut: '보내기', statusCopyIn: '받기', statusTrash: '휴지통 이동', statusCreateDirectory: '폴더 생성', statusBaselineDirectory: '폴더 기준 저장', statusTrashDirectory: '폴더 휴지통 이동', statusConflict: '충돌 · 확인 필요', statusSkipped: '정책에 따라 건너뜀', statusProtected: '단방향 보호', statusNew: '신규', statusRename: '이름 변경',
             phaseReady: '준비', phaseComparing: '비교', phasePlanned: '계획됨', phaseSyncing: '실행', phaseSuccess: '완료', phaseError: '오류', phaseAborted: '중단', directionBothShort: '양방향', directionOneShort: '단방향', directionReverseShort: '역방향', success: '성공', failed: '실패', aborted: '중단',
-            bookmarkAdded: '북마크가 추가되었습니다.', bookmarkRemoved: '북마크가 해제되었습니다.', swapFolders: '원본과 대상 폴더 교환', foldersSwapped: '원본과 대상 폴더를 교환했습니다.', advancedOptions: '동기화 옵션', showOptions: '옵션 보기', hideOptions: '옵션 숨기기',
+            bookmarkAdded: '북마크가 추가되었습니다.', bookmarkRemoved: '북마크가 해제되었습니다.', removeRecentFolder: '최근 목록에서 삭제: {source} ⇄ {target}', recentFolderRemoved: '최근 목록에서 삭제했습니다.', swapFolders: '원본과 대상 폴더 교환', foldersSwapped: '원본과 대상 폴더를 교환했습니다.', advancedOptions: '동기화 옵션', showOptions: '옵션 보기', hideOptions: '옵션 숨기기',
             permissionChecking: '저장된 폴더 권한을 확인하는 중입니다.', permissionRestored: '폴더 권한이 확인되었습니다. 변경사항을 비교할 수 있습니다.', permissionDenied: '폴더 권한이 승인되지 않았습니다. 원본과 대상 폴더를 다시 선택해 주세요.', permissionNeedsAction: '저장된 폴더를 사용하려면 최근 폴더 또는 북마크를 눌러 권한을 승인해 주세요.', storedHandleMissing: '저장된 폴더 연결을 찾을 수 없습니다. 원본과 대상 폴더를 다시 선택해 주세요.', storedHandleUnavailable: '저장된 폴더에 접근할 수 없습니다. 원본과 대상 폴더를 다시 선택해 주세요.',
             quickGuideButton: '사용 안내', quickGuideTitle: '사용 안내', quickGuideDescription: '비교부터 동기화까지, 안전한 기본 흐름을 확인하세요.', quickGuideStepFolders: '원본 폴더와 대상 폴더를 선택합니다.', quickGuideStepOptions: '동기화 방향, 충돌 정책, 비교 모드를 확인합니다.', quickGuideStepCompare: '변경사항 비교를 실행합니다.', quickGuideStepPlan: '생성된 작업 계획과 충돌 항목을 검토합니다.', quickGuideStepSync: '계획을 확인한 뒤 동기화를 실행합니다.', quickGuidePermission: '저장된 폴더는 권한 재승인이 필요할 수 있습니다. 승인할 수 없으면 원본과 대상 폴더를 다시 선택하세요.', quickGuideSafety: '중요한 데이터는 먼저 백업하세요. `.trash` 복구는 수동이며 자동 롤백이 아닙니다.',
             detailsHead: '상세', details: '상세 보기', runDetailTitle: '실행 상세', runDetailDescription: '실행 중 처리한 모든 작업과 결과입니다.', close: '닫기', loadingDetails: '상세 기록을 불러오는 중입니다.', detailsUnavailable: '상세 기록을 찾을 수 없습니다.', durationHead: '소요 시간', sequenceHead: '순서', actionHead: '작업', versionIdHead: '버전 ID', versionPathHead: '버전 경로', errorHead: '오류', previousPage: '이전', nextPage: '다음', downloadCsv: 'CSV 다운로드', downloadRunJson: 'JSON 다운로드', entrySuccess: '성공', entryFailed: '실패', entryNotRun: '미실행', actionCopy: '복사', actionRename: '이름 변경', actionTrash: '휴지통 이동', actionBaseline: '기준 저장', actionCreateDirectory: '폴더 생성', actionBaselineDirectory: '폴더 기준 저장', actionTrashDirectory: '폴더 휴지통 이동', actionUnknown: '기타',
@@ -99,7 +99,7 @@
             importDone: 'JSON data restored.', importFailed: 'Could not restore JSON: {message}', exportDone: 'JSON backup created.', defaultDone: 'Default JSON created.', historyCleared: 'Synchronization history cleared.', confirmClear: 'Clear the active profile and global synchronization history?',
             statusUnchanged: 'No change', statusBaseline: 'Save baseline', statusCopyOut: 'Send', statusCopyIn: 'Receive', statusTrash: 'Move to trash', statusCreateDirectory: 'Create folder', statusBaselineDirectory: 'Save folder baseline', statusTrashDirectory: 'Move folder to trash', statusConflict: 'Conflict · review', statusSkipped: 'Skipped by policy', statusProtected: 'Protected by one-way mode', statusNew: 'New', statusRename: 'Rename',
             phaseReady: 'Ready', phaseComparing: 'Comparing', phasePlanned: 'Planned', phaseSyncing: 'Running', phaseSuccess: 'Complete', phaseError: 'Error', phaseAborted: 'Stopped', directionBothShort: 'Bidirectional', directionOneShort: 'One-way', directionReverseShort: 'Reverse', success: 'Success', failed: 'Failed', aborted: 'Stopped',
-            bookmarkAdded: 'Bookmark added.', bookmarkRemoved: 'Bookmark removed.', swapFolders: 'Swap source and target folders', foldersSwapped: 'Source and target folders swapped.', advancedOptions: 'Synchronization options', showOptions: 'Show options', hideOptions: 'Hide options',
+            bookmarkAdded: 'Bookmark added.', bookmarkRemoved: 'Bookmark removed.', removeRecentFolder: 'Remove from recent folders: {source} ⇄ {target}', recentFolderRemoved: 'Removed from recent folders.', swapFolders: 'Swap source and target folders', foldersSwapped: 'Source and target folders swapped.', advancedOptions: 'Synchronization options', showOptions: 'Show options', hideOptions: 'Hide options',
             permissionChecking: 'Checking access to the saved folders.', permissionRestored: 'Folder access verified. You can compare changes now.', permissionDenied: 'Folder access was not granted. Select the source and target folders again.', permissionNeedsAction: 'Select the recent folder or bookmark to approve access before reconnecting.', storedHandleMissing: 'The saved folder connection is unavailable. Select the source and target folders again.', storedHandleUnavailable: 'The saved folders cannot be accessed. Select the source and target folders again.',
             quickGuideButton: 'Quick guide', quickGuideTitle: 'Quick guide', quickGuideDescription: 'Follow the safe path from comparison to synchronization.', quickGuideStepFolders: 'Select the source and target folders.', quickGuideStepOptions: 'Check the synchronization direction, conflict policy, and comparison mode.', quickGuideStepCompare: 'Compare the changes.', quickGuideStepPlan: 'Review the generated work plan and any conflicts.', quickGuideStepSync: 'Run synchronization only after reviewing the plan.', quickGuidePermission: 'Saved folders may require you to renew permission. If access cannot be renewed, select the source and target folders again.', quickGuideSafety: 'Create a backup of important data first. `.trash` recovery is manual and is not an automatic rollback.',
             detailsHead: 'Details', details: 'View details', runDetailTitle: 'Run details', runDetailDescription: 'Every action processed during this synchronization run.', close: 'Close', loadingDetails: 'Loading run details.', detailsUnavailable: 'Run details are unavailable.', durationHead: 'Duration', sequenceHead: 'Sequence', actionHead: 'Action', versionIdHead: 'Version ID', versionPathHead: 'Version path', errorHead: 'Error', previousPage: 'Previous', nextPage: 'Next', downloadCsv: 'Download CSV', downloadRunJson: 'Download JSON', entrySuccess: 'Success', entryFailed: 'Failed', entryNotRun: 'Not run', actionCopy: 'Copy', actionRename: 'Rename', actionTrash: 'Move to trash', actionBaseline: 'Save baseline', actionCreateDirectory: 'Create folder', actionBaselineDirectory: 'Save folder baseline', actionTrashDirectory: 'Move folder to trash', actionUnknown: 'Other',
@@ -2234,13 +2234,30 @@
 
         for (const r of recents) {
             if (bookmarkedIds.has(r.profileId)) continue;
+            const group = document.createElement('span');
+            group.className = 'recent-chip';
             const chip = document.createElement('button');
             chip.type = 'button';
             chip.className = 'chip';
             chip.textContent = `🕒 ${r.sourceName || '?'} ⇄ ${r.targetName || '?'}`;
             chip.disabled = operationBlocked();
             chip.addEventListener('click', () => Controller.selectProfile(r.profileId));
-            elements.recentChips.append(chip);
+            const remove = document.createElement('button');
+            remove.type = 'button';
+            remove.className = 'chip-remove';
+            remove.textContent = '×';
+            remove.title = t('removeRecentFolder', { source: r.sourceName || '?', target: r.targetName || '?' });
+            remove.setAttribute('aria-label', remove.title);
+            remove.disabled = operationBlocked();
+            remove.addEventListener('click', () => {
+                if (operationBlocked()) return;
+                const index = [...elements.recentChips.children].indexOf(group);
+                Controller.removeRecentFolder(r.profileId);
+                const next = elements.recentChips.children[Math.min(index, elements.recentChips.children.length - 1)];
+                (next?.querySelector('.chip-remove') || elements.btnSrc).focus();
+            });
+            group.append(chip, remove);
+            elements.recentChips.append(group);
         }
     };
     const renderStaticText = () => {
@@ -2606,6 +2623,13 @@
             setStatus(t('foldersSwapped'), 'success', 'check');
             addLog(t('foldersSwapped'));
         };
+        const removeRecentFolder = (profileId) => {
+            if (operationBlocked()) return;
+            model.state.recentFolders = model.state.recentFolders.filter(r => r.profileId !== profileId);
+            StateStore.save(model.state);
+            renderRecentAndBookmarks();
+            setStatus(t('recentFolderRemoved'), 'info', 'info');
+        };
         const toggleBookmark = () => {
             if (operationBlocked() || !model.profile) return;
             const id = model.profile.id;
@@ -2745,7 +2769,7 @@
                 model.state = StateStore.importText(await file.text()); model.source = model.target = model.profile = null; model.trustedProfile = false; model.plan = null; StateStore.save(model.state); setPhase('idle'); renderStaticText(); setStatus(t('importDone'), 'success', 'check'); addLog(t('importDone'));
             } catch (error) { setPhase('error'); setStatus(t('importFailed', { message: safeMessage(error) }), 'danger', 'alert'); }
         };
-        return Object.freeze({ abort, bindPair: appOperation(bindPair), compare: appOperation(compare), connectStoredProfile: appOperation(connectStoredProfile), importState: appOperation(importState), invalidatePlan, pick: appOperation(pick), saveConfig, selectProfile: appOperation(selectProfile), swapFolders: appOperation(swapFolders), sync: appOperation(sync), toggleBookmark });
+        return Object.freeze({ abort, bindPair: appOperation(bindPair), compare: appOperation(compare), connectStoredProfile: appOperation(connectStoredProfile), importState: appOperation(importState), invalidatePlan, pick: appOperation(pick), removeRecentFolder, saveConfig, selectProfile: appOperation(selectProfile), swapFolders: appOperation(swapFolders), sync: appOperation(sync), toggleBookmark });
     })();
 
     const downloadBlob = (blob, name) => {
