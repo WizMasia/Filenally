@@ -32,13 +32,14 @@ async function installMockFileSystem(page) {
       }
 
       async getFile() {
+        if (shouldFail('getFile', this.name)) throw new DOMException('Injected missing file', 'NotFoundError');
         const file = new File([this.content], this.name, { lastModified: this.lastModified });
         if (this.contentAfterRead != null) {
           this.content = this.contentAfterRead;
           this.contentAfterRead = null;
           this.lastModified = ++clock;
         }
-        if (this.readDelay) {
+        if (this.readDelay || window.__mockFailure?.operation === 'arrayBuffer') {
           const originalSlice = file.slice.bind(file);
           Object.defineProperty(file, 'slice', {
             value: (...args) => {
@@ -46,6 +47,7 @@ async function installMockFileSystem(page) {
               const arrayBuffer = chunk.arrayBuffer.bind(chunk);
               Object.defineProperty(chunk, 'arrayBuffer', {
                 value: async () => {
+                  if (shouldFail('arrayBuffer', this.name)) throw new DOMException('Injected unreadable file bytes', 'NotFoundError');
                   await new Promise((resolve) => setTimeout(resolve, this.readDelay));
                   return arrayBuffer();
                 },
@@ -96,6 +98,7 @@ async function installMockFileSystem(page) {
       }
 
       async *values() {
+        if (shouldFail('values', this.name)) throw new DOMException('Injected missing directory', 'NotFoundError');
         yield* this.entries.values();
       }
 

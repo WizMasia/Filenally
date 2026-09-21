@@ -1,6 +1,7 @@
 (() => {
     'use strict';
 
+    const DEBUG_VERSION = '0.15.1';
     const STORAGE_KEY = 'smart_sync_state';
     const SHOW_CHANGED_ONLY_KEY = 'file_nally_show_changed_only';
     const STATE_VERSION = 2;
@@ -41,6 +42,17 @@
             sourceTitle: '원본 폴더', targetTitle: '대상 폴더', showChangedOnly: '변경된 항목만 보기', pathHead: '항목명과 경로', sizeHead: '크기', dateHead: '수정일', stateHead: '상태', logTitle: '실시간 로그', idle: '대기', historyTitle: '동기화 이력', clearHistory: '이력 초기화', timeHead: '실행 시간', directionHead: '방향', processedHead: '처리',
             disclaimer: '중요한 데이터는 동기화 전에 별도로 백업하세요. 브라우저와 운영체제의 파일 권한 또는 예기치 않은 중단으로 인한 손실 가능성이 있습니다.',
             emptyFiles: '표시할 항목이 없습니다.', emptyChangedFiles: '변경된 항목이 없습니다.', emptyHistory: '기록된 동기화 이력이 없습니다.', selected: '{name} 선택됨', pairReady: '폴더 쌍이 확인되었습니다. 변경사항을 비교할 수 있습니다.', sameFolder: '같은 폴더를 원본과 대상으로 사용할 수 없습니다.', nestedFolder: '한 폴더가 다른 폴더 안에 있습니다. 중첩 폴더는 동기화할 수 없습니다.', pickCancelled: '폴더 선택이 취소되었습니다.', pickFailed: '폴더를 선택하지 못했습니다: {message}',
+            filenameObservations: '파일명 관찰 정보 — 원인은 아직 확정되지 않았습니다.',
+            filenameLong: '긴 이름 후보: {name} ({count} UTF-16 단위). 240 이상은 참고 기준이며 파일시스템의 제한값이 아닙니다.',
+            filenamePercent: '퍼센트 인코딩 형태: {name}. 디코딩 미리보기(실제 이름 변경 없음): {preview}',
+            filenameDecodeFailed: '퍼센트 인코딩 형태: {name}. 완전한 UTF-8 퍼센트 문자열로 디코딩할 수 없습니다.',
+            filenameWindows: 'Windows 이름 제약 확인: {name} — {reasons}',
+            filenameRestricted: '제한 문자', filenameTrailing: '끝 공백·점', filenameReserved: '예약 장치 이름',
+            filenamePathLength: '상대 경로만 {count} UTF-16 단위입니다. 일부 Windows API의 전체 경로 제한에 닿을 가능성이 있습니다.',
+            filenameAbsoluteUnknown: '선택 폴더 위의 절대 경로는 알 수 없습니다. 표시한 길이만으로 전체 경로 제한 여부를 판정할 수 없습니다.',
+            filenameShortPath: '원본을 보존하고 같은 이름의 복사본을 더 짧은 상위 경로에 두어 비교해 보세요.',
+            filenameRenameAdvice: '필요하면 복사본의 이름을 탐색기에서 짧고 유효한 이름으로 변경한 뒤 폴더를 다시 선택하고 비교하세요. 디코딩 미리보기는 유효한 파일명 제안이 아닙니다.',
+            downloadDiagnostic: '진단 JSON 다운로드',
             comparing: '폴더를 검사하고 변경 계획을 계산하는 중입니다.', compareStopping: '현재 파일 비교를 마친 뒤 중지합니다.', compareStopped: '파일 비교가 중지되었습니다.', compareDone: '비교 완료 · 실행할 작업 {count}건', compareNone: '비교 완료 · 실행할 변경사항이 없습니다.', compareFailed: '비교 중 오류가 발생했습니다: {message}',
             syncing: '동기화 실행 중 · {current}/{total}', syncDone: '동기화 완료 · {count}건 처리', syncAborted: '동기화가 안전하게 중단되었습니다. {count}건 처리됨', syncFailed: '동기화 중 오류가 발생했습니다: {message}', aborting: '현재 파일 작업을 마친 뒤 중단합니다.',
             importDone: 'JSON 데이터를 복원했습니다.', importFailed: 'JSON을 복원하지 못했습니다: {message}', exportDone: 'JSON 백업을 생성했습니다.', defaultDone: '기본 JSON을 생성했습니다.', historyCleared: '동기화 이력을 초기화했습니다.', confirmClear: '현재 프로필과 전체 동기화 이력을 초기화할까요?',
@@ -68,6 +80,17 @@
             profileNone: 'No synchronization profile is selected.', profileUnverified: 'Folder pair unverified', profileVerified: 'Folder pair verified', profileLabel: '{source} ⇄ {target}',
             directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', directionReverse: 'Reverse (Target → Source)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', comparisonLabel: 'Comparison mode', comparisonQuick: 'Quick comparison (size + modified time, default)', comparisonExact: 'Exact comparison (byte-by-byte, slower)', excludeLabel: 'Excluded directory names',
             defaultJson: 'Default JSON', exportJson: 'Back up JSON', importJson: 'Restore JSON', compare: 'Compare changes', sync: 'Run synchronization', abort: 'Stop safely', waiting: 'Select both folders to begin.', preparing: 'Preparing',
+            filenameObservations: 'Filename observations — the cause is not confirmed.',
+            filenameLong: 'Long name candidate: {name} ({count} UTF-16 units). 240 is an advisory threshold, not a filesystem limit.',
+            filenamePercent: 'Percent-encoding pattern: {name}. Decoded preview (actual name unchanged): {preview}',
+            filenameDecodeFailed: 'Percent-encoding pattern: {name}. Cannot decode as a complete UTF-8 percent-encoded string.',
+            filenameWindows: 'Check Windows name restrictions: {name} — {reasons}',
+            filenameRestricted: 'restricted character', filenameTrailing: 'trailing space or dot', filenameReserved: 'reserved device name',
+            filenamePathLength: 'The relative path alone is {count} UTF-16 units. It may reach a full-path limit in some Windows APIs.',
+            filenameAbsoluteUnknown: 'The absolute path above the selected folder is unknown. The displayed length cannot determine the full-path limit.',
+            filenameShortPath: 'Preserve the original and compare a copy with the same name under a shorter parent path.',
+            filenameRenameAdvice: 'If needed, give a copy a short valid name in File Explorer, then reselect the folders and compare again. The decoded preview is not a valid-filename suggestion.',
+            downloadDiagnostic: 'Download diagnostic JSON',
             sourceTitle: 'Source folder', targetTitle: 'Target folder', showChangedOnly: 'Show changed items only', pathHead: 'Item and path', sizeHead: 'Size', dateHead: 'Modified', stateHead: 'Status', logTitle: 'Live log', idle: 'Idle', historyTitle: 'Synchronization history', clearHistory: 'Clear history', timeHead: 'Run time', directionHead: 'Direction', processedHead: 'Processed',
             disclaimer: 'Back up important data before synchronization. Browser or operating-system permissions and unexpected interruption can still cause data loss.',
             emptyFiles: 'No items to display.', emptyChangedFiles: 'No changed items to display.', emptyHistory: 'No synchronization history recorded.', selected: '{name} selected', pairReady: 'Folder pair verified. You can compare changes now.', sameFolder: 'The same folder cannot be both source and target.', nestedFolder: 'One selected folder is inside the other. Nested pairs are not supported.', pickCancelled: 'Folder selection was cancelled.', pickFailed: 'Could not select the folder: {message}',
@@ -94,7 +117,7 @@
         const normalized = values.map((item) => String(item).trim()).filter((item) => item && !RESERVED_EXCLUDES.includes(item));
         return [...new Set(normalized)].slice(0, 100).concat(RESERVED_EXCLUDES);
     };
-    const format = (template, values = {}) => Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), template);
+    const format = (template, values = {}) => template.replace(/\{([^{}]+)\}/g, (match, key) => Object.hasOwn(values, key) ? String(values[key]) : match);
     const safeMessage = (error) => error instanceof Error || error instanceof DOMException ? error.message : String(error || 'Unknown error');
     const safeSegments = (path) => {
         const parts = String(path).split('/');
@@ -136,11 +159,77 @@
         check();
         return handle;
     };
-    const equalFileBytes = async (sourceFile, targetFile, onProgress = () => {}, isCancelled = () => false) => {
+    const comparisonError = (error, context) => {
+        if (error?.comparisonContext) return error;
+        const wrapped = new Error(safeMessage(error), { cause: error });
+        wrapped.name = error?.name || 'Error';
+        wrapped.comparisonContext = context;
+        wrapped.stack = error?.stack || wrapped.stack;
+        return wrapped;
+    };
+    const comparisonRead = async (context, read) => {
+        try { return await read(); }
+        catch (error) { throw comparisonError(error, context); }
+    };
+    const diagnosticFailure = (error) => {
+        const context = error?.comparisonContext || { stage: 'planning', operation: 'plan' };
+        const path = context.path ?? '';
+        const codePoint = (char) => `U+${char.codePointAt(0).toString(16).toUpperCase().padStart(4, '0')}`;
+        return {
+            ...context, name: error?.name || 'Error', message: safeMessage(error), stack: error?.stack || '',
+            pathUtf16Length: path.length, pathUtf8Bytes: new TextEncoder().encode(path).length,
+            absolutePathKnown: false,
+            // Advisory signals only: the actual absolute path and filesystem limits are unavailable.
+            pathLengthWarning: path.length >= 260,
+            segments: path ? path.split('/').map(name => {
+                const percentEncoded = /%[0-9a-f]{2}/i.test(name);
+                let decodedPreview = null;
+                if (percentEncoded) {
+                    try { decodedPreview = decodeURIComponent(name); } catch { /* Keep malformed names unchanged. */ }
+                }
+                const windowsIssues = [];
+                if (/[<>:"\\|?*\x00-\x1F]/u.test(name)) windowsIssues.push('restricted-character');
+                if (/[ .]$/u.test(name)) windowsIssues.push('trailing-dot-space');
+                if (/^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)/iu.test(name)) windowsIssues.push('reserved-name');
+                return {
+                    name, escaped: JSON.stringify(name), utf16Length: name.length,
+                    utf8Bytes: new TextEncoder().encode(name).length,
+                    codePoints: Array.from(name, codePoint),
+                    nfcDiffers: name !== name.normalize('NFC'), nfdDiffers: name !== name.normalize('NFD'),
+                    trailingWhitespace: /\s$/u.test(name), trailingDot: name.endsWith('.'),
+                    invisibleCodePoints: Array.from(name).filter(char => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(char)).map(codePoint),
+                    longName: name.length >= 240, percentEncoded, decodedPreview, windowsIssues,
+                };
+            }) : [],
+        };
+    };
+
+    const filenameRecovery = (failure) => {
+        const lines = [];
+        const reasonKeys = { 'restricted-character': 'filenameRestricted', 'trailing-dot-space': 'filenameTrailing', 'reserved-name': 'filenameReserved' };
+        for (const segment of failure.segments) {
+            const name = JSON.stringify(segment.name);
+            if (segment.longName) lines.push(t('filenameLong', { name, count: segment.utf16Length }));
+            if (segment.percentEncoded) lines.push(t(segment.decodedPreview === null ? 'filenameDecodeFailed' : 'filenamePercent', { name, preview: JSON.stringify(segment.decodedPreview) }));
+            if (segment.windowsIssues.length) lines.push(t('filenameWindows', { name, reasons: segment.windowsIssues.map(reason => t(reasonKeys[reason])).join(', ') }));
+        }
+        if (failure.pathLengthWarning) lines.push(t('filenamePathLength', { count: failure.pathUtf16Length }));
+        if (!lines.length) return '';
+        lines.unshift(t('filenameObservations'));
+        lines.push(t('filenameAbsoluteUnknown'));
+        if (failure.pathLengthWarning || failure.segments.some(segment => segment.longName)) lines.push(t('filenameShortPath'));
+        if (failure.segments.some(segment => segment.percentEncoded || segment.windowsIssues.length)) lines.push(t('filenameRenameAdvice'));
+        return lines.join('\n');
+    };
+
+    const equalFileBytes = async (sourceFile, targetFile, onProgress = () => {}, isCancelled = () => false, diagnosticContexts = null) => {
+        const read = (file, start, end, index) => diagnosticContexts
+            ? comparisonRead({ ...diagnosticContexts[index], operation: 'arrayBuffer' }, () => file.slice(start, end).arrayBuffer())
+            : file.slice(start, end).arrayBuffer();
         if (sourceFile.size !== targetFile.size) return false;
         const totalBytes = sourceFile.size * 2;
         if (!totalBytes) {
-            await Promise.all([sourceFile.slice(0, 0).arrayBuffer(), targetFile.slice(0, 0).arrayBuffer()]);
+            await Promise.all([read(sourceFile, 0, 0, 0), read(targetFile, 0, 0, 1)]);
             onProgress(0, 0);
             return true;
         }
@@ -148,8 +237,8 @@
             if (isCancelled()) throw new DOMException('Comparison stopped', 'AbortError');
             const end = Math.min(offset + CONTENT_CHUNK_BYTES, sourceFile.size);
             const [sourceBuffer, targetBuffer] = await Promise.all([
-                sourceFile.slice(offset, end).arrayBuffer(),
-                targetFile.slice(offset, end).arrayBuffer(),
+                read(sourceFile, offset, end, 0),
+                read(targetFile, offset, end, 1),
             ]);
             if (isCancelled()) throw new DOMException('Comparison stopped', 'AbortError');
             const sourceBytes = new Uint8Array(sourceBuffer);
@@ -1871,31 +1960,41 @@
     })();
 
     const FileAdapter = (() => {
-        const scan = async (directory, excludes, currentPath = '') => {
+        const scan = async (directory, excludes, currentPath = '', side = '', rootName = directory.name) => {
             const files = new Map();
             const directories = new Set();
-            for await (const entry of directory.values()) {
-                const path = currentPath ? `${currentPath}/${entry.name}` : entry.name;
-                safeSegments(path);
-                if (entry.kind === 'file') {
-                    const file = await entry.getFile();
-                    files.set(path, { kind: 'file', name: entry.name, path, size: file.size, lastModified: file.lastModified, handle: entry });
-                } else if (!excludes.includes(entry.name)) {
-                    directories.add(path);
-                    const nested = await scan(entry, excludes, path);
-                    for (const [key, value] of nested.files) files.set(key, value);
-                    for (const nestedPath of nested.directories) directories.add(nestedPath);
+            let context = { stage: 'scan', operation: 'values', side, rootName, path: currentPath };
+            try {
+                for await (const entry of directory.values()) {
+                    const path = currentPath ? `${currentPath}/${entry.name}` : entry.name;
+                    context = { stage: 'scan', operation: 'validate-path', side, rootName, path };
+                    safeSegments(path);
+                    if (entry.kind === 'file') {
+                        context.operation = 'getFile';
+                        const file = await entry.getFile();
+                        files.set(path, { kind: 'file', name: entry.name, path, size: file.size, lastModified: file.lastModified, handle: entry, side, rootName });
+                    } else if (!excludes.includes(entry.name)) {
+                        directories.add(path);
+                        const nested = await scan(entry, excludes, path, side, rootName);
+                        for (const [key, value] of nested.files) files.set(key, value);
+                        for (const nestedPath of nested.directories) directories.add(nestedPath);
+                    }
+                    context = { stage: 'scan', operation: 'values', side, rootName, path: currentPath };
                 }
-            }
+            } catch (error) { throw comparisonError(error, context); }
             return { files, directories };
         };
-        const compareContent = async (source, target, onProgress, isCancelled) => {
+        const compareContent = async (source, target, onProgress, isCancelled, stage = 'compare-content') => {
             if (source.size !== target.size) return false;
-            const [sourceFile, targetFile] = await Promise.all([source.handle.getFile(), target.handle.getFile()]);
+            const contexts = [source, target].map(file => ({ stage, operation: 'getFile', side: file.side, rootName: file.rootName, path: file.path }));
+            const [sourceFile, targetFile] = await Promise.all([
+                comparisonRead(contexts[0], () => source.handle.getFile()),
+                comparisonRead(contexts[1], () => target.handle.getFile()),
+            ]);
             if (sourceFile.size !== source.size || targetFile.size !== target.size
                 || sourceFile.lastModified !== source.lastModified || targetFile.lastModified !== target.lastModified
                 || sourceFile.size !== targetFile.size) return false;
-            return equalFileBytes(sourceFile, targetFile, onProgress, isCancelled);
+            return equalFileBytes(sourceFile, targetFile, onProgress, isCancelled, contexts);
         };
         const verifyRenameMatches = async (actions, files, isCancelled) => {
             const trashes = actions.filter((action) => action.type === 'trash');
@@ -1910,7 +2009,7 @@
                     if (trash.side !== copy.toSide) continue;
                     const copyFile = files[copy.fromSide].get(copy.sourcePath);
                     if (!copyFile || Number(trashFile.size) !== Number(copyFile.size)) continue;
-                    if (await compareContent(trashFile, copyFile, () => {}, isCancelled)) {
+                    if (await compareContent(trashFile, copyFile, () => {}, isCancelled, 'rename-detection')) {
                         matches.push({ trashIndex, copyIndex, key: renameMatchKey(trash, copy) });
                     }
                 }
@@ -2027,6 +2126,7 @@
     };
 
     const model = {
+        comparisonDiagnostic: null,
         versionBusy: false, appOperation: false,
         state: StateStore.load(), showChangedOnly: sessionStorage.getItem(SHOW_CHANGED_ONLY_KEY) === 'true', source: null, target: null, profile: null, trustedProfile: false, sourceFiles: new Map(), targetFiles: new Map(), sourceDirectories: new Set(), targetDirectories: new Set(), plan: null, phase: 'idle', abortRequested: false, profileConnectionPending: false, logs: [], advancedExpanded: null, selectedRun: null, runDetailPage: 0, runDetailTrigger: null,
     };
@@ -2540,14 +2640,21 @@
         };
         const compare = async () => {
             if (!model.profile || !model.source || !model.target) return;
+            model.comparisonDiagnostic = null;
+            $('#btnDownloadDiagnostic').disabled = true;
+            const startedAt = nowIso();
+            let scanFailures = [];
             model.abortRequested = false;
             setPhase('comparing'); setStatus(t('comparing'), 'info', 'compare'); elements.progress.dataset.visible = 'false';
             try {
                 const excludes = normalizeExcludes(elements.excludes.value);
-                const [sourceScan, targetScan] = await Promise.all([
-                    FileAdapter.scan(model.source, excludes),
-                    FileAdapter.scan(model.target, excludes),
+                const scans = await Promise.allSettled([
+                    FileAdapter.scan(model.source, excludes, '', 'source'),
+                    FileAdapter.scan(model.target, excludes, '', 'target'),
                 ]);
+                scanFailures = scans.filter(result => result.status === 'rejected').map(result => result.reason);
+                if (scanFailures.length) throw scanFailures[0];
+                const [sourceScan, targetScan] = scans.map(result => result.value);
                 applyScans(sourceScan, targetScan);
                 if (model.abortRequested) throw new DOMException('Comparison stopped', 'AbortError');
                 const contentEquality = new Map();
@@ -2584,7 +2691,20 @@
                 if (error?.name === 'AbortError' && model.abortRequested) {
                     elements.progress.dataset.visible = 'false'; setPhase('ready'); setStatus(t('compareStopped'), 'warning', 'stop'); addLog(t('compareStopped'));
                 } else {
-                    setPhase('error'); setStatus(t('compareFailed', { message: safeMessage(error) }), 'danger', 'alert'); addLog(t('compareFailed', { message: safeMessage(error) }));
+                    const errors = (scanFailures.length ? scanFailures : [error]).map(diagnosticFailure);
+                    model.comparisonDiagnostic = {
+                        schemaVersion: 1, version: DEBUG_VERSION, status: 'failed', startedAt, endedAt: nowIso(),
+                        browser: { userAgent: navigator.userAgent, language: navigator.language },
+                        comparisonMode: elements.comparison.value, direction: elements.direction.value,
+                        excludes: normalizeExcludes(elements.excludes.value), errors,
+                        note: 'Paths are relative to selected roots. Filename observations are not proof of the cause. File contents are not included.',
+                    };
+                    $('#btnDownloadDiagnostic').disabled = false;
+                    const detail = errors.map(failure => {
+                        const recovery = filenameRecovery(failure);
+                        return `[${failure.side || '?'} · ${failure.stage}/${failure.operation} · ${JSON.stringify(failure.path ?? '')}] ${failure.name}: ${failure.message}${recovery ? `\n${recovery}` : ''}`;
+                    }).join('\n');
+                    setPhase('error'); setStatus(t('compareFailed', { message: detail }), 'danger', 'alert'); addLog(t('compareFailed', { message: detail }));
                 }
             } finally { model.abortRequested = false; renderControls(); }
         };
@@ -3394,6 +3514,9 @@
         model.state.ui = { advancedExpanded: model.advancedExpanded };
         StateStore.save(model.state);
         renderAdvancedControls();
+    });
+    $('#btnDownloadDiagnostic').addEventListener('click', () => {
+        if (model.comparisonDiagnostic) downloadJson(model.comparisonDiagnostic, `file-nally-diagnostic-${runStamp()}.json`);
     });
     elements.btnCompare.addEventListener('click', Controller.compare);
     elements.btnSync.addEventListener('click', Controller.sync);
