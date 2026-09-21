@@ -1,6 +1,6 @@
 # File-nally
 
-**Beta v0.15.1** · [English manual](docs/README_en.md)
+**Beta v0.15.2** · [English manual](docs/README_en.md)
 
 비교 오류 진단·파일명 복구 안내: [사용 방법](docs/DEBUG-COMPARISON.md)
 

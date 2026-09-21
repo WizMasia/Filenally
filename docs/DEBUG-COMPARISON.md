@@ -1,4 +1,4 @@
-# 변경사항 비교 진단 — v0.15.1
+# 변경사항 비교 진단 — v0.15.2
 
 특정 폴더에서 변경사항 비교가 실패할 때 오류 위치와 파일명 특성을 확인하는 진단 기능입니다. 파일명 특이점이 발견되어도 오류 원인으로 확정하지 않습니다.
 
@@ -47,3 +47,47 @@ JSON에는 각 `segments` 항목의 `longName`, `percentEncoded`, `decodedPrevie
 ### Filename recovery guidance (English)
 
 Comparison errors now show advisory observations for long names (240 UTF-16 units), long relative paths (260 units), percent-encoding patterns and Windows naming restrictions. These are not confirmed causes or universal filesystem limits. The absolute path above the selected root is unavailable. Decoded previews are display-only and may contain unsafe filename characters; they are not rename suggestions. Malformed encodings are preserved. Try an unchanged-name copy under a shorter parent path, or manually give a copy a short valid name and reselect/recompare. Failed comparisons still discard the plan and block synchronization.
+
+
+## Windows 실제 파일 재현 결과 (이슈 #18)
+
+[이슈 #18](https://github.com/WizMasia/Filenally/issues/18)의 재발 오류를 합성 파일로 조사했습니다. 사용자 원본 경로와 개인정보는 재현 코드에 포함하지 않았습니다. `_D__` 접두부는 Windows에서 사용할 수 있으며, 최초 메시지의 `*D*` 표기는 실제 별표로 확정하지 않습니다.
+
+Windows 10.0.26100 / Chrome 152.0.7977.83에서 `LongPathsEnabled=1`인 상태로 다음 결과를 얻었습니다. 길이는 UTF-16 단위입니다.
+
+| 조건 | 절대 경로 길이 | Node 파일 읽기 | Chrome `getFile()` |
+| --- | ---: | --- | --- |
+| 짧은 이름, 불완전한 `%EC%` 포함 | 37 | 성공 | 성공 |
+| 210단위 퍼센트 형태 이름, 짧은 상위 경로 | 231 | 성공 | 성공 |
+| 같은 이름, 상대 경로 262단위 | 283 | 성공 | `NotFoundError` |
+| 완전한 퍼센트 형태 이름, 상대 경로 262단위 | 283 | 성공 | `NotFoundError` |
+| 일반 영문 이름, 상대 경로 262단위 | 283 | 성공 | `NotFoundError` |
+
+이 실험은 경로 길이에 따른 실패를 재현합니다. 정확한 경계 길이, 모든 Windows/브라우저 버전 또는 사용자 원본 파일의 원인을 확정하는 시험은 아닙니다. 퍼센트 디코딩 실패는 진단 관찰이며, 해당 실험의 파일 접근 실패 원인이 아닙니다. 레지스트리 설정만 바꾸면 해결된다는 결론도 낼 수 없습니다.
+
+재현 스크립트: `node tests/windows-path-probe.cjs` (Node 및 `npm ci`, 설치된 Chrome 필요). 실제 임시 디렉터리와 CDP 드롭 이벤트로 얻은 네이티브 핸들을 사용합니다. OPFS나 모의 파일 핸들이 아닙니다. 임시 합성 파일 및 Windows 임시 드라이브 연결을 만들고 종료 시 정리합니다. 결과는 `artifacts/issue-18/native-<platform>.json`에 저장합니다. 파일별 실패는 관찰값이므로 **CI 성공이 모든 파일 읽기 성공을 뜻하지 않습니다.**
+
+[원래 경로 시험](https://github.com/WizMasia/Filenally/actions/runs/35563195979), [드라이브 별칭 시험](https://github.com/WizMasia/Filenally/actions/runs/35563397409)에서 원래 절대 경로 283단위의 세 파일은 실패했고, 파일명을 유지한 채 `subst`로 가까운 상위 폴더를 연결한 213단위 별칭 경로에서는 세 파일 모두 내용을 읽었습니다.
+
+[하위 폴더 별칭 시험](https://github.com/WizMasia/Filenally/actions/runs/35563651473)에서도 드라이브 바로 아래 하위 폴더를 통한 231단위 경로로 세 파일 모두 읽었습니다. 이 시험 역시 폴더 선택 창 대신 드롭 이벤트로 핸들을 얻었습니다.
+
+### 파일명을 유지하는 우회 후보
+
+`subst`는 폴더를 드라이브 문자에 연결합니다. 실제 파일을 복사하거나 이름을 바꾸지 않습니다. 앱의 `showDirectoryPicker()`와 실제 동기화는 이 드롭 핸들 실험과 별도 검증이 필요합니다. 우선 **변경사항 비교만** 확인하세요.
+
+1. 사용하지 않는 드라이브 문자를 확인합니다. 아래 `X:`는 예시입니다.
+2. 명령 프롬프트에서 문제가 있는 폴더의 **바로 위 폴더**를 연결합니다. 경로는 실제 값으로 바꿉니다.
+
+   ```bat
+   subst X: "C:\실제\긴\상위폴더"
+   ```
+
+3. 앱에서 `X:\문서 작업`처럼 드라이브 아래 해당 하위 폴더를 새로 선택합니다. 상대 경로만 이미 262단위인 기존 최상위 폴더를 연결하면 충분히 짧아지지 않습니다. 필요한 경우 비교 범위를 하위 폴더로 좁히고 **대상도 정확히 대응하는 하위 폴더**를 선택하세요.
+4. 비교 결과와 범위를 확인합니다. 별칭은 같은 실제 파일을 가리키므로 동기화를 실행하면 원본 위치에 반영됩니다. 이 시험은 쓰기·삭제·이름 변경 성공을 보장하지 않습니다.
+5. 사용을 마친 뒤 연결을 해제합니다. 해제 후에는 해당 핸들을 다시 사용하지 말고 폴더를 새로 선택합니다.
+
+   ```bat
+   subst X: /D
+   ```
+
+명령 구문: [Microsoft `subst` 문서](https://learn.microsoft.com/en-us/windows-server/administration/windows-commands/subst). 웹 앱이 드라이브 연결 명령을 직접 실행하거나 불투명한 파일 핸들에 Windows 경로 접두부를 붙일 수는 없습니다. v0.15.2는 재현 결과와 우회 절차를 정리한 릴리즈이며 앱의 자동 복구 수정은 포함하지 않습니다. 사용자 요청에 따라 이슈 #18은 임시 종결합니다. 실제 사용자 환경 검증은 보류 상태이며 같은 문제가 발생하면 새 이슈에서 이어갑니다.

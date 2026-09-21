@@ -1,6 +1,6 @@
 # File-nally
 
-**Beta v0.15.1** · [한국어 메인 설명서](../README.md)
+**Beta v0.15.2** · [한국어 메인 설명서](../README.md)
 
 Comparison diagnostics and filename recovery guidance: [Usage guide](DEBUG-COMPARISON.md)
 
