@@ -35,7 +35,7 @@
             <span class="brand-mark"><svg class="icon" aria-hidden="true"><use href="#icon-sync"></use></svg></span>
             <div class="brand-copy">
                 <h1>File-nally</h1>
-                <div class="version">Beta v0.15.0</div>
+                <div class="version">Beta v0.15.1-debug.1</div>
             </div>
         </div>
         <div class="header-actions">
@@ -169,6 +169,7 @@
         <section id="activityResults" class="history-grid" aria-label="동기화 기록">
             <article class="panel">
                 <div class="panel-header"><h2 class="panel-title"><svg class="icon" aria-hidden="true"><use href="#icon-info"></use></svg><span data-i18n="logTitle">실시간 로그</span></h2><span id="phaseLabel" class="count" data-i18n="idle">대기</span></div>
+                <button id="btnDownloadDiagnostic" type="button" data-i18n="downloadDiagnostic" disabled>진단 JSON 다운로드</button>
                 <div id="logBox" class="log-box" role="log" aria-live="polite"></div>
             </article>
             <article class="panel history-panel">

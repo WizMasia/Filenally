@@ -302,6 +302,76 @@ async function main() {
     if (!NAME_FILTER || NAME_FILTER.test(name)) tests.push({ name, run });
   };
 
+  for (const scenario of [
+    { name: 'nested enumeration', side: 'target', operation: 'values', entry: 'broken', path: 'outer/broken', stage: 'scan', occurrence: 1 },
+    { name: 'filename read', side: 'source', operation: 'getFile', entry: '\u1100\u1161\u200b.txt ', path: 'outer/\u1100\u1161\u200b.txt ', stage: 'scan', occurrence: 1 },
+    { name: 'exact content read', side: 'target', operation: 'getFile', entry: 'same.txt', path: 'outer/same.txt', stage: 'compare-content', occurrence: 4 },
+    { name: 'exact byte read', side: 'target', operation: 'arrayBuffer', entry: 'same.txt', path: 'outer/same.txt', stage: 'compare-content', occurrence: 2 },
+  ]) {
+    add(`comparison diagnostic reports ${scenario.name} without changing files`, async ({ page }) => {
+      const entries = { broken: { type: 'directory', entries: {} }, '\u1100\u1161\u200b.txt ': { content: 'PRIVATE_FILE_CONTENT' }, 'same.txt': { content: 'same', lastModified: 10 } };
+      const pair = { source: {}, target: {} };
+      pair[scenario.side] = { outer: { type: 'directory', entries } };
+      if (scenario.stage === 'compare-content') pair.source = { outer: { type: 'directory', entries: { 'same.txt': { content: 'same', lastModified: 10 } } } };
+      await mountPair(page, pair);
+      if (scenario.stage === 'compare-content') await selectExactComparison(page);
+      const before = await snapshotMockPair(page);
+      await page.evaluate(rule => window.__setMockFailure(rule), { operation: scenario.operation, name: scenario.entry, occurrence: scenario.occurrence });
+      await page.locator('#btnCompare').click();
+      await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'error');
+      assert.match(await page.locator('#logBox').innerText(), new RegExp(scenario.operation));
+      assert.equal(await page.locator('#btnSync').isDisabled(), true);
+      if (VISUAL && scenario.name === 'filename read') {
+        await fs.mkdir(path.join(ROOT, 'artifacts', 'visual'), { recursive: true });
+        for (const width of [1280, 390]) {
+          await page.setViewportSize({ width, height: 900 });
+          assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+          await page.locator('#btnDownloadDiagnostic').scrollIntoViewIfNeeded();
+          await page.screenshot({ path: path.join(ROOT, 'artifacts', 'visual', `diagnostic-${width}.png`) });
+        }
+      }
+      const pending = page.waitForEvent('download');
+      await page.getByRole('button', { name: '진단 JSON 다운로드' }).click();
+      const text = await downloadText(await pending);
+      const report = JSON.parse(text);
+      assert.equal(report.status, 'failed');
+      assert.ok(report.browser.userAgent);
+      const failure = report.errors[0];
+      assert.equal(failure.side, scenario.side);
+      assert.equal(failure.path, scenario.path);
+      assert.equal(failure.stage, scenario.stage);
+      assert.equal(failure.operation, scenario.operation);
+      assert.equal(failure.name, 'NotFoundError');
+      if (scenario.name === 'filename read') {
+        const name = failure.segments.at(-1);
+        assert.equal(name.nfcDiffers, true);
+        assert.equal(name.trailingWhitespace, true);
+        assert.ok(name.codePoints.includes('U+200B'));
+        assert.ok(name.invisibleCodePoints.includes('U+200B'));
+      }
+      assert.equal(text.includes('PRIVATE_FILE_CONTENT'), false);
+      assert.deepEqual(await snapshotMockPair(page), before);
+      await page.evaluate(() => { window.__mockFailure = null; });
+      await compare(page);
+      assert.equal(await page.getByRole('button', { name: '진단 JSON 다운로드' }).isDisabled(), true);
+    });
+  }
+
+  add('comparison diagnostic identifies rename candidate read failure', async ({ page }) => {
+    await planRename(page);
+    await page.evaluate(() => window.__setMockFailure({ operation: 'getFile', name: 'original.txt', occurrence: 2 }));
+    await page.locator('#btnCompare').click();
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'error');
+    const pending = page.waitForEvent('download');
+    await page.getByRole('button', { name: '진단 JSON 다운로드' }).click();
+    const report = JSON.parse(await downloadText(await pending));
+    assert.equal(report.errors[0].stage, 'rename-detection');
+    assert.equal(report.errors[0].side, 'target');
+    assert.equal(report.errors[0].path, 'original.txt');
+    assert.equal(report.errors[0].operation, 'getFile');
+    assert.equal(await page.locator('#btnSync').isDisabled(), true);
+  });
+
   add('version comparison UI is explicit and preserves files and sync state', async ({ page }) => {
     await mountVersion(page);
     await compare(page);
@@ -4702,7 +4772,7 @@ async function main() {
       background: getComputedStyle(document.body).backgroundColor,
       errors: window.__testUnhandledErrors || [],
     }));
-    assert.equal(result.version, 'Beta v0.15.0');
+    assert.equal(result.version, 'Beta v0.15.1-debug.1');
     assert.equal(result.background, 'rgb(244, 246, 250)');
     assert.deepEqual(result.errors, []);
   });
