@@ -5,12 +5,13 @@ const fs = require('node:fs/promises');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const { execFileSync } = require('node:child_process');
 
 async function main() {
   const output = path.resolve('artifacts/issue-18');
   await fs.mkdir(output, { recursive: true });
   const root = await fs.mkdtemp(path.join(process.env.RUNNER_TEMP || os.tmpdir(), 'fn-'));
-  let server, browser;
+  let server, browser, aliasDrive;
   try {
     const suffix = '%EC% (7).png';
     const prefix = '_D__' + '%EA%B0%80'.repeat(21);
@@ -87,11 +88,33 @@ async function main() {
     }
     await page.waitForFunction(() => window.probe !== undefined, null, { timeout: 15000 });
     const observed = await page.evaluate(() => window.probe);
+    let aliasProbe = null;
+    if (process.platform === 'win32') {
+      // Only this disposable runner is affected; never replace an occupied drive.
+      for (const letter of ['Z', 'Y', 'X', 'W', 'V']) {
+        const drive = `${letter}:`;
+        try { await fs.stat(`${drive}\\`); continue; }
+        catch (error) { if (error.code !== 'ENOENT') continue; }
+        try {
+          execFileSync('subst.exe', [drive, path.join(root, ...parents)]);
+          aliasDrive = drive;
+          break;
+        } catch { /* Try another free drive without replacing mappings. */ }
+      }
+      if (aliasDrive) {
+        await page.evaluate(() => { delete window.probe; });
+        for (const type of ['dragEnter', 'dragOver', 'drop']) {
+          await cdp.send('Input.dispatchDragEvent', { type, x: 100, y: 100, data: { items: [], files: [`${aliasDrive}\\`], dragOperationsMask: 1 } });
+        }
+        await page.waitForFunction(() => window.probe !== undefined, null, { timeout: 15000 });
+        aliasProbe = { method: 'subst to deep parent', aliasLeafPathLength: 3 + encoded.length, result: await page.evaluate(() => window.probe) };
+      } else aliasProbe = { error: 'No available drive alias' };
+    }
     const report = {
       platform: process.platform, osRelease: os.release(), chrome: await browser.version(),
       storage: 'native temporary directory, not OPFS', longPathsEnabled: process.env.PROBE_LONG_PATHS_ENABLED ?? null,
       cases: cases.map(item => ({ ...item, browser: observed.files.find(file => file.path === item.relativePath) || { status: 'not-enumerated' } })),
-      enumerationErrors: observed.enumerationErrors,
+      enumerationErrors: observed.enumerationErrors, aliasProbe,
     };
     await fs.writeFile(path.join(output, `native-${process.platform}.json`), JSON.stringify(report, null, 2));
     console.log(JSON.stringify(report, null, 2));
@@ -100,6 +123,7 @@ async function main() {
     }
   } finally {
     if (browser) await browser.close();
+    if (aliasDrive) execFileSync('subst.exe', [aliasDrive, '/D']);
     if (server?.listening) await new Promise(resolve => server.close(resolve));
     await fs.rm(root, { recursive: true, force: true });
   }
