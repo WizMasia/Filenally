@@ -115,6 +115,7 @@ select, input[type="text"] { width: 100%; min-height: 40px; border: 1px solid va
 .primary-actions { margin-top: var(--space-4); padding-top: var(--space-4); border-top: 1px solid var(--border-default); }
 
 .status-banner { display: flex; align-items: flex-start; gap: var(--space-2); min-height: 44px; margin-top: var(--space-4); border: 1px solid var(--border-default); border-radius: var(--radius-md); padding: var(--space-3); background: var(--surface-subtle); color: var(--text-secondary); }
+#syncStatusText { min-width: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
 .status-banner[data-tone="info"] { border-color: #b2ddff; background: var(--status-info-soft); color: var(--status-info); }
 .status-banner[data-tone="success"] { border-color: #abefc6; background: var(--status-success-soft); color: var(--status-success); }
 .status-banner[data-tone="warning"] { border-color: #fedf89; background: var(--status-warning-soft); color: var(--status-warning); }

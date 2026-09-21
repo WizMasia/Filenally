@@ -357,6 +357,84 @@ async function main() {
     });
   }
 
+  for (const lang of ['ko', 'en']) {
+    for (const sample of [
+      { id: 'percent-long', name: '%ED%95%9C'.repeat(27) + '.txt', long: true, encoded: true, decoded: '한'.repeat(27) + '.txt', issues: [] },
+      { id: 'literal-dollar', name: '%24%26.txt', long: false, encoded: true, decoded: '$&.txt', issues: [] },
+      { id: 'literal-placeholder', name: '%41{preview}.txt', long: false, encoded: true, decoded: 'A{preview}.txt', issues: [] },
+      { id: 'malformed-percent', name: '%E0%A4.txt', long: false, encoded: true, decoded: null, issues: [] },
+      { id: 'unsafe-decoded-preview', name: '%2F%00%3Cimg%3E.txt', long: false, encoded: true, decoded: '/\u0000<img>.txt', issues: [] },
+      { id: 'windows-characters', name: 'bad:name?.txt ', long: false, encoded: false, decoded: null, issues: ['restricted-character', 'trailing-dot-space'] },
+      { id: 'windows-backslash', name: 'bad\\name.txt', long: false, encoded: false, decoded: null, issues: ['restricted-character'] },
+      { id: 'windows-reserved', name: 'COM¹.txt', long: false, encoded: false, decoded: null, issues: ['reserved-name'] },
+      { id: 'valid-unicode', name: '한글😀.txt', long: false, encoded: false, decoded: null, issues: [] },
+    ]) {
+      add(`filename recovery ${lang} explains ${sample.id} without renaming or skipping`, async ({ page }) => {
+        await page.locator(lang === 'ko' ? '#btnLangKo' : '#btnLangEn').click();
+        await mountPair(page, { source: { [sample.name]: { content: 'UNCHANGED' } }, target: {} });
+        const before = await snapshotMockPair(page);
+        await page.evaluate(name => window.__setMockFailure({ operation: 'getFile', name }), sample.name);
+        await page.locator('#btnCompare').click();
+        await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'error');
+        const pending = page.waitForEvent('download');
+        await page.locator('#btnDownloadDiagnostic').click();
+        const failure = JSON.parse(await downloadText(await pending)).errors[0];
+        const segment = failure.segments.at(-1);
+        assert.equal(segment.longName, sample.long);
+        assert.equal(segment.percentEncoded, sample.encoded);
+        assert.equal(segment.decodedPreview, sample.decoded);
+        assert.deepEqual(segment.windowsIssues, sample.issues);
+        assert.equal(failure.absolutePathKnown, false);
+        assert.equal(failure.pathLengthWarning, false);
+        const log = await page.locator('#logBox').innerText();
+        if (sample.long) assert.match(log, lang === 'ko' ? /짧은.*경로/ : /shorter.*path/i);
+        if (sample.encoded) {
+          assert.match(log, lang === 'ko' ? /퍼센트 인코딩/ : /percent.encoding/i);
+          if (sample.decoded !== null) {
+            assert.ok(log.includes(JSON.stringify(sample.decoded)));
+            assert.ok(log.includes(`${lang === 'ko' ? '퍼센트 인코딩 형태' : 'Percent-encoding pattern'}: ${JSON.stringify(sample.name)}`));
+          }
+          else assert.match(log, lang === 'ko' ? /디코딩할 수 없/ : /cannot decode/i);
+        }
+        if (sample.issues.length) assert.match(log, lang === 'ko' ? /Windows.*이름/ : /Windows.*name/i);
+        assert.equal(await page.locator('#logBox img').count(), 0);
+        assert.equal(await page.locator('#btnSync').isDisabled(), true);
+        assert.deepEqual(await snapshotMockPair(page), before);
+        if (VISUAL && sample.id === 'percent-long') {
+          await fs.mkdir(path.join(ROOT, 'artifacts', 'issue-16'), { recursive: true });
+          for (const width of [390, 1280]) {
+            await page.setViewportSize({ width, height: 900 });
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+            await page.locator('#logBox').scrollIntoViewIfNeeded();
+            await page.screenshot({ path: path.join(ROOT, 'artifacts', 'issue-16', `recovery-${lang}-${width}.png`) });
+          }
+        }
+        await page.evaluate(() => { window.__mockFailure = null; });
+        await page.locator('#btnCompare').click();
+        await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'planned');
+        const actions = await page.evaluate(() => window.FileNallyTest.getModel().plan.actions);
+        assert.ok(actions.some(action => action.sourcePath === sample.name && action.destinationPath === sample.name));
+        assert.deepEqual(await snapshotMockPair(page), before);
+      });
+    }
+  }
+
+  add('filename recovery distinguishes relative path length from unknown absolute path', async ({ page }) => {
+    const dir = 'a'.repeat(130), name = 'b'.repeat(130) + '.txt';
+    await mountPair(page, { source: { [dir]: { type: 'directory', entries: { [name]: { content: 'same' } } } }, target: {} });
+    await page.evaluate(name => window.__setMockFailure({ operation: 'getFile', name }), name);
+    await page.locator('#btnCompare').click();
+    await page.waitForFunction(() => window.FileNallyTest.getModel().phase === 'error');
+    const pending = page.waitForEvent('download');
+    await page.locator('#btnDownloadDiagnostic').click();
+    const failure = JSON.parse(await downloadText(await pending)).errors[0];
+    assert.equal(failure.pathLengthWarning, true);
+    assert.equal(failure.absolutePathKnown, false);
+    assert.ok(failure.segments.every(segment => segment.longName === false));
+    assert.match(await page.locator('#logBox').innerText(), /절대 경로.*알 수 없/);
+    assert.equal(await page.locator('#btnSync').isDisabled(), true);
+  });
+
   add('comparison diagnostic identifies rename candidate read failure', async ({ page }) => {
     await planRename(page);
     await page.evaluate(() => window.__setMockFailure({ operation: 'getFile', name: 'original.txt', occurrence: 2 }));

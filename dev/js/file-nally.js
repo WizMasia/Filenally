@@ -42,6 +42,16 @@
             sourceTitle: '원본 폴더', targetTitle: '대상 폴더', showChangedOnly: '변경된 항목만 보기', pathHead: '항목명과 경로', sizeHead: '크기', dateHead: '수정일', stateHead: '상태', logTitle: '실시간 로그', idle: '대기', historyTitle: '동기화 이력', clearHistory: '이력 초기화', timeHead: '실행 시간', directionHead: '방향', processedHead: '처리',
             disclaimer: '중요한 데이터는 동기화 전에 별도로 백업하세요. 브라우저와 운영체제의 파일 권한 또는 예기치 않은 중단으로 인한 손실 가능성이 있습니다.',
             emptyFiles: '표시할 항목이 없습니다.', emptyChangedFiles: '변경된 항목이 없습니다.', emptyHistory: '기록된 동기화 이력이 없습니다.', selected: '{name} 선택됨', pairReady: '폴더 쌍이 확인되었습니다. 변경사항을 비교할 수 있습니다.', sameFolder: '같은 폴더를 원본과 대상으로 사용할 수 없습니다.', nestedFolder: '한 폴더가 다른 폴더 안에 있습니다. 중첩 폴더는 동기화할 수 없습니다.', pickCancelled: '폴더 선택이 취소되었습니다.', pickFailed: '폴더를 선택하지 못했습니다: {message}',
+            filenameObservations: '파일명 관찰 정보 — 원인은 아직 확정되지 않았습니다.',
+            filenameLong: '긴 이름 후보: {name} ({count} UTF-16 단위). 240 이상은 참고 기준이며 파일시스템의 제한값이 아닙니다.',
+            filenamePercent: '퍼센트 인코딩 형태: {name}. 디코딩 미리보기(실제 이름 변경 없음): {preview}',
+            filenameDecodeFailed: '퍼센트 인코딩 형태: {name}. 완전한 UTF-8 퍼센트 문자열로 디코딩할 수 없습니다.',
+            filenameWindows: 'Windows 이름 제약 확인: {name} — {reasons}',
+            filenameRestricted: '제한 문자', filenameTrailing: '끝 공백·점', filenameReserved: '예약 장치 이름',
+            filenamePathLength: '상대 경로만 {count} UTF-16 단위입니다. 일부 Windows API의 전체 경로 제한에 닿을 가능성이 있습니다.',
+            filenameAbsoluteUnknown: '선택 폴더 위의 절대 경로는 알 수 없습니다. 표시한 길이만으로 전체 경로 제한 여부를 판정할 수 없습니다.',
+            filenameShortPath: '원본을 보존하고 같은 이름의 복사본을 더 짧은 상위 경로에 두어 비교해 보세요.',
+            filenameRenameAdvice: '필요하면 복사본의 이름을 탐색기에서 짧고 유효한 이름으로 변경한 뒤 폴더를 다시 선택하고 비교하세요. 디코딩 미리보기는 유효한 파일명 제안이 아닙니다.',
             downloadDiagnostic: '진단 JSON 다운로드',
             comparing: '폴더를 검사하고 변경 계획을 계산하는 중입니다.', compareStopping: '현재 파일 비교를 마친 뒤 중지합니다.', compareStopped: '파일 비교가 중지되었습니다.', compareDone: '비교 완료 · 실행할 작업 {count}건', compareNone: '비교 완료 · 실행할 변경사항이 없습니다.', compareFailed: '비교 중 오류가 발생했습니다: {message}',
             syncing: '동기화 실행 중 · {current}/{total}', syncDone: '동기화 완료 · {count}건 처리', syncAborted: '동기화가 안전하게 중단되었습니다. {count}건 처리됨', syncFailed: '동기화 중 오류가 발생했습니다: {message}', aborting: '현재 파일 작업을 마친 뒤 중단합니다.',
@@ -70,6 +80,16 @@
             profileNone: 'No synchronization profile is selected.', profileUnverified: 'Folder pair unverified', profileVerified: 'Folder pair verified', profileLabel: '{source} ⇄ {target}',
             directionLabel: 'Synchronization direction', directionBoth: 'Bidirectional (Source ⇄ Target)', directionOne: 'One-way (Source → Target)', directionReverse: 'Reverse (Target → Source)', policyLabel: 'Conflict policy', policyLatest: 'Keep the latest file', policySource: 'Source wins conflicts', policySkip: 'Skip existing files', policyRename: 'Rename and preserve both versions', comparisonLabel: 'Comparison mode', comparisonQuick: 'Quick comparison (size + modified time, default)', comparisonExact: 'Exact comparison (byte-by-byte, slower)', excludeLabel: 'Excluded directory names',
             defaultJson: 'Default JSON', exportJson: 'Back up JSON', importJson: 'Restore JSON', compare: 'Compare changes', sync: 'Run synchronization', abort: 'Stop safely', waiting: 'Select both folders to begin.', preparing: 'Preparing',
+            filenameObservations: 'Filename observations — the cause is not confirmed.',
+            filenameLong: 'Long name candidate: {name} ({count} UTF-16 units). 240 is an advisory threshold, not a filesystem limit.',
+            filenamePercent: 'Percent-encoding pattern: {name}. Decoded preview (actual name unchanged): {preview}',
+            filenameDecodeFailed: 'Percent-encoding pattern: {name}. Cannot decode as a complete UTF-8 percent-encoded string.',
+            filenameWindows: 'Check Windows name restrictions: {name} — {reasons}',
+            filenameRestricted: 'restricted character', filenameTrailing: 'trailing space or dot', filenameReserved: 'reserved device name',
+            filenamePathLength: 'The relative path alone is {count} UTF-16 units. It may reach a full-path limit in some Windows APIs.',
+            filenameAbsoluteUnknown: 'The absolute path above the selected folder is unknown. The displayed length cannot determine the full-path limit.',
+            filenameShortPath: 'Preserve the original and compare a copy with the same name under a shorter parent path.',
+            filenameRenameAdvice: 'If needed, give a copy a short valid name in File Explorer, then reselect the folders and compare again. The decoded preview is not a valid-filename suggestion.',
             downloadDiagnostic: 'Download diagnostic JSON',
             sourceTitle: 'Source folder', targetTitle: 'Target folder', showChangedOnly: 'Show changed items only', pathHead: 'Item and path', sizeHead: 'Size', dateHead: 'Modified', stateHead: 'Status', logTitle: 'Live log', idle: 'Idle', historyTitle: 'Synchronization history', clearHistory: 'Clear history', timeHead: 'Run time', directionHead: 'Direction', processedHead: 'Processed',
             disclaimer: 'Back up important data before synchronization. Browser or operating-system permissions and unexpected interruption can still cause data loss.',
@@ -97,7 +117,7 @@
         const normalized = values.map((item) => String(item).trim()).filter((item) => item && !RESERVED_EXCLUDES.includes(item));
         return [...new Set(normalized)].slice(0, 100).concat(RESERVED_EXCLUDES);
     };
-    const format = (template, values = {}) => Object.entries(values).reduce((text, [key, value]) => text.replaceAll(`{${key}}`, String(value)), template);
+    const format = (template, values = {}) => template.replace(/\{([^{}]+)\}/g, (match, key) => Object.hasOwn(values, key) ? String(values[key]) : match);
     const safeMessage = (error) => error instanceof Error || error instanceof DOMException ? error.message : String(error || 'Unknown error');
     const safeSegments = (path) => {
         const parts = String(path).split('/');
@@ -158,15 +178,48 @@
         return {
             ...context, name: error?.name || 'Error', message: safeMessage(error), stack: error?.stack || '',
             pathUtf16Length: path.length, pathUtf8Bytes: new TextEncoder().encode(path).length,
-            segments: path ? path.split('/').map(name => ({
-                name, escaped: JSON.stringify(name), utf16Length: name.length,
-                utf8Bytes: new TextEncoder().encode(name).length,
-                codePoints: Array.from(name, codePoint),
-                nfcDiffers: name !== name.normalize('NFC'), nfdDiffers: name !== name.normalize('NFD'),
-                trailingWhitespace: /\s$/u.test(name), trailingDot: name.endsWith('.'),
-                invisibleCodePoints: Array.from(name).filter(char => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(char)).map(codePoint),
-            })) : [],
+            absolutePathKnown: false,
+            // Advisory signals only: the actual absolute path and filesystem limits are unavailable.
+            pathLengthWarning: path.length >= 260,
+            segments: path ? path.split('/').map(name => {
+                const percentEncoded = /%[0-9a-f]{2}/i.test(name);
+                let decodedPreview = null;
+                if (percentEncoded) {
+                    try { decodedPreview = decodeURIComponent(name); } catch { /* Keep malformed names unchanged. */ }
+                }
+                const windowsIssues = [];
+                if (/[<>:"\\|?*\x00-\x1F]/u.test(name)) windowsIssues.push('restricted-character');
+                if (/[ .]$/u.test(name)) windowsIssues.push('trailing-dot-space');
+                if (/^(CON|PRN|AUX|NUL|COM[1-9¹²³]|LPT[1-9¹²³])(?:\.|$)/iu.test(name)) windowsIssues.push('reserved-name');
+                return {
+                    name, escaped: JSON.stringify(name), utf16Length: name.length,
+                    utf8Bytes: new TextEncoder().encode(name).length,
+                    codePoints: Array.from(name, codePoint),
+                    nfcDiffers: name !== name.normalize('NFC'), nfdDiffers: name !== name.normalize('NFD'),
+                    trailingWhitespace: /\s$/u.test(name), trailingDot: name.endsWith('.'),
+                    invisibleCodePoints: Array.from(name).filter(char => /[\p{Cc}\p{Cf}\p{Zl}\p{Zp}]/u.test(char)).map(codePoint),
+                    longName: name.length >= 240, percentEncoded, decodedPreview, windowsIssues,
+                };
+            }) : [],
         };
+    };
+
+    const filenameRecovery = (failure) => {
+        const lines = [];
+        const reasonKeys = { 'restricted-character': 'filenameRestricted', 'trailing-dot-space': 'filenameTrailing', 'reserved-name': 'filenameReserved' };
+        for (const segment of failure.segments) {
+            const name = JSON.stringify(segment.name);
+            if (segment.longName) lines.push(t('filenameLong', { name, count: segment.utf16Length }));
+            if (segment.percentEncoded) lines.push(t(segment.decodedPreview === null ? 'filenameDecodeFailed' : 'filenamePercent', { name, preview: JSON.stringify(segment.decodedPreview) }));
+            if (segment.windowsIssues.length) lines.push(t('filenameWindows', { name, reasons: segment.windowsIssues.map(reason => t(reasonKeys[reason])).join(', ') }));
+        }
+        if (failure.pathLengthWarning) lines.push(t('filenamePathLength', { count: failure.pathUtf16Length }));
+        if (!lines.length) return '';
+        lines.unshift(t('filenameObservations'));
+        lines.push(t('filenameAbsoluteUnknown'));
+        if (failure.pathLengthWarning || failure.segments.some(segment => segment.longName)) lines.push(t('filenameShortPath'));
+        if (failure.segments.some(segment => segment.percentEncoded || segment.windowsIssues.length)) lines.push(t('filenameRenameAdvice'));
+        return lines.join('\n');
     };
 
     const equalFileBytes = async (sourceFile, targetFile, onProgress = () => {}, isCancelled = () => false, diagnosticContexts = null) => {
@@ -2647,7 +2700,10 @@
                         note: 'Paths are relative to selected roots. Filename observations are not proof of the cause. File contents are not included.',
                     };
                     $('#btnDownloadDiagnostic').disabled = false;
-                    const detail = errors.map(failure => `[${failure.side || '?'} · ${failure.stage}/${failure.operation} · ${JSON.stringify(failure.path ?? '')}] ${failure.name}: ${failure.message}`).join('\n');
+                    const detail = errors.map(failure => {
+                        const recovery = filenameRecovery(failure);
+                        return `[${failure.side || '?'} · ${failure.stage}/${failure.operation} · ${JSON.stringify(failure.path ?? '')}] ${failure.name}: ${failure.message}${recovery ? `\n${recovery}` : ''}`;
+                    }).join('\n');
                     setPhase('error'); setStatus(t('compareFailed', { message: detail }), 'danger', 'alert'); addLog(t('compareFailed', { message: detail }));
                 }
             } finally { model.abortRequested = false; renderControls(); }
