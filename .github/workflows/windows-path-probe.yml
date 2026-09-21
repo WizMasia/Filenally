@@ -1,0 +1,31 @@
+name: Windows native path investigation
+on:
+  push:
+    branches: [codex/issue-18-windows-repro]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-paths:
+    runs-on: windows-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Record Windows long-path setting (read only)
+        shell: pwsh
+        run: |
+          $value = (Get-ItemProperty -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem').LongPathsEnabled
+          "PROBE_LONG_PATHS_ENABLED=$value" >> $env:GITHUB_ENV
+      - name: Probe native Chrome handles
+        run: node tests/windows-path-probe.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-native-path-report
+          path: artifacts/issue-18/*.json
+          if-no-files-found: warn
